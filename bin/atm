@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+# ATM - Atomy Tools Modules
+# Modular dev environment manager.
+
+ATM_BIN_SOURCE="${BASH_SOURCE[0]}"
+
+if command -v readlink >/dev/null 2>&1; then
+    ATM_BIN_SOURCE="$(readlink -f "$ATM_BIN_SOURCE" 2>/dev/null || printf '%s\n' "$ATM_BIN_SOURCE")"
+fi
+
+ATM_BIN_DIR="$(cd "$(dirname "$ATM_BIN_SOURCE")" && pwd)"
+ATM_HOME="$(cd "$ATM_BIN_DIR/.." && pwd)"
+export ATM_HOME
+
+# shellcheck source=../lib/atm_core.sh
+source "$ATM_HOME/lib/atm_core.sh"
+
+atm_core_main "$@"

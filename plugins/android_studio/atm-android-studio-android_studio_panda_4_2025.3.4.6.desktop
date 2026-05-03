@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=Android Studio Panda 4
+Comment=Android Studio installed by ATM
+GenericName=Android IDE
+Exec=/home/php/Apps/AndroidStudio/current/bin/studio
+Icon=/home/php/Apps/AndroidStudio/current/bin/studio.png
+Type=Application
+StartupNotify=true
+StartupWMClass=jetbrains-studio
+Categories=Development;IDE;
+Keywords=android;studio;ide;kotlin;java;flutter;

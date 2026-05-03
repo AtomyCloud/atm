@@ -1,0 +1,11 @@
+[Desktop Entry]
+Name=__ANDROID_STUDIO_NAME__
+Comment=Android Studio installed by ATM
+GenericName=Android IDE
+Exec=__ANDROID_STUDIO_EXEC__
+Icon=__ANDROID_STUDIO_ICON__
+Type=Application
+StartupNotify=true
+StartupWMClass=jetbrains-studio
+Categories=Development;IDE;
+Keywords=android;studio;ide;kotlin;java;flutter;
