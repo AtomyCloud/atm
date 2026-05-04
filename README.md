@@ -2,19 +2,19 @@
 
 <div align="center">
 
-#### _Read this in [other languages](translations/Translations.md)._
-<kbd>[<img title="English Britain" alt="English" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/gb.svg" width="44">](README.md)</kbd>
-<kbd>[<img title="English USA" alt="English" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/us.svg" width="44">](README.md)</kbd>
-<kbd>[<img title="Português" alt="Português" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/pt.svg" width="44">](docs/pt/README-PT.md)</kbd>
-<kbd>[<img title="Português Brasileiro" alt="Português Brasileiro   " src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/br.svg" width="44">](docs/br/README-PT-BR.md)</kbd>
-<kbd>[<img title="Español" alt="Español" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/es.svg" width="44">](docs/es/README-ES.md)</kbd>
-<kbd>[<img title="Français" alt="Français" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/fr.svg" width="44">](docs/fr/README-FR.md)</kbd>
-<kbd>[<img title="Italiano" alt="Italiano" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/it.svg" width="44">](docs/it/README-IT.md)</kbd>
-<kbd>[<img title="Deutsch" alt="Deutsch" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/de.svg" width="44">](docs/de/README-DE.md)</kbd>
-<kbd>[<img title="日本語" alt="日本語" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/jp.svg" width="44">](docs/jp/README-JP.md)</kbd>
-<kbd>[<img title="Русский" alt="Русский" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/ru.svg" width="44">](docs/ru/README-RU.md)</kbd>
-<kbd>[<img title="中文" alt="中文" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/cn.svg" width="44">](docs/cn/README-CN.md)</kbd>
-<kbd>[<img title="한국어" alt="한국어" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/kr.svg" width="44">](docs/kr/README-KR.md)</kbd>
+#### _User manual in other languages._
+<kbd>[<img title="English Britain" alt="English Britain" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/gb.svg" width="44">](docs/en-gb/USER-MANUAL-EN-GB.md)</kbd>
+<kbd>[<img title="English USA" alt="English USA" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/us.svg" width="44">](docs/en-us/USER-MANUAL-EN-US.md)</kbd>
+<kbd>[<img title="Português" alt="Português" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/pt.svg" width="44">](docs/pt/USER-MANUAL-PT-PT.md)</kbd>
+<kbd>[<img title="Português Brasileiro" alt="Português Brasileiro" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/br.svg" width="44">](docs/br/USER-MANUAL-PT-BR.md)</kbd>
+<kbd>[<img title="Español" alt="Español" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/es.svg" width="44">](docs/es/USER-MANUAL-ES.md)</kbd>
+<kbd>[<img title="Français" alt="Français" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/fr.svg" width="44">](docs/fr/USER-MANUAL-FR.md)</kbd>
+<kbd>[<img title="Italiano" alt="Italiano" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/it.svg" width="44">](docs/it/USER-MANUAL-IT.md)</kbd>
+<kbd>[<img title="Deutsch" alt="Deutsch" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/de.svg" width="44">](docs/de/USER-MANUAL-DE.md)</kbd>
+<kbd>[<img title="日本語" alt="日本語" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/jp.svg" width="44">](docs/ja/USER-MANUAL-JA.md)</kbd>
+<kbd>[<img title="Русский" alt="Русский" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/ru.svg" width="44">](docs/ru/USER-MANUAL-RU.md)</kbd>
+<kbd>[<img title="中文" alt="中文" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/cn.svg" width="44">](docs/zh-cn/USER-MANUAL-ZH-CN.md)</kbd>
+<kbd>[<img title="한국어" alt="한국어" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/kr.svg" width="44">](docs/ko/USER-MANUAL-KO.md)</kbd>
 
 </div>
 
@@ -438,9 +438,9 @@ docs/
 Available public docs:
 
 ```text
-docs/PLUGIN-DEVELOPER-MANUAL-<LANG>.md
-docs/USER-MANUAL-<LANG>.md
-docs/AI-PROMPT-PLUGIN-CREATOR-<LANG>.md
+docs/<locale>/USER-MANUAL-<LANG>.md
+docs/<locale>/PLUGIN-DEVELOPER-MANUAL-<LANG>.md
+docs/<locale>/AI-PROMPT-PLUGIN-CREATOR-<LANG>.md
 ```
 
 ## Project Layout
