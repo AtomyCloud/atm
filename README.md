@@ -460,6 +460,7 @@ Available public docs:
 docs/<locale>/USER-MANUAL-<LANG>.md
 docs/<locale>/PLUGIN-DEVELOPER-MANUAL-<LANG>.md
 docs/<locale>/AI-PROMPT-PLUGIN-CREATOR-<LANG>.md
+docs/<locale>/AI-PROMPT-PLUGIN-CONVERT-<LANG>.md
 ```
 
 ## Project Layout
