@@ -4,6 +4,10 @@ atm_os_packages_manifest_file() {
     printf '%s\n' "${ATM_OS_PACKAGES_MANIFEST_FILE:-$ATM_MANIFEST_DIR/os_packages.manifest}"
 }
 
+atm_os_packages_package_file() {
+    printf '%s\n' "${ATM_OS_PACKAGES_PACKAGE_FILE:-$ATM_PLUGIN_DIR/os_packages/packages.txt}"
+}
+
 atm_os_packages_detect() {
     local os_id=""
     local os_like=""
@@ -77,15 +81,41 @@ atm_os_packages_package_manager() {
 
 atm_os_packages_packages_for_manager() {
     local package_manager="$1"
+    local package_file=""
+    local packages=""
 
-    case "$package_manager" in
-        apt-get) printf '%s\n' "${ATM_OS_PACKAGES_APT_PACKAGES:-}" ;;
-        dnf) printf '%s\n' "${ATM_OS_PACKAGES_DNF_PACKAGES:-}" ;;
-        yum) printf '%s\n' "${ATM_OS_PACKAGES_YUM_PACKAGES:-}" ;;
-        pacman) printf '%s\n' "${ATM_OS_PACKAGES_PACMAN_PACKAGES:-}" ;;
-        apk) printf '%s\n' "${ATM_OS_PACKAGES_APK_PACKAGES:-}" ;;
-        *) atm_fail "$(atm_t ATM_PLUGIN_OS_PACKAGES_UNSUPPORTED_MANAGER): $package_manager" ;;
-    esac
+    package_file="$(atm_os_packages_package_file)"
+    [[ -f "$package_file" ]] || atm_fail "$(atm_t ATM_PLUGIN_OS_PACKAGES_PACKAGE_FILE_NOT_FOUND): $package_file"
+
+    packages="$(
+        awk -v section="$package_manager" '
+            function trim(value) {
+                gsub(/^[[:space:]]+|[[:space:]]+$/, "", value)
+                return value
+            }
+
+            {
+                line = $0
+                sub(/[[:space:]]+#.*/, "", line)
+                line = trim(line)
+
+                if (line == "" || line ~ /^#/) {
+                    next
+                }
+
+                if (line ~ /^\[[^]]+\]$/) {
+                    active = (line == "[" section "]")
+                    next
+                }
+
+                if (active) {
+                    print line
+                }
+            }
+        ' "$package_file" | tr '\n' ' ' | sed 's/[[:space:]]*$//'
+    )"
+
+    printf '%s\n' "$packages"
 }
 
 atm_os_packages_update_command() {
