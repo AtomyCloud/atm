@@ -131,6 +131,7 @@ atm_os_packages_remove_command() {
 
 atm_os_packages_run_command() {
     local command_text="$1"
+    local run_command="$command_text"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
         printf 'DRY-RUN: %s\n' "$command_text"
@@ -138,10 +139,14 @@ atm_os_packages_run_command() {
     fi
 
     if [[ "${EUID:-$(id -u)}" != "0" ]]; then
-        atm_fail "$(atm_t ATM_PLUGIN_OS_PACKAGES_ROOT_REQUIRED)"
+        command -v sudo >/dev/null 2>&1 || atm_fail "$(atm_t ATM_PLUGIN_OS_PACKAGES_SUDO_NOT_FOUND)"
+
+        printf '%s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_SUDO_REQUIRED)"
+        sudo --validate || atm_fail "$(atm_t ATM_PLUGIN_OS_PACKAGES_SUDO_FAILED)"
+        run_command="sudo $command_text"
     fi
 
-    bash -c "$command_text"
+    bash -c "$run_command"
 }
 
 atm_os_packages_write_manifest() {

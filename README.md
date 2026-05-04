@@ -377,7 +377,7 @@ b) Back
 q) Exit
 ```
 
-Use this submenu to install or remove the configured common package set for the detected Linux distribution. This plugin does not run `sudo` automatically; real package operations require running ATM as root, while `--dry-run` prints the package manager commands safely.
+Use this submenu to install or remove the configured common package set for the detected Linux distribution. For real package operations, this plugin asks for `sudo` when ATM is not already running as root. `--dry-run` prints the package manager commands safely without requesting sudo.
 
 ## Setup Menu
 
