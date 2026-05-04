@@ -51,6 +51,7 @@ Desktop apps: ~/.local/share/applications
 | VS Code | `vscode` | `0.0.1` | Install VS Code versions, switch installed versions, configure CLI and desktop launchers. |
 | Android Studio | `android_studio` | `0.0.1` | Install and switch Android Studio versions and create desktop launchers. |
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
+| OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 
 ## Features
 
@@ -185,6 +186,7 @@ Language: en-us
 4) 💻 VS Code                          <status>
 5) 🤖 Android Studio                   <status>
 6) 📦 Android SDK                      <status>
+7) 🧰 OS Packages                      <status>
 ------------------------------------------
 8) ⚡ Install Stack / Full Setup
 9) 🛠️  Configure PATH, CLI & Desktop
@@ -201,7 +203,7 @@ Main menu actions:
 
 | Option | Action |
 |---|---|
-| `1` to `6` | Open the selected plugin submenu. |
+| `1` to `7` | Open the selected plugin submenu. |
 | `8` | Run Full Setup for plugins enabled for stack installation. |
 | `9` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
@@ -359,6 +361,23 @@ q) Exit
 Use this submenu to install Android SDK command-line tools and package stacks, choose custom SDK versions, list installed packages, remove a package, or uninstall the SDK managed by ATM.
 
 ATM status prefers stable numeric Android APIs over codenames/previews when both exist.
+
+### OS Packages
+
+```text
+🧰 OS Packages
+Current: <status>
+OS: <detected distribution>
+Package manager: <detected package manager>
+------------------------------------------
+1) Install OS packages
+2) Uninstall OS packages
+3) Show package manager commands
+b) Back
+q) Exit
+```
+
+Use this submenu to install or remove the configured common package set for the detected Linux distribution. This plugin does not run `sudo` automatically; real package operations require running ATM as root, while `--dry-run` prints the package manager commands safely.
 
 ## Setup Menu
 
