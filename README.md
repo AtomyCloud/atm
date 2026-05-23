@@ -52,6 +52,7 @@ Desktop apps: ~/.local/share/applications
 | Android Studio | `android_studio` | `0.0.1` | Install and switch Android Studio versions and create desktop launchers. |
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
+| Docker | `docker` | `0.0.1` | Install Docker Engine from the official Docker installation script. |
 
 ## Features
 
@@ -187,9 +188,10 @@ Language: en-us
 5) 🤖 Android Studio                   <status>
 6) 📦 Android SDK                      <status>
 7) 🧰 OS Packages                      <status>
+8) 🐳 Docker                           <status>
 ------------------------------------------
-8) ⚡ Install Stack / Full Setup
-9) 🛠️  Configure PATH, CLI & Desktop
+9) ⚡ Install Stack / Full Setup
+10) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -203,9 +205,9 @@ Main menu actions:
 
 | Option | Action |
 |---|---|
-| `1` to `7` | Open the selected plugin submenu. |
-| `8` | Run Full Setup for plugins enabled for stack installation. |
-| `9` | Configure shell PATH, CLI links, and desktop launchers. |
+| `1` to `8` | Open the selected plugin submenu. |
+| `9` | Run Full Setup for plugins enabled for stack installation. |
+| `10` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
 | `p` | List loaded plugins. |
 | `d` | Run doctor checks. |
@@ -378,6 +380,22 @@ q) Exit
 ```
 
 Use this submenu to install or remove the package set from `plugins/os_packages/packages.txt` for the detected Linux distribution. For real package operations, this plugin asks for `sudo` when ATM is not already running as root. `--dry-run` prints the package manager commands safely without requesting sudo.
+
+### Docker
+
+```text
+🐳 Docker Installer
+Current: <status>
+------------------------------------------
+1) Install Docker Engine
+2) Install Docker Compose
+3) Install Docker Desktop
+4) Install ALL
+b) Back
+q) Exit
+```
+
+In this phase, only `Install Docker Engine` is implemented. It follows the provided Ansible flow: run the official Docker install script, add the target user to the `docker` group, and enable/start the Docker service. The other Docker menu options are placeholders for later patches.
 
 ## Setup Menu
 

@@ -40,6 +40,8 @@ atm_menu_main() {
     local id=""
     local ids=()
     local map_ids=()
+    local full_setup_choice=""
+    local path_choice=""
 
     while true; do
         idx=1
@@ -60,9 +62,14 @@ atm_menu_main() {
             idx=$((idx + 1))
         done
 
+        full_setup_choice="$idx"
+        idx=$((idx + 1))
+        path_choice="$idx"
+        idx=$((idx + 1))
+
         printf '%s\n' "------------------------------------------"
-        printf '8) ⚡ %s\n' "$(atm_t ATM_MENU_FULL_SETUP)"
-        printf '9) 🛠️  %s\n' "$(atm_t ATM_MENU_PATH)"
+        printf '%s) ⚡ %s\n' "$full_setup_choice" "$(atm_t ATM_MENU_FULL_SETUP)"
+        printf '%s) 🛠️  %s\n' "$path_choice" "$(atm_t ATM_MENU_PATH)"
         printf 's) ⚙️  %s\n' "$(atm_t ATM_MENU_SETUP_ATM)"
         printf 'p) 🔌 %s\n' "$(atm_t ATM_MENU_PLUGINS)"
         printf 'd) 🩺 %s\n' "$(atm_t ATM_MENU_DOCTOR)"
@@ -77,14 +84,6 @@ atm_menu_main() {
             q|Q)
                 atm_success "$(atm_t ATM_MSG_BYE)"
                 exit 0
-                ;;
-            8)
-                atm_full_setup
-                atm_prompt_continue
-                ;;
-            9)
-                atm_path_apply
-                atm_prompt_continue
                 ;;
             s|S)
                 atm_setup_menu
@@ -106,7 +105,13 @@ atm_menu_main() {
                 sleep 1
                 ;;
             *)
-                if [[ -n "${map_ids[$choice]:-}" ]]; then
+                if [[ "$choice" == "$full_setup_choice" ]]; then
+                    atm_full_setup
+                    atm_prompt_continue
+                elif [[ "$choice" == "$path_choice" ]]; then
+                    atm_path_apply
+                    atm_prompt_continue
+                elif [[ -n "${map_ids[$choice]:-}" ]]; then
                     atm_plugin_run_menu "${map_ids[$choice]}"
                     atm_prompt_continue
                 else
