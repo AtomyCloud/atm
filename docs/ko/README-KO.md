@@ -43,7 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, platform-tools를 설치합니다. |
 | OS Packages | `os_packages` | `0.0.1` | 감지된 Linux package manager를 사용해 일반 OS 패키지를 설치하고 제거합니다. |
 | Docker | `docker` | `0.0.1` | 공식 소스에서 Docker Engine, Docker Compose, Docker Desktop을 설치합니다. |
-| AI Tools | `ai` | `0.0.1` | Install Hermes and Ollama AI tools. |
+| AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 
 ## 기능
 
@@ -413,6 +413,7 @@ Current: <status>
 ------------------------------------------
 1) Hermes
 2) Ollama
+3) PicoClaw
 b) Back
 q) Exit
 ```
@@ -439,7 +440,7 @@ b) Back
 q) Exit
 ```
 
-`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `Install Ollama` runs `curl -fsSL https://ollama.com/install.sh | sh` and prints run/pull usage examples after installation. `--dry-run` prints commands without downloading or installing.
+`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `Install Ollama` runs `curl -fsSL https://ollama.com/install.sh | sh` and prints run/pull usage examples after installation. `PicoClaw` downloads the official latest `.tar.gz` release for the detected OS/architecture and extracts it into `~/Apps/ai/picoclaw`. `--dry-run` prints commands without downloading or installing.
 
 
 
