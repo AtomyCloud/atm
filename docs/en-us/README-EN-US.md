@@ -43,7 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 | Docker | `docker` | `0.0.1` | Install Docker Engine, Docker Compose, and Docker Desktop from official sources. |
-| AI Tools | `ai` | `0.0.1` | Install Hermes-Agent and Hermes-Desktop tools. |
+| AI Tools | `ai` | `0.0.1` | Install Hermes and Ollama AI tools. |
 
 ## Features
 
@@ -396,6 +396,7 @@ In this phase, `Install Docker Engine`, `Install Docker Compose`, and `Install D
 Current: <status>
 ------------------------------------------
 1) Hermes
+2) Ollama
 b) Back
 q) Exit
 ```
@@ -412,7 +413,17 @@ b) Back
 q) Exit
 ```
 
-`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `--dry-run` prints commands without downloading or installing.
+The Ollama submenu installs Ollama:
+
+```text
+Ollama
+------------------------------------------
+1) Install Ollama
+b) Back
+q) Exit
+```
+
+`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `Install Ollama` runs `curl -fsSL https://ollama.com/install.sh | sh` and prints run/pull usage examples after installation. `--dry-run` prints commands without downloading or installing.
 
 
 

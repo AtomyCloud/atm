@@ -43,7 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Installe les command-line tools, platforms, build-tools, CMake, NDK, emulator et platform-tools de l’Android SDK. |
 | OS Packages | `os_packages` | `0.0.1` | Installe et supprime les paquets système communs avec le gestionnaire de paquets détecté. |
 | Docker | `docker` | `0.0.1` | Installe Docker Engine, Docker Compose et Docker Desktop depuis les sources officielles. |
-| AI Tools | `ai` | `0.0.1` | Install Hermes-Agent and Hermes-Desktop tools. |
+| AI Tools | `ai` | `0.0.1` | Install Hermes and Ollama AI tools. |
 
 ## Fonctionnalités
 
@@ -412,6 +412,7 @@ Le mode portable est le défaut recommandé. Le mode système crée seulement un
 Current: <status>
 ------------------------------------------
 1) Hermes
+2) Ollama
 b) Back
 q) Exit
 ```
@@ -428,7 +429,17 @@ b) Back
 q) Exit
 ```
 
-`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `--dry-run` prints commands without downloading or installing.
+The Ollama submenu installs Ollama:
+
+```text
+Ollama
+------------------------------------------
+1) Install Ollama
+b) Back
+q) Exit
+```
+
+`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `Install Ollama` runs `curl -fsSL https://ollama.com/install.sh | sh` and prints run/pull usage examples after installation. `--dry-run` prints commands without downloading or installing.
 
 
 

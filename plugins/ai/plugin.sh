@@ -27,6 +27,10 @@ atm_ai_hermes_installed() {
     command -v hermes-agent >/dev/null 2>&1
 }
 
+atm_ai_ollama_installed() {
+    command -v ollama >/dev/null 2>&1
+}
+
 atm_ai_hermes_desktop_system_installed() {
     command -v hermes-desktop >/dev/null 2>&1 || [[ -d /opt/HermesDesktop || -d /opt/hermes-desktop ]]
 }
@@ -52,6 +56,10 @@ atm_ai_status() {
 
     if atm_ai_hermes_desktop_installed; then
         parts+=("Hermes-Desktop")
+    fi
+
+    if atm_ai_ollama_installed; then
+        parts+=("Ollama")
     fi
 
     if ((${#parts[@]} > 0)); then
@@ -90,11 +98,14 @@ atm_ai_write_manifest() {
     local hermes_installed="0"
     local desktop_installed="0"
     local desktop_portable_installed="0"
+    local ollama_installed="0"
     local hermes_version=""
     local desktop_version=""
+    local ollama_version=""
 
     hermes_version="$(hermes-agent --version 2>/dev/null || true)"
     desktop_version="$(hermes-desktop --version 2>/dev/null || true)"
+    ollama_version="$(ollama version 2>/dev/null || true)"
 
     if atm_ai_hermes_installed; then
         hermes_installed="1"
@@ -108,6 +119,10 @@ atm_ai_write_manifest() {
         desktop_portable_installed="1"
     fi
 
+    if atm_ai_ollama_installed; then
+        ollama_installed="1"
+    fi
+
     atm_manifest_write "ai" \
         "ATM_PLUGIN_NAME=AI Tools" \
         "ATM_PLUGIN_VERSION=0.0.1" \
@@ -116,7 +131,9 @@ atm_ai_write_manifest() {
         "ATM_AI_HERMES_AGENT_VERSION=$hermes_version" \
         "ATM_AI_HERMES_DESKTOP_INSTALLED=$desktop_installed" \
         "ATM_AI_HERMES_DESKTOP_PORTABLE_INSTALLED=$desktop_portable_installed" \
-        "ATM_AI_HERMES_DESKTOP_VERSION=$desktop_version"
+        "ATM_AI_HERMES_DESKTOP_VERSION=$desktop_version" \
+        "ATM_AI_OLLAMA_INSTALLED=$ollama_installed" \
+        "ATM_AI_OLLAMA_VERSION=$ollama_version"
 }
 
 atm_ai_install_hermes_agent() {
@@ -212,6 +229,63 @@ atm_ai_install_hermes_desktop_portable() {
     atm_success "$(atm_t ATM_PLUGIN_AI_HERMES_DESKTOP_PORTABLE_INSTALLED)"
 }
 
+atm_ai_ollama_version_text() {
+    if atm_ai_ollama_installed; then
+        ollama version 2>/dev/null || printf '%s\n' "unknown"
+    else
+        printf '%s\n' "not available in dry-run"
+    fi
+}
+
+atm_ai_print_ollama_usage() {
+    local version=""
+
+    version="$(atm_ai_ollama_version_text)"
+
+    cat <<EOF
+
+✅ Done! ollama Installed Successfully:
+  🆔 ollama version: $version
+
+To run ollama, use the following command:
+  #RUN: ollama run <model-name>
+  #Example: ollama run llama3
+
+  #PULL: ollama pull <model-name>
+  #Example: ollama pull llama3
+
+EOF
+}
+
+atm_ai_install_ollama() {
+    local install_url="${ATM_AI_OLLAMA_INSTALL_URL:-https://ollama.com/install.sh}"
+
+    printf '%s\n' "$(atm_t ATM_PLUGIN_AI_OLLAMA_INSTALLING)"
+
+    if atm_ai_ollama_installed; then
+        atm_warn "$(atm_t ATM_PLUGIN_AI_OLLAMA_ALREADY_INSTALLED)"
+        atm_ai_print_ollama_usage
+        return 0
+    fi
+
+    if [[ "${ATM_DRY_RUN:-0}" != "1" ]]; then
+        atm_require_commands curl sh
+    fi
+
+    if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+        printf 'DRY-RUN: curl -fsSL %q | sh\n' "$install_url"
+    else
+        curl -fsSL "$install_url" | sh
+    fi
+
+    if [[ "${ATM_DRY_RUN:-0}" != "1" ]] && ! atm_ai_ollama_installed; then
+        atm_fail "$(atm_t ATM_PLUGIN_AI_OLLAMA_INSTALL_FAILED)"
+    fi
+
+    atm_ai_write_manifest
+    atm_ai_print_ollama_usage
+}
+
 atm_ai_install() {
     atm_ai_hermes_menu "$@"
 }
@@ -272,6 +346,42 @@ atm_ai_hermes_menu() {
     done
 }
 
+atm_ai_ollama_menu() {
+    local choice=""
+
+    while true; do
+        clear
+        printf '%s\n' "=========================================="
+        printf '    %s\n' "$(atm_t ATM_PLUGIN_AI_OLLAMA_MENU_TITLE)"
+        printf '%s\n' "=========================================="
+        printf '%s\n' "------------------------------------------"
+        printf '1) %s\n' "$(atm_t ATM_PLUGIN_AI_INSTALL_OLLAMA)"
+        printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+        printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
+        printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+        read -r choice
+
+        case "$choice" in
+            1)
+                atm_ai_install_ollama
+                ;;
+            b|B)
+                return 0
+                ;;
+            q|Q)
+                exit 0
+                ;;
+            *)
+                atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
+                ;;
+        esac
+
+        printf '\n%s' "$(atm_t ATM_MENU_PRESS_ANY_KEY)"
+        read -r -n 1 _ || true
+        printf '\n'
+    done
+}
+
 atm_ai_menu() {
     local choice=""
     local current=""
@@ -286,6 +396,7 @@ atm_ai_menu() {
         printf '%s: %s\n' "$(atm_t ATM_PLUGIN_AI_CURRENT)" "$current"
         printf '%s\n' "------------------------------------------"
         printf '1) %s\n' "$(atm_t ATM_PLUGIN_AI_HERMES_MENU_OPTION)"
+        printf '2) %s\n' "$(atm_t ATM_PLUGIN_AI_OLLAMA_MENU_OPTION)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -294,6 +405,9 @@ atm_ai_menu() {
         case "$choice" in
             1)
                 atm_ai_hermes_menu
+                ;;
+            2)
+                atm_ai_ollama_menu
                 ;;
             b|B)
                 return 0
