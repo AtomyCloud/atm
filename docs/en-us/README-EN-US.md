@@ -3,29 +3,19 @@
 <div align="center">
 
 #### _README in other languages._
-<kbd>[<img title="English Britain" alt="English Britain" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/gb.svg" width="44">](docs/en-gb/README-EN-GB.md)</kbd>
-<kbd>[<img title="English USA" alt="English USA" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/us.svg" width="44">](docs/en-us/README-EN-US.md)</kbd>
-<kbd>[<img title="Português" alt="Português" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/pt.svg" width="44">](docs/pt/README-PT-PT.md)</kbd>
-<kbd>[<img title="Português Brasileiro" alt="Português Brasileiro" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/br.svg" width="44">](docs/br/README-PT-BR.md)</kbd>
-<kbd>[<img title="Español" alt="Español" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/es.svg" width="44">](docs/es/README-ES.md)</kbd>
-<kbd>[<img title="Français" alt="Français" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/fr.svg" width="44">](docs/fr/README-FR.md)</kbd>
-<kbd>[<img title="Italiano" alt="Italiano" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/it.svg" width="44">](docs/it/README-IT.md)</kbd>
-<kbd>[<img title="Deutsch" alt="Deutsch" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/de.svg" width="44">](docs/de/README-DE.md)</kbd>
-<kbd>[<img title="日本語" alt="日本語" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/jp.svg" width="44">](docs/ja/README-JA.md)</kbd>
-<kbd>[<img title="Русский" alt="Русский" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/ru.svg" width="44">](docs/ru/README-RU.md)</kbd>
-<kbd>[<img title="中文" alt="中文" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/cn.svg" width="44">](docs/zh-cn/README-ZH-CN.md)</kbd>
-<kbd>[<img title="한국어" alt="한국어" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/kr.svg" width="44">](docs/ko/README-KO.md)</kbd>
+<kbd>[<img title="English Britain" alt="English Britain" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/gb.svg" width="44">](../en-gb/README-EN-GB.md)</kbd>
+<kbd>[<img title="English USA" alt="English USA" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/us.svg" width="44">](../en-us/README-EN-US.md)</kbd>
+<kbd>[<img title="Português" alt="Português" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/pt.svg" width="44">](../pt/README-PT-PT.md)</kbd>
+<kbd>[<img title="Português Brasileiro" alt="Português Brasileiro" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/br.svg" width="44">](../br/README-PT-BR.md)</kbd>
+<kbd>[<img title="Español" alt="Español" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/es.svg" width="44">](../es/README-ES.md)</kbd>
+<kbd>[<img title="Français" alt="Français" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/fr.svg" width="44">](../fr/README-FR.md)</kbd>
+<kbd>[<img title="Italiano" alt="Italiano" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/it.svg" width="44">](../it/README-IT.md)</kbd>
+<kbd>[<img title="Deutsch" alt="Deutsch" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/de.svg" width="44">](../de/README-DE.md)</kbd>
+<kbd>[<img title="日本語" alt="日本語" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/jp.svg" width="44">](../ja/README-JA.md)</kbd>
+<kbd>[<img title="Русский" alt="Русский" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/ru.svg" width="44">](../ru/README-RU.md)</kbd>
+<kbd>[<img title="中文" alt="中文" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/cn.svg" width="44">](../zh-cn/README-ZH-CN.md)</kbd>
+<kbd>[<img title="한국어" alt="한국어" src="https://cdn.jsdelivr.net/gh/hjnilsson/country-flags@master/svg/kr.svg" width="44">](../ko/README-KO.md)</kbd>
 
-</div>
-
-<div align="center">
-  
-![GitHub commit activity](https://img.shields.io/github/commit-activity/t/atomycloud/atomycloud?style=for-the-badge&logo=github&logoSize=auto&labelColor=%238000ff&color=%23bf00ff)
-![GitHub followers](https://img.shields.io/github/followers/atomycloud?style=for-the-badge&labelColor=%2300bfff&color=%23bf00ff)
-![GitHub forks](https://img.shields.io/github/forks/atomycloud/atomycloud?style=for-the-badge&labelColor=%2300bfff&color=%23bf00ff)
-![GitHub Repo stars](https://img.shields.io/github/stars/atomycloud/atomycloud?style=for-the-badge&labelColor=%23bf00ff)
-![GitHub watchers](https://img.shields.io/github/watchers/atomycloud/atomycloud?style=for-the-badge&labelColor=%23bf00ff)
-  
 </div>
 
 ATM is a modular Linux tool manager written in Bash. It installs and manages developer tools in user space, keeps multiple versions side by side, switches the active version with `current` symlinks, configures shell PATH entries, and creates desktop launchers for GUI tools.
@@ -92,7 +82,7 @@ update-desktop-database
 sudo
 ```
 
-`sudo` is not used for desktop launchers. It is only needed for optional system-level command setup.
+`sudo` is not used for desktop launchers. It is only needed for optional system-level command setup and plugins that install system packages.
 
 ## Quick Start
 
@@ -510,4 +500,4 @@ ATM_LANG=en-us bin/atm --dry-run path apply
 
 ## License
 
-See [LICENSE](LICENSE).
+See [LICENSE](../../LICENSE).
