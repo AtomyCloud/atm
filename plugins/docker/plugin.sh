@@ -58,6 +58,38 @@ atm_docker_compose_url() {
     printf '%s/docker-compose-%s-%s\n' "$base_url" "$os_name" "$arch_name"
 }
 
+atm_docker_desktop_deb_file() {
+    printf '%s\n' "${ATM_DOCKER_DESKTOP_DEB_FILE:-$ATM_DOWNLOAD_DIR/docker-desktop-amd64.deb}"
+}
+
+atm_docker_desktop_installed() {
+    command -v docker-desktop >/dev/null 2>&1 || [[ -d "${ATM_DOCKER_DESKTOP_INSTALL_DIR:-/opt/docker-desktop}" ]]
+}
+
+atm_docker_require_desktop_platform() {
+    local arch_name=""
+
+    arch_name="$(uname -m)"
+
+    case "$arch_name" in
+        x86_64|amd64)
+            ;;
+        *)
+            atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_UNSUPPORTED_ARCH)"
+            ;;
+    esac
+
+    if command -v apt-get >/dev/null 2>&1; then
+        return 0
+    fi
+
+    if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+        return 0
+    fi
+
+    atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_APT_REQUIRED)"
+}
+
 atm_docker_status() {
     if atm_docker_engine_installed; then
         printf '✅ '
@@ -71,12 +103,15 @@ atm_docker_write_manifest() {
     local target_user=""
     local docker_version=""
     local compose_version=""
+    local desktop_version=""
     local engine_installed="0"
     local compose_installed="0"
+    local desktop_installed="0"
 
     target_user="$(atm_docker_target_user)"
     docker_version="$(docker --version 2>/dev/null || true)"
     compose_version="$(docker-compose --version 2>/dev/null || true)"
+    desktop_version="$(docker-desktop --version 2>/dev/null || true)"
 
     if atm_docker_engine_installed; then
         engine_installed="1"
@@ -86,14 +121,20 @@ atm_docker_write_manifest() {
         compose_installed="1"
     fi
 
+    if atm_docker_desktop_installed; then
+        desktop_installed="1"
+    fi
+
     atm_manifest_write "docker" \
         "ATM_PLUGIN_NAME=Docker" \
         "ATM_PLUGIN_VERSION=0.0.1" \
         "ATM_INSTALLED=1" \
         "ATM_DOCKER_ENGINE_INSTALLED=$engine_installed" \
         "ATM_DOCKER_COMPOSE_INSTALLED=$compose_installed" \
+        "ATM_DOCKER_DESKTOP_INSTALLED=$desktop_installed" \
         "ATM_DOCKER_VERSION=$docker_version" \
         "ATM_DOCKER_COMPOSE_VERSION=$compose_version" \
+        "ATM_DOCKER_DESKTOP_VERSION=$desktop_version" \
         "ATM_DOCKER_TARGET_USER=$target_user" \
         "ATM_DOCKER_CHANNEL=${ATM_DOCKER_CHANNEL:-stable}"
 }
@@ -158,6 +199,40 @@ atm_docker_install_compose() {
     atm_success "$(atm_t ATM_PLUGIN_DOCKER_COMPOSE_INSTALLED)"
 }
 
+atm_docker_install_desktop() {
+    local deb_url="${ATM_DOCKER_DESKTOP_DEB_URL:-https://desktop.docker.com/linux/main/amd64/docker-desktop-amd64.deb}"
+    local deb_file=""
+
+    deb_file="$(atm_docker_desktop_deb_file)"
+
+    printf '%s\n%s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_DOCS)" "https://docs.docker.com/desktop/setup/install/linux/ubuntu/#install-docker-desktop"
+
+    if atm_docker_desktop_installed; then
+        atm_warn "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_ALREADY_INSTALLED)"
+        return 0
+    fi
+
+    atm_docker_require_desktop_platform
+    printf '%s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALLING)"
+
+    if [[ "${ATM_DRY_RUN:-0}" != "1" ]]; then
+        atm_require_commands curl apt-get apt uname
+    fi
+
+    atm_run mkdir -p "$(dirname "$deb_file")"
+    atm_run curl -L "$deb_url" -o "$deb_file"
+    atm_docker_run_elevated "apt-get update"
+    atm_docker_run_elevated "apt install -y '$deb_file'"
+
+    if [[ "${ATM_DRY_RUN:-0}" != "1" ]] && ! atm_docker_desktop_installed; then
+        atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALL_FAILED)"
+    fi
+
+    atm_docker_write_manifest
+    atm_success "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALLED)"
+    atm_warn "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_ACCEPT_TERMS)"
+}
+
 atm_docker_install() {
     atm_docker_install_engine "$@"
 }
@@ -207,7 +282,10 @@ atm_docker_menu() {
             2)
                 atm_docker_install_compose
                 ;;
-            3|4)
+            3)
+                atm_docker_install_desktop
+                ;;
+            4)
                 atm_docker_not_implemented
                 ;;
             b|B)
