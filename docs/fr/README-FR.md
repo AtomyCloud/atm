@@ -182,8 +182,8 @@ Language: en-us
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
 ------------------------------------------
-10) ⚡ Install Stack / Full Setup
-11) 🛠️  Configure PATH, CLI & Desktop
+f) ⚡ Install Stack / Full Setup
+c) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -198,8 +198,8 @@ Actions du menu principal :
 | Option | Action |
 |---|---|
 | `1` to `9` | Ouvre le sous-menu du plugin sélectionné. |
-| `9` | Exécute Full Setup pour les plugins activés pour l’installation de stack. |
-| `10` | Configure le PATH du shell, les liens CLI et les lanceurs desktop. |
+| `f` | Exécute Full Setup pour les plugins activés pour l’installation de stack. |
+| `c` | Configure le PATH du shell, les liens CLI et les lanceurs desktop. |
 | `s` | Ouvre la configuration de la commande ATM. |
 | `p` | Liste les plugins chargés. |
 | `d` | Exécute les contrôles doctor. |

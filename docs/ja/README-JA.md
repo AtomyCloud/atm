@@ -182,8 +182,8 @@ Language: en-us
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
 ------------------------------------------
-10) ⚡ Install Stack / Full Setup
-11) 🛠️  Configure PATH, CLI & Desktop
+f) ⚡ Install Stack / Full Setup
+c) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -198,8 +198,8 @@ Choose an option:
 | オプション | 操作 |
 |---|---|
 | `1` to `9` | 選択したプラグインのサブメニューを開きます。 |
-| `9` | stack installation が有効なプラグインに対して Full Setup を実行します。 |
-| `10` | shell PATH、CLI links、desktop launchers を設定します。 |
+| `f` | stack installation が有効なプラグインに対して Full Setup を実行します。 |
+| `c` | shell PATH、CLI links、desktop launchers を設定します。 |
 | `s` | ATM command setup を開きます。 |
 | `p` | 読み込まれたプラグインを一覧表示します。 |
 | `d` | doctor checks を実行します。 |

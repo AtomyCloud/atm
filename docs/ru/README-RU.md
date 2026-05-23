@@ -182,8 +182,8 @@ Language: en-us
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
 ------------------------------------------
-10) ⚡ Install Stack / Full Setup
-11) 🛠️  Configure PATH, CLI & Desktop
+f) ⚡ Install Stack / Full Setup
+c) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -198,8 +198,8 @@ Choose an option:
 | Опция | Действие |
 |---|---|
 | `1` to `9` | Открывает подменю выбранного плагина. |
-| `9` | Запускает Full Setup для плагинов, включённых для установки stack. |
-| `10` | Настраивает shell PATH, CLI links и desktop launchers. |
+| `f` | Запускает Full Setup для плагинов, включённых для установки stack. |
+| `c` | Настраивает shell PATH, CLI links и desktop launchers. |
 | `s` | Открывает настройку команды ATM. |
 | `p` | Показывает загруженные плагины. |
 | `d` | Запускает doctor checks. |

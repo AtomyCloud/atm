@@ -182,8 +182,8 @@ Language: en-us
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
 ------------------------------------------
-10) ⚡ Install Stack / Full Setup
-11) 🛠️  Configure PATH, CLI & Desktop
+f) ⚡ Install Stack / Full Setup
+c) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -198,8 +198,8 @@ Choose an option:
 | 옵션 | 작업 |
 |---|---|
 | `1` to `9` | 선택한 플러그인 하위 메뉴를 엽니다. |
-| `9` | stack installation이 활성화된 플러그인에 대해 Full Setup을 실행합니다. |
-| `10` | shell PATH, CLI links, desktop launchers를 구성합니다. |
+| `f` | stack installation이 활성화된 플러그인에 대해 Full Setup을 실행합니다. |
+| `c` | shell PATH, CLI links, desktop launchers를 구성합니다. |
 | `s` | ATM command setup을 엽니다. |
 | `p` | 로드된 플러그인을 나열합니다. |
 | `d` | doctor checks를 실행합니다. |

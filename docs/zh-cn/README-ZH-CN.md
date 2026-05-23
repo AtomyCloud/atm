@@ -182,8 +182,8 @@ Language: en-us
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
 ------------------------------------------
-10) ⚡ Install Stack / Full Setup
-11) 🛠️  Configure PATH, CLI & Desktop
+f) ⚡ Install Stack / Full Setup
+c) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -198,8 +198,8 @@ Choose an option:
 | 选项 | 操作 |
 |---|---|
 | `1` to `9` | 打开所选插件子菜单。 |
-| `9` | 对启用 stack installation 的插件运行 Full Setup。 |
-| `10` | 配置 shell PATH、CLI links 和 desktop launchers。 |
+| `f` | 对启用 stack installation 的插件运行 Full Setup。 |
+| `c` | 配置 shell PATH、CLI links 和 desktop launchers。 |
 | `s` | 打开 ATM command setup。 |
 | `p` | 列出已加载插件。 |
 | `d` | 运行 doctor checks。 |
