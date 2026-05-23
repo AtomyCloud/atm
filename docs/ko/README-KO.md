@@ -43,7 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, platform-tools를 설치합니다. |
 | OS Packages | `os_packages` | `0.0.1` | 감지된 Linux package manager를 사용해 일반 OS 패키지를 설치하고 제거합니다. |
 | Docker | `docker` | `0.0.1` | 공식 소스에서 Docker Engine, Docker Compose, Docker Desktop을 설치합니다. |
-| AI Tools | `ai` | `0.0.1` | Install AI tools and agents, starting with Hermes-Agent. |
+| AI Tools | `ai` | `0.0.1` | Install Hermes-Agent and Hermes-Desktop tools. |
 
 ## 기능
 
@@ -411,12 +411,26 @@ portable mode가 권장 기본값입니다. system mode는 command link만 생�
 🧠 AI Tools Installer
 Current: <status>
 ------------------------------------------
-1) Install Hermes-Agent
+1) Hermes
 b) Back
 q) Exit
 ```
 
-In this phase, only `Install Hermes-Agent` is implemented. The installer runs: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `--dry-run` prints the command without downloading or executing it.
+The Hermes submenu groups Hermes tools:
+
+```text
+Hermes
+------------------------------------------
+1) Install Hermes-Agent
+2) Install Hermes-Desktop (System DEB)
+3) Install Hermes-Desktop (Portable AppImage)
+b) Back
+q) Exit
+```
+
+`Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `--dry-run` prints commands without downloading or installing.
+
+
 
 ## PATH, CLI, Desktop
 
