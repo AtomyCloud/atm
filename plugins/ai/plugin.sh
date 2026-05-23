@@ -424,7 +424,7 @@ atm_ai_install_picoclaw() {
 }
 
 atm_ai_install() {
-    atm_ai_hermes_menu "$@"
+    atm_ai_menu "$@"
 }
 
 atm_ai_use() {
