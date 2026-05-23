@@ -52,7 +52,7 @@ Desktop apps: ~/.local/share/applications
 | Android Studio | `android_studio` | `0.0.1` | Install and switch Android Studio versions and create desktop launchers. |
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
-| Docker | `docker` | `0.0.1` | Install Docker Engine from the official Docker installation script. |
+| Docker | `docker` | `0.0.1` | Install Docker Engine and Docker Compose from official sources. |
 
 ## Features
 
@@ -395,7 +395,7 @@ b) Back
 q) Exit
 ```
 
-In this phase, only `Install Docker Engine` is implemented. It follows the provided Ansible flow: run the official Docker install script, add the target user to the `docker` group, and enable/start the Docker service. The other Docker menu options are placeholders for later patches.
+In this phase, `Install Docker Engine` and `Install Docker Compose` are implemented. Docker Engine follows the provided Ansible flow: run the official Docker install script, add the target user to the `docker` group, and enable/start the Docker service. Docker Compose downloads the latest official standalone binary from GitHub into `/usr/local/bin/docker-compose` and marks it executable. Docker Desktop and Install ALL remain placeholders for later patches.
 
 ## Setup Menu
 
