@@ -53,6 +53,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 | Docker | `docker` | `0.0.1` | Install Docker Engine, Docker Compose, and Docker Desktop from official sources. |
+| AI Tools | `ai` | `0.0.1` | Install AI tools and agents, starting with Hermes-Agent. |
 
 ## Features
 
@@ -189,9 +190,10 @@ Language: en-us
 6) 📦 Android SDK                      <status>
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
+9) 🧠 AI Tools                         <status>
 ------------------------------------------
-9) ⚡ Install Stack / Full Setup
-10) 🛠️  Configure PATH, CLI & Desktop
+10) ⚡ Install Stack / Full Setup
+11) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -205,9 +207,9 @@ Main menu actions:
 
 | Option | Action |
 |---|---|
-| `1` to `8` | Open the selected plugin submenu. |
-| `9` | Run Full Setup for plugins enabled for stack installation. |
-| `10` | Configure shell PATH, CLI links, and desktop launchers. |
+| `1` to `9` | Open the selected plugin submenu. |
+| `10` | Run Full Setup for plugins enabled for stack installation. |
+| `11` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
 | `p` | List loaded plugins. |
 | `d` | Run doctor checks. |
@@ -396,6 +398,19 @@ q) Exit
 ```
 
 In this phase, `Install Docker Engine`, `Install Docker Compose`, and `Install Docker Desktop` are implemented. Docker Engine follows the provided Ansible flow: run the official Docker install script, add the target user to the `docker` group, and enable/start the Docker service. Docker Compose downloads the latest official standalone binary from GitHub into `/usr/local/bin/docker-compose` and marks it executable. Docker Desktop follows the official Ubuntu DEB flow: download the latest `docker-desktop-amd64.deb`, run `apt-get update`, and install the local package with `apt`. Install ALL remains a placeholder for a later patch.
+
+### AI Tools
+
+```text
+🧠 AI Tools Installer
+Current: <status>
+------------------------------------------
+1) Install Hermes-Agent
+b) Back
+q) Exit
+```
+
+In this phase, only `Install Hermes-Agent` is implemented. The installer runs the official Hermes-Agent install command: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `--dry-run` prints the command without downloading or executing it.
 
 ## Setup Menu
 

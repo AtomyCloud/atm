@@ -43,6 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Instala command-line tools, platforms, build-tools, CMake, NDK, emulator e platform-tools do Android SDK. |
 | OS Packages | `os_packages` | `0.0.1` | Instala e remove pacotes comuns do sistema operacional usando o gerenciador de pacotes detectado. |
 | Docker | `docker` | `0.0.1` | Instala Docker Engine, Docker Compose e Docker Desktop a partir de fontes oficiais. |
+| AI Tools | `ai` | `0.0.1` | Install AI tools and agents, starting with Hermes-Agent. |
 
 ## Recursos
 
@@ -179,9 +180,10 @@ Language: en-us
 6) 📦 Android SDK                      <status>
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
+9) 🧠 AI Tools                         <status>
 ------------------------------------------
-9) ⚡ Install Stack / Full Setup
-10) 🛠️  Configure PATH, CLI & Desktop
+10) ⚡ Install Stack / Full Setup
+11) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -195,7 +197,7 @@ Ações do menu principal:
 
 | Opção | Ação |
 |---|---|
-| `1` to `8` | Abre o submenu do plugin selecionado. |
+| `1` to `9` | Abre o submenu do plugin selecionado. |
 | `9` | Executa Full Setup para plugins habilitados para instalação da stack. |
 | `10` | Configura PATH do shell, links CLI e lançadores desktop. |
 | `s` | Abre a configuração do comando ATM. |
@@ -402,6 +404,19 @@ q) Exit
 ```
 
 O modo portátil é o padrão recomendado. O modo sistema só cria um link de comando; os ficheiros do projeto continuam em `~/Apps/atm`.
+
+### AI Tools
+
+```text
+🧠 AI Tools Installer
+Current: <status>
+------------------------------------------
+1) Install Hermes-Agent
+b) Back
+q) Exit
+```
+
+In this phase, only `Install Hermes-Agent` is implemented. The installer runs: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `--dry-run` prints the command without downloading or executing it.
 
 ## PATH, CLI e Desktop
 

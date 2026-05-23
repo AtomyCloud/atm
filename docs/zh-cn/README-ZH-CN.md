@@ -43,6 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | 安装 Android SDK command-line tools、platforms、build-tools、CMake、NDK、emulator 和 platform-tools。 |
 | OS Packages | `os_packages` | `0.0.1` | 使用检测到的 Linux 包管理器安装和移除常用操作系统软件包。 |
 | Docker | `docker` | `0.0.1` | 从官方来源安装 Docker Engine、Docker Compose 和 Docker Desktop。 |
+| AI Tools | `ai` | `0.0.1` | Install AI tools and agents, starting with Hermes-Agent. |
 
 ## 功能
 
@@ -179,9 +180,10 @@ Language: en-us
 6) 📦 Android SDK                      <status>
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
+9) 🧠 AI Tools                         <status>
 ------------------------------------------
-9) ⚡ Install Stack / Full Setup
-10) 🛠️  Configure PATH, CLI & Desktop
+10) ⚡ Install Stack / Full Setup
+11) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -195,7 +197,7 @@ Choose an option:
 
 | 选项 | 操作 |
 |---|---|
-| `1` to `8` | 打开所选插件子菜单。 |
+| `1` to `9` | 打开所选插件子菜单。 |
 | `9` | 对启用 stack installation 的插件运行 Full Setup。 |
 | `10` | 配置 shell PATH、CLI links 和 desktop launchers。 |
 | `s` | 打开 ATM command setup。 |
@@ -402,6 +404,19 @@ q) Exit
 ```
 
 portable mode 是推荐默认值。system mode 只创建命令链接；项目文件仍位于 `~/Apps/atm`。
+
+### AI Tools
+
+```text
+🧠 AI Tools Installer
+Current: <status>
+------------------------------------------
+1) Install Hermes-Agent
+b) Back
+q) Exit
+```
+
+In this phase, only `Install Hermes-Agent` is implemented. The installer runs: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `--dry-run` prints the command without downloading or executing it.
 
 ## PATH、CLI 和 Desktop
 

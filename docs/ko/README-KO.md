@@ -43,6 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, platform-tools를 설치합니다. |
 | OS Packages | `os_packages` | `0.0.1` | 감지된 Linux package manager를 사용해 일반 OS 패키지를 설치하고 제거합니다. |
 | Docker | `docker` | `0.0.1` | 공식 소스에서 Docker Engine, Docker Compose, Docker Desktop을 설치합니다. |
+| AI Tools | `ai` | `0.0.1` | Install AI tools and agents, starting with Hermes-Agent. |
 
 ## 기능
 
@@ -179,9 +180,10 @@ Language: en-us
 6) 📦 Android SDK                      <status>
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
+9) 🧠 AI Tools                         <status>
 ------------------------------------------
-9) ⚡ Install Stack / Full Setup
-10) 🛠️  Configure PATH, CLI & Desktop
+10) ⚡ Install Stack / Full Setup
+11) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -195,7 +197,7 @@ Choose an option:
 
 | 옵션 | 작업 |
 |---|---|
-| `1` to `8` | 선택한 플러그인 하위 메뉴를 엽니다. |
+| `1` to `9` | 선택한 플러그인 하위 메뉴를 엽니다. |
 | `9` | stack installation이 활성화된 플러그인에 대해 Full Setup을 실행합니다. |
 | `10` | shell PATH, CLI links, desktop launchers를 구성합니다. |
 | `s` | ATM command setup을 엽니다. |
@@ -402,6 +404,19 @@ q) Exit
 ```
 
 portable mode가 권장 기본값입니다. system mode는 command link만 생성하며 프로젝트 파일은 `~/Apps/atm`에 남아 있습니다.
+
+### AI Tools
+
+```text
+🧠 AI Tools Installer
+Current: <status>
+------------------------------------------
+1) Install Hermes-Agent
+b) Back
+q) Exit
+```
+
+In this phase, only `Install Hermes-Agent` is implemented. The installer runs: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `--dry-run` prints the command without downloading or executing it.
 
 ## PATH, CLI, Desktop
 

@@ -43,6 +43,7 @@ Desktop apps: ~/.local/share/applications
 | Android SDK | `android_sdk` | `0.0.1` | Android SDK command-line tools、platforms、build-tools、CMake、NDK、emulator、platform-tools をインストールします。 |
 | OS Packages | `os_packages` | `0.0.1` | 検出された Linux package manager を使って共通 OS パッケージをインストール/削除します。 |
 | Docker | `docker` | `0.0.1` | 公式ソースから Docker Engine、Docker Compose、Docker Desktop をインストールします。 |
+| AI Tools | `ai` | `0.0.1` | Install AI tools and agents, starting with Hermes-Agent. |
 
 ## 機能
 
@@ -179,9 +180,10 @@ Language: en-us
 6) 📦 Android SDK                      <status>
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
+9) 🧠 AI Tools                         <status>
 ------------------------------------------
-9) ⚡ Install Stack / Full Setup
-10) 🛠️  Configure PATH, CLI & Desktop
+10) ⚡ Install Stack / Full Setup
+11) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
@@ -195,7 +197,7 @@ Choose an option:
 
 | オプション | 操作 |
 |---|---|
-| `1` to `8` | 選択したプラグインのサブメニューを開きます。 |
+| `1` to `9` | 選択したプラグインのサブメニューを開きます。 |
 | `9` | stack installation が有効なプラグインに対して Full Setup を実行します。 |
 | `10` | shell PATH、CLI links、desktop launchers を設定します。 |
 | `s` | ATM command setup を開きます。 |
@@ -402,6 +404,19 @@ q) Exit
 ```
 
 portable mode が推奨デフォルトです。system mode は command link のみを作成し、プロジェクトファイルは `~/Apps/atm` に残ります。
+
+### AI Tools
+
+```text
+🧠 AI Tools Installer
+Current: <status>
+------------------------------------------
+1) Install Hermes-Agent
+b) Back
+q) Exit
+```
+
+In this phase, only `Install Hermes-Agent` is implemented. The installer runs: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `--dry-run` prints the command without downloading or executing it.
 
 ## PATH、CLI、Desktop
 
