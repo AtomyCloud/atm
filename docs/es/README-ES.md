@@ -464,7 +464,16 @@ Los lanzadores de escritorio se instalan en:
 
 ## Locales
 
-Usa `ATM_LANG` para seleccionar un idioma:
+Use the CLI to persistently change the ATM language:
+
+```bash
+atm lang list
+atm lang current
+atm lang set pt-br
+atm lang select
+```
+
+Use `ATM_LANG` for a one-command temporary language override:
 
 ```bash
 ATM_LANG=pt-br atm

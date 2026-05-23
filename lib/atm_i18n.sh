@@ -154,12 +154,46 @@ atm_i18n_load_plugin_lang() {
     atm_i18n_load_file "$plugin_lang_file"
 }
 
+atm_i18n_select_cli() {
+    local choice=""
+    local langs=()
+    local idx=1
+    local lang=""
+
+    mapfile -t langs < <(atm_i18n_available)
+
+    if ((${#langs[@]} == 0)); then
+        atm_fail "No language files found in $ATM_LANG_DIR"
+    fi
+
+    printf 'Current language: %s\n' "${ATM_LANG:-not configured}"
+    printf '\nAvailable languages:\n'
+
+    for lang in "${langs[@]}"; do
+        printf '%s) %s\n' "$idx" "$lang"
+        idx=$((idx + 1))
+    done
+
+    printf 'Select language: '
+    read -r choice || atm_fail "Language selection cancelled."
+
+    if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#langs[@]})); then
+        atm_i18n_cli set "${langs[$((choice - 1))]}"
+        return 0
+    fi
+
+    atm_i18n_cli set "$choice"
+}
+
 atm_i18n_cli() {
     local subcmd="${1:-list}"
 
     case "$subcmd" in
-        list)
+        list|available)
             atm_i18n_available
+            ;;
+        current|status)
+            printf '%s\n' "${ATM_LANG:-not configured}"
             ;;
         set)
             local locale="${2:-}"
@@ -170,7 +204,11 @@ atm_i18n_cli() {
             atm_i18n_exists "$locale" || atm_fail "Language not found: $locale"
 
             atm_config_set_key "$ATM_CONFIG_FILE" "ATM_LANG" "$locale"
+            ATM_LANG="$locale"
             atm_success "Language set to: $locale"
+            ;;
+        select|choose|menu|change)
+            atm_i18n_select_cli
             ;;
         *)
             atm_fail "Unknown lang command: $subcmd"

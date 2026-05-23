@@ -184,7 +184,9 @@ Usage:
   atm setup [portable|system|status]
   atm self-update [--git|--tarball|--check]
   atm lang list
+  atm lang current
   atm lang set <locale>
+  atm lang select
 
 Global options:
   --debug
@@ -228,7 +230,7 @@ atm_core_dispatch() {
         use)
             atm_use_cli "${ATM_ARGS[@]:1}"
             ;;
-        lang)
+        lang|language)
             atm_i18n_cli "${ATM_ARGS[@]:1}"
             ;;
         *)
@@ -244,6 +246,12 @@ atm_core_main() {
     atm_core_prepare_dirs
     atm_logs_init
     atm_config_init
+
+    if [[ "${ATM_ARGS[0]:-}" == "lang" || "${ATM_ARGS[0]:-}" == "language" ]]; then
+        atm_i18n_cli "${ATM_ARGS[@]:1}"
+        return 0
+    fi
+
     atm_i18n_init
     atm_plugin_load_all
 

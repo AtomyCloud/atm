@@ -464,7 +464,16 @@ desktop launcher は次にインストールされます:
 
 ## Locales
 
-言語を選ぶには `ATM_LANG` を使います:
+Use the CLI to persistently change the ATM language:
+
+```bash
+atm lang list
+atm lang current
+atm lang set pt-br
+atm lang select
+```
+
+Use `ATM_LANG` for a one-command temporary language override:
 
 ```bash
 ATM_LANG=pt-br atm

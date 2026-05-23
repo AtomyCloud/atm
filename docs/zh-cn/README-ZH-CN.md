@@ -464,7 +464,16 @@ ATM_PATH_WRITE_SYSTEM_PROFILE=1 atm path apply
 
 ## Locales
 
-使用 `ATM_LANG` 选择语言：
+Use the CLI to persistently change the ATM language:
+
+```bash
+atm lang list
+atm lang current
+atm lang set pt-br
+atm lang select
+```
+
+Use `ATM_LANG` for a one-command temporary language override:
 
 ```bash
 ATM_LANG=pt-br atm
