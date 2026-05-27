@@ -196,6 +196,7 @@ f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
+l) 🌐 Change Language
 d) 🩺 Doctor
 u) ♻️  Self-update
 q) ❌ Exit

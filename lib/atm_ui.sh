@@ -65,6 +65,7 @@ atm_menu_main() {
         printf 'c) 🛠️  %s\n' "$(atm_t ATM_MENU_PATH)"
         printf 's) ⚙️  %s\n' "$(atm_t ATM_MENU_SETUP_ATM)"
         printf 'p) 🔌 %s\n' "$(atm_t ATM_MENU_PLUGINS)"
+        printf 'l) 🌐 %s\n' "$(atm_t ATM_MENU_CHANGE_LANGUAGE)"
         printf 'd) 🩺 %s\n' "$(atm_t ATM_MENU_DOCTOR)"
         printf 'u) ♻️  %s\n' "$(atm_t ATM_MENU_SELF_UPDATE)"
         printf 'q) ❌ %s\n' "$(atm_t ATM_MENU_EXIT)"
@@ -83,6 +84,11 @@ atm_menu_main() {
                 ;;
             p|P)
                 atm_plugins_cli list
+                atm_prompt_continue
+                ;;
+            l|L)
+                atm_i18n_select_cli
+                atm_i18n_load_file "$ATM_LANG_DIR/$ATM_LANG.lang"
                 atm_prompt_continue
                 ;;
             d|D)
