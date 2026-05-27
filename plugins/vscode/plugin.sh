@@ -90,6 +90,38 @@ atm_vscode_version_from_args() {
     atm_vscode_normalize_version "$version"
 }
 
+atm_vscode_versions_from_api() {
+    local releases_url="${ATM_VSCODE_RELEASES_URL:-https://update.code.visualstudio.com/api/releases/stable}"
+    local limit="${ATM_VSCODE_RELEASES_LIMIT:-7}"
+
+    if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+        return 1
+    fi
+
+    atm_require_commands curl grep sed
+
+    curl -fsSL "$releases_url" 2>/dev/null \
+        | grep -oE "\"[0-9]+\.[0-9]+\.[0-9]+\"" \
+        | sed "s/\"//g" \
+        | sed -n "1,${limit}p"
+}
+
+atm_vscode_fallback_versions() {
+    printf "%s\n" ${ATM_VSCODE_VERSION_OPTIONS:-1.118.1 1.118.0 1.117.0 1.116.0 1.115.0 1.114.0 1.113.0}
+}
+
+atm_vscode_latest_versions() {
+    local versions=()
+
+    mapfile -t versions < <(atm_vscode_versions_from_api || true)
+
+    if (( ${#versions[@]} == 0 )); then
+        mapfile -t versions < <(atm_vscode_fallback_versions)
+    fi
+
+    printf "%s\n" "${versions[@]}"
+}
+
 atm_vscode_read_package_version() {
     local vscode_home="$1"
     local package_json="$vscode_home/resources/app/package.json"
@@ -539,6 +571,90 @@ atm_vscode_uninstall() {
     atm_success "$(atm_t ATM_PLUGIN_VSCODE_UNINSTALLED)"
 }
 
+atm_vscode_migrate_data() {
+    local source_version="$1"
+    local target_version="$2"
+    local source_data=""
+    local target_data=""
+    local backup_data=""
+
+    source_version="$(atm_vscode_normalize_version "$source_version")"
+    target_version="$(atm_vscode_normalize_version "$target_version")"
+
+    [[ "$source_version" != "$target_version" ]] || atm_fail "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_SAME_VERSION)"
+
+    source_data="$(atm_vscode_install_dir "$source_version")/data"
+    target_data="$(atm_vscode_install_dir "$target_version")/data"
+
+    [[ -d "$source_data" ]] || atm_fail "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_SOURCE_MISSING): $source_data"
+    [[ -d "$(atm_vscode_install_dir "$target_version")" ]] || atm_fail "VS Code version is not installed: v$(atm_vscode_short_version "$target_version")"
+
+    if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+        printf "DRY-RUN: migrate VS Code data from %s to %s\n" "$source_data" "$target_data"
+        return 0
+    fi
+
+    if [[ -e "$target_data" ]]; then
+        backup_data="${target_data}.backup.$(date +%Y%m%d%H%M%S)"
+        mv "$target_data" "$backup_data"
+        atm_warn "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_BACKUP_CREATED): $backup_data"
+    fi
+
+    cp -a "$source_data" "$target_data"
+    atm_success "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_DONE): v$(atm_vscode_short_version "$source_version") -> v$(atm_vscode_short_version "$target_version")"
+}
+
+atm_vscode_migrate_data_menu() {
+    local choice=""
+    local idx=1
+    local source_choice=""
+    local target_choice=""
+    local source_version=""
+    local target_version=""
+    local version=""
+    local versions=()
+
+    mapfile -t versions < <(atm_vscode_list_installed_versions)
+
+    if [[ "${#versions[@]}" -lt 2 ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_NEEDS_TWO)"
+        return 0
+    fi
+
+    clear
+    printf "%s\n" "=========================================="
+    printf "    💻 %s\n" "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_TITLE)"
+    printf "%s\n" "=========================================="
+
+    for version in "${versions[@]}"; do
+        printf "%s) VS Code %s\n" "$idx" "$version"
+        idx=$((idx + 1))
+    done
+
+    printf "%s " "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_SELECT_SOURCE)"
+    read -r source_choice
+    printf "%s " "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_SELECT_TARGET)"
+    read -r target_choice
+
+    case "$source_choice" in
+        ""|*[!0-9]*) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; return 0 ;;
+    esac
+
+    case "$target_choice" in
+        ""|*[!0-9]*) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; return 0 ;;
+    esac
+
+    if [[ "$source_choice" -lt 1 || "$source_choice" -gt "${#versions[@]}" || "$target_choice" -lt 1 || "$target_choice" -gt "${#versions[@]}" ]]; then
+        atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
+        return 0
+    fi
+
+    source_version="${versions[$((source_choice - 1))]}"
+    target_version="${versions[$((target_choice - 1))]}"
+
+    atm_vscode_migrate_data "$source_version" "$target_version"
+}
+
 atm_vscode_use_installed_menu() {
     local choice=""
     local idx=1
@@ -606,6 +722,7 @@ atm_vscode_menu() {
     local current=""
     local choose_option=0
     local use_option=0
+    local migrate_option=0
     local list_option=0
     local remove_option=0
     local uninstall_option=0
@@ -623,8 +740,9 @@ atm_vscode_menu() {
         idx=1
         versions=()
 
-        for version in ${ATM_VSCODE_VERSION_OPTIONS:-1.118.1 1.118.0 1.117.0 1.116.0 1.115.0 1.114.0 1.113.0}; do
-            versions+=("$version")
+        mapfile -t versions < <(atm_vscode_latest_versions)
+
+        for version in "${versions[@]}"; do
 
             if [[ "$idx" == "1" ]]; then
                 printf '%s) VS Code %s (%s)\n' "$idx" "$version" "$(atm_t ATM_PLUGIN_VSCODE_LATEST_STABLE)"
@@ -643,6 +761,10 @@ atm_vscode_menu() {
 
         use_option="$idx"
         printf '%s) %s\n' "$use_option" "$(atm_t ATM_PLUGIN_VSCODE_USE_INSTALLED)"
+        idx=$((idx + 1))
+
+        migrate_option="$idx"
+        printf '%s) %s\n' "$migrate_option" "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_DATA)"
         idx=$((idx + 1))
 
         list_option="$idx"
@@ -689,6 +811,9 @@ atm_vscode_menu() {
 
                 elif [[ "$choice" -eq "$use_option" ]]; then
                     atm_vscode_use_installed_menu
+
+                elif [[ "$choice" -eq "$migrate_option" ]]; then
+                    atm_vscode_migrate_data_menu
 
                 elif [[ "$choice" -eq "$list_option" ]]; then
                     atm_vscode_list_installed_versions
