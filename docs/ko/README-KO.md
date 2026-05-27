@@ -44,6 +44,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | 감지된 Linux package manager를 사용해 일반 OS 패키지를 설치하고 제거합니다. |
 | Docker | `docker` | `0.0.1` | 공식 소스에서 Docker Engine, Docker Compose, Docker Desktop을 설치합니다. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
+| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 
 ## 기능
 
@@ -181,6 +182,7 @@ Language: en-us
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
+10) 🟢 Node.js                          <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -198,11 +200,12 @@ Choose an option:
 
 | 옵션 | 작업 |
 |---|---|
-| `1` to `9` | 선택한 플러그인 하위 메뉴를 엽니다. |
+| `1` to `10` | 선택한 플러그인 하위 메뉴를 엽니다. |
 | `f` | stack installation이 활성화된 플러그인에 대해 Full Setup을 실행합니다. |
 | `c` | shell PATH, CLI links, desktop launchers를 구성합니다. |
 | `s` | ATM command setup을 엽니다. |
 | `p` | 로드된 플러그인을 나열합니다. |
+| `l` | ATM에 설정된 언어를 변경합니다. |
 | `d` | doctor checks를 실행합니다. |
 | `u` | self-update status를 확인합니다. |
 | `q` | 종료합니다. |
@@ -405,6 +408,25 @@ q) Exit
 ```
 
 portable mode가 권장 기본값입니다. system mode는 command link만 생성하며 프로젝트 파일은 `~/Apps/atm`에 남아 있습니다.
+
+### Node.js
+
+```text
+🟢 Node.js Installer
+Current: <status>
+------------------------------------------
+1) Node.js v26.x
+2) Node.js v25.x
+3) Node.js v24.x (LTS)
+4) List installed versions
+5) Change active version
+6) Remove installed version
+7) Uninstall Node.js completely
+b) Back
+q) Exit
+```
+
+Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
 ### AI Tools
 

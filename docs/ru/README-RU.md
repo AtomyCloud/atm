@@ -44,6 +44,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | Устанавливает и удаляет общие пакеты ОС через обнаруженный пакетный менеджер. |
 | Docker | `docker` | `0.0.1` | Устанавливает Docker Engine, Docker Compose и Docker Desktop из официальных источников. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
+| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 
 ## Возможности
 
@@ -181,6 +182,7 @@ Language: en-us
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
+10) 🟢 Node.js                          <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -198,11 +200,12 @@ Choose an option:
 
 | Опция | Действие |
 |---|---|
-| `1` to `9` | Открывает подменю выбранного плагина. |
+| `1` to `10` | Открывает подменю выбранного плагина. |
 | `f` | Запускает Full Setup для плагинов, включённых для установки stack. |
 | `c` | Настраивает shell PATH, CLI links и desktop launchers. |
 | `s` | Открывает настройку команды ATM. |
 | `p` | Показывает загруженные плагины. |
+| `l` | Меняет настроенный язык ATM. |
 | `d` | Запускает doctor checks. |
 | `u` | Проверяет статус self-update. |
 | `q` | Выход. |
@@ -405,6 +408,25 @@ q) Exit
 ```
 
 Portable mode — рекомендуемый вариант по умолчанию. System mode создаёт только command link; файлы проекта остаются в `~/Apps/atm`.
+
+### Node.js
+
+```text
+🟢 Node.js Installer
+Current: <status>
+------------------------------------------
+1) Node.js v26.x
+2) Node.js v25.x
+3) Node.js v24.x (LTS)
+4) List installed versions
+5) Change active version
+6) Remove installed version
+7) Uninstall Node.js completely
+b) Back
+q) Exit
+```
+
+Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
 ### AI Tools
 

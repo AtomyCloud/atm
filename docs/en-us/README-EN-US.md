@@ -44,6 +44,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 | Docker | `docker` | `0.0.1` | Install Docker Engine, Docker Compose, and Docker Desktop from official sources. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
+| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 
 ## Features
 
@@ -181,6 +182,7 @@ Language: en-us
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
+10) 🟢 Node.js                          <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -198,11 +200,12 @@ Main menu actions:
 
 | Option | Action |
 |---|---|
-| `1` to `9` | Open the selected plugin submenu. |
+| `1` to `10` | Open the selected plugin submenu. |
 | `f` | Run Full Setup for plugins enabled for stack installation. |
 | `c` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
 | `p` | List loaded plugins. |
+| `l` | Change the configured ATM language. |
 | `d` | Run doctor checks. |
 | `u` | Check self-update status. |
 | `q` | Exit. |
@@ -389,6 +392,25 @@ q) Exit
 ```
 
 In this phase, `Install Docker Engine`, `Install Docker Compose`, and `Install Docker Desktop` are implemented. Docker Engine follows the provided Ansible flow: run the official Docker install script, add the target user to the `docker` group, and enable/start the Docker service. Docker Compose downloads the latest official standalone binary from GitHub into `/usr/local/bin/docker-compose` and marks it executable. Docker Desktop follows the official Ubuntu DEB flow: download the latest `docker-desktop-amd64.deb`, run `apt-get update`, and install the local package with `apt`. Install ALL remains a placeholder for a later patch.
+
+### Node.js
+
+```text
+🟢 Node.js Installer
+Current: <status>
+------------------------------------------
+1) Node.js v26.x
+2) Node.js v25.x
+3) Node.js v24.x (LTS)
+4) List installed versions
+5) Change active version
+6) Remove installed version
+7) Uninstall Node.js completely
+b) Back
+q) Exit
+```
+
+Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
 ### AI Tools
 

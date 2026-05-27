@@ -44,6 +44,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | Installiert und entfernt gängige Betriebssystempakete mit dem erkannten Paketmanager. |
 | Docker | `docker` | `0.0.1` | Installiert Docker Engine, Docker Compose und Docker Desktop aus offiziellen Quellen. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
+| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 
 ## Funktionen
 
@@ -181,6 +182,7 @@ Language: en-us
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
+10) 🟢 Node.js                          <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -198,11 +200,12 @@ Aktionen im Hauptmenü:
 
 | Option | Aktion |
 |---|---|
-| `1` to `9` | Öffnet das Untermenü des ausgewählten Plugins. |
+| `1` to `10` | Öffnet das Untermenü des ausgewählten Plugins. |
 | `f` | Führt Full Setup für Plugins aus, die für Stack-Installation aktiviert sind. |
 | `c` | Konfiguriert Shell-PATH, CLI-Links und Desktop-Starter. |
 | `s` | Öffnet die ATM-Befehlseinrichtung. |
 | `p` | Listet geladene Plugins auf. |
+| `l` | Ändert die konfigurierte ATM-Sprache. |
 | `d` | Führt Doctor-Prüfungen aus. |
 | `u` | Prüft den Self-update-Status. |
 | `q` | Beendet. |
@@ -405,6 +408,25 @@ q) Exit
 ```
 
 Der portable Modus ist der empfohlene Standard. Der Systemmodus erstellt nur einen Befehlslink; Projektdateien bleiben unter `~/Apps/atm`.
+
+### Node.js
+
+```text
+🟢 Node.js Installer
+Current: <status>
+------------------------------------------
+1) Node.js v26.x
+2) Node.js v25.x
+3) Node.js v24.x (LTS)
+4) List installed versions
+5) Change active version
+6) Remove installed version
+7) Uninstall Node.js completely
+b) Back
+q) Exit
+```
+
+Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
 ### AI Tools
 

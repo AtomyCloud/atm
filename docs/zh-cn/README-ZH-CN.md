@@ -44,6 +44,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | 使用检测到的 Linux 包管理器安装和移除常用操作系统软件包。 |
 | Docker | `docker` | `0.0.1` | 从官方来源安装 Docker Engine、Docker Compose 和 Docker Desktop。 |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
+| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 
 ## 功能
 
@@ -181,6 +182,7 @@ Language: en-us
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
+10) 🟢 Node.js                          <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -198,11 +200,12 @@ Choose an option:
 
 | 选项 | 操作 |
 |---|---|
-| `1` to `9` | 打开所选插件子菜单。 |
+| `1` to `10` | 打开所选插件子菜单。 |
 | `f` | 对启用 stack installation 的插件运行 Full Setup。 |
 | `c` | 配置 shell PATH、CLI links 和 desktop launchers。 |
 | `s` | 打开 ATM command setup。 |
 | `p` | 列出已加载插件。 |
+| `l` | 更改 ATM 配置的语言。 |
 | `d` | 运行 doctor checks。 |
 | `u` | 检查 self-update status。 |
 | `q` | 退出。 |
@@ -405,6 +408,25 @@ q) Exit
 ```
 
 portable mode 是推荐默认值。system mode 只创建命令链接；项目文件仍位于 `~/Apps/atm`。
+
+### Node.js
+
+```text
+🟢 Node.js Installer
+Current: <status>
+------------------------------------------
+1) Node.js v26.x
+2) Node.js v25.x
+3) Node.js v24.x (LTS)
+4) List installed versions
+5) Change active version
+6) Remove installed version
+7) Uninstall Node.js completely
+b) Back
+q) Exit
+```
+
+Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
 ### AI Tools
 

@@ -44,6 +44,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | 検出された Linux package manager を使って共通 OS パッケージをインストール/削除します。 |
 | Docker | `docker` | `0.0.1` | 公式ソースから Docker Engine、Docker Compose、Docker Desktop をインストールします。 |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
+| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 
 ## 機能
 
@@ -181,6 +182,7 @@ Language: en-us
 7) 🧰 OS Packages                      <status>
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
+10) 🟢 Node.js                          <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -198,11 +200,12 @@ Choose an option:
 
 | オプション | 操作 |
 |---|---|
-| `1` to `9` | 選択したプラグインのサブメニューを開きます。 |
+| `1` to `10` | 選択したプラグインのサブメニューを開きます。 |
 | `f` | stack installation が有効なプラグインに対して Full Setup を実行します。 |
 | `c` | shell PATH、CLI links、desktop launchers を設定します。 |
 | `s` | ATM command setup を開きます。 |
 | `p` | 読み込まれたプラグインを一覧表示します。 |
+| `l` | ATM の設定言語を変更します。 |
 | `d` | doctor checks を実行します。 |
 | `u` | self-update status を確認します。 |
 | `q` | 終了します。 |
@@ -405,6 +408,25 @@ q) Exit
 ```
 
 portable mode が推奨デフォルトです。system mode は command link のみを作成し、プロジェクトファイルは `~/Apps/atm` に残ります。
+
+### Node.js
+
+```text
+🟢 Node.js Installer
+Current: <status>
+------------------------------------------
+1) Node.js v26.x
+2) Node.js v25.x
+3) Node.js v24.x (LTS)
+4) List installed versions
+5) Change active version
+6) Remove installed version
+7) Uninstall Node.js completely
+b) Back
+q) Exit
+```
+
+Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
 ### AI Tools
 
