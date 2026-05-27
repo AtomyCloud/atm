@@ -19,12 +19,16 @@ atm_path_user_zshrc_file() {
     printf '%s\n' "$HOME/.zshrc"
 }
 
+atm_path_portable_home() {
+    printf '%s\n' "${ATM_PORTABLE_HOME:-$HOME/Apps/atm}"
+}
+
 atm_path_collect_entries() {
     local id=""
     local func=""
 
     printf '%s\n' "$HOME/.local/bin"
-    printf '%s\n' "$ATM_HOME/bin"
+    printf '%s\n' "$(atm_path_portable_home)/bin"
 
     for id in $(atm_plugin_list_sorted_ids); do
         func="${ATM_PLUGIN_PATH_FUNC[$id]:-}"
@@ -39,6 +43,9 @@ atm_path_generate_block() {
     local entries=()
     local entry=""
     local path_line=""
+    local portable_home=""
+
+    portable_home="$(atm_path_portable_home)"
 
     mapfile -t entries < <(atm_path_collect_entries | awk 'NF && !seen[$0]++')
 
@@ -48,7 +55,7 @@ atm_path_generate_block() {
 
     cat <<EOF
 $atm_path_block_begin
-export ATM_HOME="$ATM_HOME"
+export ATM_HOME="$portable_home"
 export ATM_APPS_DIR="$ATM_APPS_DIR"
 export ATM_CACHE_DIR="$ATM_CACHE_DIR"
 export ATM_STATE_DIR="$ATM_STATE_DIR"

@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 
 atm_config_init() {
+    local runtime_atm_home="${ATM_HOME:-}"
+    local runtime_atm_lang_dir="${ATM_LANG_DIR:-}"
+    local runtime_atm_plugin_dir="${ATM_PLUGIN_DIR:-}"
     local env_atm_lang="${ATM_LANG:-}"
     local env_atm_apps_dir="${ATM_APPS_DIR:-}"
     local env_atm_cache_dir="${ATM_CACHE_DIR:-}"
@@ -42,6 +45,12 @@ EOF
 
     # shellcheck source=/dev/null
     [[ -f "$ATM_PLUGINS_CONFIG_FILE" ]] && source "$ATM_PLUGINS_CONFIG_FILE"
+
+    # ATM_HOME is runtime-owned by bin/atm. Never let stale config point to
+    # an old checkout such as ~/Downloads/atm.
+    ATM_HOME="$runtime_atm_home"
+    ATM_LANG_DIR="$runtime_atm_lang_dir"
+    ATM_PLUGIN_DIR="$runtime_atm_plugin_dir"
 
     # Environment variables must override config file values.
     [[ -n "$env_atm_lang" ]] && ATM_LANG="$env_atm_lang"
