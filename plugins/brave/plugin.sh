@@ -8,6 +8,14 @@ atm_brave_package_name() {
     printf '%s\n' "${ATM_BRAVE_PACKAGE_NAME:-brave-browser}"
 }
 
+atm_brave_profile_dir() {
+    printf '%s\n' "${ATM_BRAVE_PROFILE_DIR:-$HOME/.config/BraveSoftware/Brave-Browser}"
+}
+
+atm_brave_backup_dir() {
+    printf '%s\n' "${ATM_BRAVE_BACKUP_DIR:-$ATM_APPS_DIR/backups/brave}"
+}
+
 atm_brave_package_manager() {
     if command -v apt-get >/dev/null 2>&1; then
         printf '%s\n' "apt-get"
@@ -41,6 +49,17 @@ atm_brave_installed() {
     command -v brave-browser >/dev/null 2>&1
 }
 
+atm_brave_browser_running() {
+    command -v pgrep >/dev/null 2>&1 || return 1
+    pgrep -u "${USER:-$(id -un)}" -f 'brave-browser' >/dev/null 2>&1
+}
+
+atm_brave_require_profile_closed() {
+    if atm_brave_browser_running; then
+        atm_fail "$(atm_t ATM_PLUGIN_BRAVE_CLOSE_BROWSER_FIRST)"
+    fi
+}
+
 atm_brave_status() {
     if atm_brave_installed; then
         printf '✅ '
@@ -63,7 +82,9 @@ atm_brave_write_manifest() {
         "ATM_PLUGIN_VERSION=0.0.1" \
         "ATM_INSTALLED=$installed" \
         "ATM_PACKAGE_MANAGER=$manager" \
-        "ATM_BRAVE_VERSION=$version"
+        "ATM_BRAVE_VERSION=$version" \
+        "ATM_BRAVE_PROFILE_DIR=$(atm_brave_profile_dir)" \
+        "ATM_BRAVE_BACKUP_DIR=$(atm_brave_backup_dir)"
 }
 
 atm_brave_apt_install_commands() {
@@ -207,6 +228,140 @@ atm_brave_show_commands() {
     atm_brave_remove_commands "$package_manager"
 }
 
+atm_brave_backup_file() {
+    local timestamp=""
+
+    timestamp="$(date +%Y%m%d-%H%M%S)"
+    printf '%s/brave-profile-%s.tar.gz\n' "$(atm_brave_backup_dir)" "$timestamp"
+}
+
+atm_brave_backup_profile() {
+    local profile_dir=""
+    local profile_parent=""
+    local profile_name=""
+    local backup_dir=""
+    local backup_file=""
+
+    profile_dir="$(atm_brave_profile_dir)"
+    profile_parent="$(dirname "$profile_dir")"
+    profile_name="$(basename "$profile_dir")"
+    backup_dir="$(atm_brave_backup_dir)"
+    backup_file="$(atm_brave_backup_file)"
+
+    [[ -d "$profile_dir" ]] || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_PROFILE_NOT_FOUND): $profile_dir"
+    atm_brave_require_profile_closed
+
+    if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+        printf 'DRY-RUN: mkdir -p %s\n' "$backup_dir"
+        printf 'DRY-RUN: tar -czf %s -C %s %s\n' "$backup_file" "$profile_parent" "$profile_name"
+        return 0
+    fi
+
+    atm_require_commands tar date dirname basename
+    mkdir -p "$backup_dir" || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_FAILED): $backup_dir"
+    tar -czf "$backup_file" -C "$profile_parent" "$profile_name" || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_FAILED): $backup_file"
+    atm_success "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_CREATED): $backup_file"
+}
+
+atm_brave_list_backups() {
+    local backup_dir=""
+
+    backup_dir="$(atm_brave_backup_dir)"
+
+    if [[ ! -d "$backup_dir" ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_BRAVE_NO_BACKUPS): $backup_dir"
+        return 0
+    fi
+
+    find "$backup_dir" -maxdepth 1 -type f -name 'brave-profile-*.tar.gz' | sort
+}
+
+atm_brave_latest_backup() {
+    atm_brave_list_backups 2>/dev/null | tail -n 1
+}
+
+atm_brave_restore_latest_backup() {
+    local archive_file=""
+    local profile_dir=""
+    local profile_parent=""
+    local safety_backup=""
+    local answer=""
+
+    archive_file="$(atm_brave_latest_backup)"
+    [[ -n "$archive_file" && -f "$archive_file" ]] || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_NO_BACKUPS): $(atm_brave_backup_dir)"
+
+    profile_dir="$(atm_brave_profile_dir)"
+    profile_parent="$(dirname "$profile_dir")"
+    safety_backup="${profile_dir}.before-restore.$(date +%Y%m%d-%H%M%S)"
+
+    atm_brave_require_profile_closed
+
+    printf '%s\n' "$(atm_t ATM_PLUGIN_BRAVE_RESTORE_WARNING)"
+    printf '%s: %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_FILE)" "$archive_file"
+    printf 'Continue? [y/N]: '
+    read -r answer
+
+    case "$answer" in
+        y|Y|yes|YES) ;;
+        *)
+            atm_warn "$(atm_t ATM_PLUGIN_BRAVE_CANCELLED)"
+            return 0
+            ;;
+    esac
+
+    if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+        printf 'DRY-RUN: mkdir -p %s\n' "$profile_parent"
+        [[ -e "$profile_dir" ]] && printf 'DRY-RUN: mv %s %s\n' "$profile_dir" "$safety_backup"
+        printf 'DRY-RUN: tar -xzf %s -C %s\n' "$archive_file" "$profile_parent"
+        return 0
+    fi
+
+    atm_require_commands tar date dirname
+    mkdir -p "$profile_parent" || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_RESTORE_FAILED): $profile_parent"
+
+    if [[ -e "$profile_dir" ]]; then
+        mv "$profile_dir" "$safety_backup" || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_RESTORE_FAILED): $safety_backup"
+        atm_warn "$(atm_t ATM_PLUGIN_BRAVE_EXISTING_PROFILE_BACKED_UP): $safety_backup"
+    fi
+
+    tar -xzf "$archive_file" -C "$profile_parent" || atm_fail "$(atm_t ATM_PLUGIN_BRAVE_RESTORE_FAILED): $archive_file"
+    atm_success "$(atm_t ATM_PLUGIN_BRAVE_RESTORED): $archive_file"
+}
+
+atm_brave_backup_menu() {
+    local choice=""
+
+    while true; do
+        clear
+        printf '%s\n' "=========================================="
+        printf '    🦁 %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_MENU_TITLE)"
+        printf '%s\n' "=========================================="
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_BRAVE_PROFILE_DIR)" "$(atm_brave_profile_dir)"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_DIR)" "$(atm_brave_backup_dir)"
+        printf '%s\n' "------------------------------------------"
+        printf '1) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_CREATE)"
+        printf '2) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_LIST)"
+        printf '3) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_RESTORE_LATEST)"
+        printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+        printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
+        printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+        read -r choice
+
+        case "$choice" in
+            1) atm_brave_backup_profile ;;
+            2) atm_brave_list_backups ;;
+            3) atm_brave_restore_latest_backup ;;
+            b|B) return 0 ;;
+            q|Q) exit 0 ;;
+            *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
+        esac
+
+        printf '\n%s' "$(atm_t ATM_MENU_PRESS_ANY_KEY)"
+        read -r -n 1 _ || true
+        printf '\n'
+    done
+}
+
 atm_brave_use() {
     atm_warn "$(atm_t ATM_PLUGIN_BRAVE_USE_NOT_SUPPORTED)"
 }
@@ -231,6 +386,7 @@ atm_brave_menu() {
         printf '1) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_INSTALL)"
         printf '2) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_UNINSTALL)"
         printf '3) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_SHOW_COMMANDS)"
+        printf '4) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_MENU)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -240,6 +396,7 @@ atm_brave_menu() {
             1) atm_brave_install ;;
             2) atm_brave_uninstall ;;
             3) atm_brave_show_commands ;;
+            4) atm_brave_backup_menu ;;
             b|B) return 0 ;;
             q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
