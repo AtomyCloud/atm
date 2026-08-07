@@ -14,7 +14,7 @@ wget
 curl
 nano
 grep
-mtr
+mtr-tiny
 jq
 htop
 btop

@@ -131,6 +131,49 @@ atm_os_packages_update_command() {
     esac
 }
 
+atm_os_packages_apt_needs_repair_sources() {
+    local os_name="$1"
+
+    case "$os_name" in
+        ubuntu|zorin)
+            return 0
+            ;;
+        *)
+            return 1
+            ;;
+    esac
+}
+
+atm_os_packages_apt_sources_command() {
+    local mirror="${ATM_OS_PACKAGES_UBUNTU_MIRROR:-http://archive.ubuntu.com/ubuntu}"
+    local security_mirror="${ATM_OS_PACKAGES_UBUNTU_SECURITY_MIRROR:-http://security.ubuntu.com/ubuntu}"
+
+    printf "%s\n" "bash -c 'codename=\"\$(. /etc/os-release && printf \"%s\" \"\${UBUNTU_CODENAME:-\${VERSION_CODENAME:-noble}}\")\"; list_file=\"/etc/apt/sources.list.d/atm-ubuntu-\${codename}.list\"; printf \"%s\\n\" \"deb ${mirror} \${codename} main restricted universe multiverse\" \"deb ${mirror} \${codename}-updates main restricted universe multiverse\" \"deb ${mirror} \${codename}-backports main restricted universe multiverse\" \"deb ${security_mirror} \${codename}-security main restricted universe multiverse\" > \"\${list_file}\"'"
+}
+
+atm_os_packages_apt_targeted_update_command() {
+    printf "%s\n" "bash -c 'codename=\"\$(. /etc/os-release && printf \"%s\" \"\${UBUNTU_CODENAME:-\${VERSION_CODENAME:-noble}}\")\"; apt-get update -o Dir::Etc::sourcelist=\"sources.list.d/atm-ubuntu-\${codename}.list\" -o Dir::Etc::sourceparts=\"-\" -o APT::Get::List-Cleanup=\"0\"'"
+}
+
+atm_os_packages_prepare_commands() {
+    local os_name="$1"
+    local package_manager="$2"
+
+    case "$package_manager" in
+        apt-get)
+            if atm_os_packages_apt_needs_repair_sources "$os_name"; then
+                atm_os_packages_apt_sources_command
+                atm_os_packages_apt_targeted_update_command
+            else
+                printf "%s\n" "apt-get update"
+            fi
+            ;;
+        *)
+            printf "%s\n" "$(atm_os_packages_update_command "$package_manager")"
+            ;;
+    esac
+}
+
 atm_os_packages_install_command() {
     local package_manager="$1"
     local packages="$2"
@@ -216,19 +259,22 @@ atm_os_packages_install() {
     local os_name=""
     local package_manager=""
     local packages=""
-    local update_command=""
+    local prepare_command=""
     local install_command=""
 
     os_name="$(atm_os_packages_os_name)"
     package_manager="$(atm_os_packages_package_manager)"
     packages="$(atm_os_packages_packages_for_manager "$package_manager")"
-    update_command="$(atm_os_packages_update_command "$package_manager")"
     install_command="$(atm_os_packages_install_command "$package_manager" "$packages")"
 
     [[ -n "$packages" ]] || atm_fail "$(atm_t ATM_PLUGIN_OS_PACKAGES_NO_PACKAGES): $package_manager"
 
-    printf '%s %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_INSTALLING)" "$os_name"
-    atm_os_packages_run_command "$update_command"
+    printf "%s %s\n" "$(atm_t ATM_PLUGIN_OS_PACKAGES_INSTALLING)" "$os_name"
+    while IFS= read -r prepare_command || [[ -n "$prepare_command" ]]; do
+        [[ -n "$prepare_command" ]] || continue
+        atm_os_packages_run_command "$prepare_command"
+    done < <(atm_os_packages_prepare_commands "$os_name" "$package_manager")
+
     atm_os_packages_run_command "$install_command"
     atm_os_packages_write_manifest "1"
     atm_success "$(atm_t ATM_PLUGIN_OS_PACKAGES_INSTALLED)"
@@ -332,15 +378,17 @@ atm_os_packages_menu() {
 }
 
 atm_os_packages_show_commands() {
+    local os_name=""
     local package_manager=""
     local packages=""
 
+    os_name="$(atm_os_packages_os_name)"
     package_manager="$(atm_os_packages_package_manager)"
     packages="$(atm_os_packages_packages_for_manager "$package_manager")"
 
-    printf '%s\n' "$(atm_os_packages_update_command "$package_manager")"
-    printf '%s\n' "$(atm_os_packages_install_command "$package_manager" "$packages")"
-    printf '%s\n' "$(atm_os_packages_remove_command "$package_manager" "$packages")"
+    atm_os_packages_prepare_commands "$os_name" "$package_manager"
+    printf "%s\n" "$(atm_os_packages_install_command "$package_manager" "$packages")"
+    printf "%s\n" "$(atm_os_packages_remove_command "$package_manager" "$packages")"
 }
 
 atm_os_packages_path_entries() {
