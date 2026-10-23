@@ -71,6 +71,41 @@ atm_go_version_from_args() {
     atm_go_normalize_version "$version"
 }
 
+atm_go_versions_from_api() {
+    local releases_url="${ATM_GO_RELEASES_URL:-https://go.dev/dl/?mode=json&include=all}"
+    local response=""
+
+    [[ "${ATM_DRY_RUN:-0}" != "1" ]] || return 1
+    command -v curl >/dev/null 2>&1 || return 1
+    command -v jq >/dev/null 2>&1 || return 1
+
+    response="$(curl -fsSL --connect-timeout 5 --max-time 15 "$releases_url" 2>/dev/null)" || return 1
+
+    jq -er '
+        [.[] | select(.stable == true) | .version
+         | select(test("^go[0-9]+\\.[0-9]+\\.[0-9]+$")) | ltrimstr("go")]
+        | unique | sort_by(split(".") | map(tonumber)) | reverse | .[:5][]
+    ' <<< "$response" 2>/dev/null
+}
+
+atm_go_latest_versions() {
+    local releases=""
+    local version=""
+    local fallback=()
+
+    if releases="$(atm_go_versions_from_api)" && [[ -n "$releases" ]]; then
+        printf '%s\n' "$releases"
+        return 0
+    fi
+
+    read -r -a fallback <<< "${ATM_GO_VERSION_OPTIONS:-1.26.2 1.26.1 1.26.0 1.25.9 1.25.5}"
+    for version in "${fallback[@]}"; do
+        version="${version#go}"
+        [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+        printf '%s\n' "$version"
+    done | sort -Vru | sed -n '1,5p'
+}
+
 atm_go_status() {
     local current=""
 
@@ -177,14 +212,13 @@ atm_go_install() {
     if [[ -x "$dest/bin/go" ]]; then
         atm_warn "$(atm_t ATM_PLUGIN_GO_ALREADY_INSTALLED): $dest"
     else
-        mkdir -p "$(atm_go_cache_dir)"
-        mkdir -p "${ATM_GO_INSTALL_ROOT:-$ATM_APPS_DIR/go}"
-
-        atm_download_file "$url" "$cache_file"
-
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+            printf 'DRY-RUN: download %s to %s\n' "$url" "$cache_file"
             printf 'DRY-RUN: install Go %s into %s\n' "$version" "$dest"
         else
+            mkdir -p "$(atm_go_cache_dir)"
+            mkdir -p "${ATM_GO_INSTALL_ROOT:-$ATM_APPS_DIR/go}"
+            atm_download_file "$url" "$cache_file"
             atm_go_extract_archive "$cache_file" "$dest"
         fi
     fi
@@ -291,6 +325,12 @@ atm_go_menu() {
     local idx=1
     local versions=()
     local current=""
+    local choose_option=""
+    local list_option=""
+    local remove_option=""
+    local uninstall_option=""
+
+    mapfile -t versions < <(atm_go_latest_versions)
 
     while true; do
         clear
@@ -298,16 +338,14 @@ atm_go_menu() {
 
         printf '%s\n' "=========================================="
         printf '    🐹 %s\n' "$(atm_t ATM_PLUGIN_GO_MENU_TITLE)"
+        printf '    https://go.dev/\n'
         printf '%s\n' "=========================================="
         printf '%s: %s\n' "$(atm_t ATM_PLUGIN_GO_CURRENT)" "$current"
         printf '%s\n' "------------------------------------------"
 
         idx=1
-        versions=()
 
-        for version in ${ATM_GO_VERSION_OPTIONS:-1.26.2 1.26.1 1.26.0 1.25.9 1.25.5}; do
-            versions+=("$version")
-
+        for version in "${versions[@]}"; do
             if [[ "$idx" == "1" ]]; then
                 printf '%s) Go %s (%s)\n' "$idx" "$version" "$(atm_t ATM_PLUGIN_GO_LATEST_STABLE)"
             else
@@ -317,21 +355,21 @@ atm_go_menu() {
             idx=$((idx + 1))
         done
 
-        printf '6) %s\n' "$(atm_t ATM_PLUGIN_GO_CHOOSE_VERSION)"
-        printf '7) %s\n' "$(atm_t ATM_PLUGIN_GO_LIST_INSTALLED)"
-        printf '8) %s\n' "$(atm_t ATM_PLUGIN_GO_REMOVE_VERSION)"
-        printf '9) %s\n' "$(atm_t ATM_PLUGIN_GO_UNINSTALL)"
+        choose_option="$idx"
+        list_option="$((idx + 1))"
+        remove_option="$((idx + 2))"
+        uninstall_option="$((idx + 3))"
+        printf '%s) %s\n' "$choose_option" "$(atm_t ATM_PLUGIN_GO_CHOOSE_VERSION)"
+        printf '%s) %s\n' "$list_option" "$(atm_t ATM_PLUGIN_GO_LIST_INSTALLED)"
+        printf '%s) %s\n' "$remove_option" "$(atm_t ATM_PLUGIN_GO_REMOVE_VERSION)"
+        printf '%s) %s\n' "$uninstall_option" "$(atm_t ATM_PLUGIN_GO_UNINSTALL)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
         read -r choice
 
         case "$choice" in
-            1|2|3|4|5)
-                version="${versions[$((choice - 1))]}"
-                atm_go_install --version "$version"
-                ;;
-            6)
+            "$choose_option")
                 printf '%s ' "$(atm_t ATM_PLUGIN_GO_ENTER_VERSION)"
                 read -r version
 
@@ -342,10 +380,10 @@ atm_go_menu() {
 
                 atm_go_install --version "$version"
                 ;;
-            7)
+            "$list_option")
                 atm_go_list_installed_versions
                 ;;
-            8)
+            "$remove_option")
                 printf '%s ' "$(atm_t ATM_PLUGIN_GO_ENTER_VERSION)"
                 read -r version
 
@@ -356,7 +394,7 @@ atm_go_menu() {
 
                 atm_go_remove "$version"
                 ;;
-            9)
+            "$uninstall_option")
                 atm_go_uninstall
                 ;;
             b|B)
@@ -366,7 +404,12 @@ atm_go_menu() {
                 exit 0
                 ;;
             *)
-                atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
+                if [[ "$choice" =~ ^[1-5]$ ]] && ((choice <= ${#versions[@]})); then
+                    version="${versions[$((choice - 1))]}"
+                    atm_go_install --version "$version"
+                else
+                    atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
+                fi
                 ;;
         esac
 
