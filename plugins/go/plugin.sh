@@ -319,6 +319,61 @@ atm_go_uninstall() {
     atm_success "$(atm_t ATM_PLUGIN_GO_UNINSTALLED)"
 }
 
+atm_go_use_installed_menu() {
+    local choice=""
+    local version=""
+    local current=""
+    local idx=1
+    local versions=()
+
+    mapfile -t versions < <(atm_go_list_installed_versions)
+
+    if ((${#versions[@]} == 0)); then
+        atm_warn "$(atm_t ATM_PLUGIN_GO_NONE_INSTALLED)"
+        return 0
+    fi
+
+    current="$(atm_go_current_version 2>/dev/null || true)"
+
+    while true; do
+        clear
+        printf '%s\n' "=========================================="
+        printf '    %s\n' "$(atm_t ATM_PLUGIN_GO_CHANGE_VERSION)"
+        printf '%s\n' "=========================================="
+
+        idx=1
+        for version in "${versions[@]}"; do
+            if [[ "$version" == "$current" ]]; then
+                printf '%s) Go %s (%s)\n' "$idx" "$version" "$(atm_t ATM_PLUGIN_GO_CURRENT)"
+            else
+                printf '%s) Go %s\n' "$idx" "$version"
+            fi
+            idx=$((idx + 1))
+        done
+
+        printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+        printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
+        printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+        read -r choice || return 0
+
+        case "$choice" in
+            b|B) return 0 ;;
+            q|Q) exit 0 ;;
+        esac
+
+        idx=1
+        for version in "${versions[@]}"; do
+            if [[ "$choice" == "$idx" ]]; then
+                atm_go_use "$version"
+                return 0
+            fi
+            idx=$((idx + 1))
+        done
+
+        atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
+    done
+}
+
 atm_go_menu() {
     local choice=""
     local version=""
@@ -326,6 +381,7 @@ atm_go_menu() {
     local versions=()
     local current=""
     local choose_option=""
+    local use_option=""
     local list_option=""
     local remove_option=""
     local uninstall_option=""
@@ -356,10 +412,12 @@ atm_go_menu() {
         done
 
         choose_option="$idx"
-        list_option="$((idx + 1))"
-        remove_option="$((idx + 2))"
-        uninstall_option="$((idx + 3))"
+        use_option="$((idx + 1))"
+        list_option="$((idx + 2))"
+        remove_option="$((idx + 3))"
+        uninstall_option="$((idx + 4))"
         printf '%s) %s\n' "$choose_option" "$(atm_t ATM_PLUGIN_GO_CHOOSE_VERSION)"
+        printf '%s) %s\n' "$use_option" "$(atm_t ATM_PLUGIN_GO_CHANGE_VERSION)"
         printf '%s) %s\n' "$list_option" "$(atm_t ATM_PLUGIN_GO_LIST_INSTALLED)"
         printf '%s) %s\n' "$remove_option" "$(atm_t ATM_PLUGIN_GO_REMOVE_VERSION)"
         printf '%s) %s\n' "$uninstall_option" "$(atm_t ATM_PLUGIN_GO_UNINSTALL)"
@@ -379,6 +437,9 @@ atm_go_menu() {
                 }
 
                 atm_go_install --version "$version"
+                ;;
+            "$use_option")
+                atm_go_use_installed_menu
                 ;;
             "$list_option")
                 atm_go_list_installed_versions
