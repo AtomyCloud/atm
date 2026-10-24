@@ -135,6 +135,203 @@ atm_docker_desktop_user_home() {
     printf '%s\n' "$user_home"
 }
 
+atm_docker_run_as_user() {
+    local target_user=""
+    local target_uid=""
+
+    target_user="$(atm_docker_target_user)"
+    if [[ "$target_user" == "$(id -un)" ]]; then
+        atm_run "$@"
+        return $?
+    fi
+
+    target_uid="$(id -u "$target_user")" || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_USER_COMMAND_FAILED)"
+    if [[ "${EUID:-$(id -u)}" == 0 ]]; then
+        atm_run runuser -u "$target_user" -- env \
+            "XDG_RUNTIME_DIR=/run/user/$target_uid" \
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$target_uid/bus" "$@"
+    else
+        atm_run sudo -H -u "$target_user" env \
+            "XDG_RUNTIME_DIR=/run/user/$target_uid" \
+            "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$target_uid/bus" "$@"
+    fi
+}
+
+atm_docker_user_service_running() {
+    local state=""
+    state="$(atm_docker_run_as_user systemctl --user show -p ActiveState --value "$1" 2>/dev/null || true)"
+    [[ "$state" =~ ^(active|activating|reloading|deactivating)$ ]]
+}
+
+atm_docker_system_service_running() {
+    local state=""
+    state="$(systemctl show -p ActiveState --value "$1" 2>/dev/null || true)"
+    [[ "$state" =~ ^(active|activating|reloading|deactivating)$ ]]
+}
+
+atm_docker_desktop_backend_running() {
+    local target_uid=""
+    command -v pgrep >/dev/null 2>&1 || return 1
+    target_uid="$(id -u "$(atm_docker_target_user)")" || return 1
+    pgrep -u "$target_uid" -f '(^|/)com[.]docker[.]backend([[:space:]]|$)' >/dev/null 2>&1
+}
+
+atm_docker_stop_running() {
+    local scope="${1:-all}"
+    local desktop_service="${ATM_DOCKER_DESKTOP_SERVICE_NAME:-docker-desktop}"
+    local engine_service="${ATM_DOCKER_SERVICE_NAME:-docker}"
+    local service=""
+    local command_text=""
+    local active_services=()
+    local engine_services=()
+
+    if [[ "$scope" == all ]]; then
+        engine_services=("$engine_service" docker.socket)
+    fi
+
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
+        if [[ "$scope" == all ]]; then
+            printf 'DRY-RUN: %s\n' "$(atm_t ATM_PLUGIN_DOCKER_STOP_PLAN)"
+        else
+            printf 'DRY-RUN: %s\n' "$(atm_t ATM_PLUGIN_DOCKER_STOP_DESKTOP_PLAN)"
+        fi
+        return 0
+    fi
+
+    if command -v systemctl >/dev/null 2>&1; then
+        if atm_docker_user_service_running "$desktop_service"; then
+            atm_info "$(atm_t ATM_PLUGIN_DOCKER_STOPPING)"
+            atm_docker_run_as_user systemctl --user stop "$desktop_service" \
+                || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+        elif atm_docker_desktop_backend_running; then
+            atm_info "$(atm_t ATM_PLUGIN_DOCKER_STOPPING)"
+            atm_docker_run_as_user docker desktop stop --timeout 30 \
+                || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+        fi
+
+        for service in "${engine_services[@]}"; do
+            if atm_docker_user_service_running "$service"; then
+                atm_docker_run_as_user systemctl --user stop "$service" \
+                    || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+                if atm_docker_user_service_running "$service"; then
+                    atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+                fi
+            fi
+            if atm_docker_system_service_running "$service"; then
+                active_services+=("$service")
+            fi
+        done
+        if ((${#active_services[@]} > 0)); then
+            if atm_docker_system_service_running containerd; then
+                active_services+=(containerd)
+            fi
+            atm_info "$(atm_t ATM_PLUGIN_DOCKER_STOPPING)"
+            printf -v command_text '%q ' "${active_services[@]}"
+            atm_docker_run_elevated "systemctl stop $command_text" \
+                || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+            for service in "${active_services[@]}"; do
+                if atm_docker_system_service_running "$service"; then
+                    atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+                fi
+            done
+        fi
+
+        if atm_docker_user_service_running "$desktop_service"; then
+            atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+        fi
+    fi
+
+    if atm_docker_desktop_backend_running \
+        || { [[ "$scope" == all ]] && command -v pgrep >/dev/null 2>&1 && pgrep -x dockerd >/dev/null 2>&1; }; then
+        atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
+    fi
+}
+
+atm_docker_desktop_gpg_keys() {
+    local listing=""
+    listing="$(atm_docker_run_as_user gpg --with-colons --list-secret-keys --fingerprint)" || return 1
+    awk -F: '
+        $1 == "sec" { usable = ($2 !~ /^[redi]$/ && $12 ~ /E/ && $12 !~ /D/); next }
+        usable && $1 == "fpr" { print $10; usable = 0 }
+    ' <<< "$listing"
+}
+
+atm_docker_setup_desktop_signin() {
+    local user_home=""
+    local store_dir=""
+    local choice=""
+    local key=""
+    local listing=""
+    local keys=()
+    local idx=1
+
+    printf '%s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_SETUP)"
+    printf '%s\n' 'https://docs.docker.com/desktop/setup/install/linux/#signing-in-with-docker-desktop-for-linux'
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
+        printf 'DRY-RUN: %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_PLAN)"
+        return 0
+    fi
+
+    atm_docker_require_desktop_platform
+    if ! command -v gpg >/dev/null 2>&1 || ! command -v pass >/dev/null 2>&1; then
+        atm_info "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_DEPS)"
+        atm_docker_run_elevated 'apt-get update' \
+            || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_FAILED)"
+        atm_docker_run_elevated 'apt-get install -y gnupg pass' \
+            || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_FAILED)"
+    fi
+    atm_require_commands gpg pass awk
+    user_home="$(atm_docker_desktop_user_home)"
+    store_dir="${PASSWORD_STORE_DIR:-$user_home/.password-store}"
+
+    if [[ -s "$store_dir/.gpg-id" ]]; then
+        atm_success "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_READY)"
+        return 0
+    fi
+
+    while true; do
+        listing="$(atm_docker_desktop_gpg_keys)" \
+            || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_FAILED)"
+        keys=()
+        if [[ -n "$listing" ]]; then
+            mapfile -t keys <<< "$listing"
+        else
+            atm_warn "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_GPG_NONE)"
+        fi
+        printf '%s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_GPG_SELECT)"
+        idx=1
+        for key in "${keys[@]}"; do
+            printf '%s) %s\n' "$idx" "$key"
+            idx=$((idx + 1))
+        done
+        printf 'g) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_GPG_GENERATE)"
+        printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+        printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+        read -r choice || return 0
+        case "$choice" in
+            b|B) return 0 ;;
+            g|G)
+                atm_info "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_GPG_PROMPT)"
+                atm_docker_run_as_user gpg --generate-key \
+                    || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_FAILED)"
+                continue
+                ;;
+        esac
+
+        idx=1
+        for key in "${keys[@]}"; do
+            if [[ "$choice" == "$idx" ]]; then
+                atm_docker_run_as_user pass init "$key" \
+                    || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_FAILED)"
+                atm_success "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_READY)"
+                return 0
+            fi
+            idx=$((idx + 1))
+        done
+        atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
+    done
+}
+
 atm_docker_desktop_installed() {
     command -v docker-desktop >/dev/null 2>&1 || [[ -d "${ATM_DOCKER_DESKTOP_INSTALL_DIR:-/opt/docker-desktop}" ]]
 }
@@ -234,6 +431,7 @@ atm_docker_install_engine() {
         atm_require_commands curl
     fi
 
+    atm_docker_stop_running || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
     atm_docker_run_elevated "curl -fsSL '$script_url' | CHANNEL='$channel' sh"
     atm_docker_run_elevated "usermod -aG '$group_name' '$target_user'"
 
@@ -326,6 +524,7 @@ atm_docker_install_desktop() {
     fi
 
     atm_docker_run_elevated "apt-get update" || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALL_FAILED)"
+    atm_docker_stop_running || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
     printf -v command_text 'apt-get install -y --allow-downgrades %q' "$deb_file"
     atm_docker_run_elevated "$command_text" || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALL_FAILED)"
 
@@ -339,6 +538,7 @@ atm_docker_install_desktop() {
     atm_docker_write_manifest
     atm_success "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALLED)"
     atm_warn "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_ACCEPT_TERMS)"
+    atm_info "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_HINT)"
 }
 
 atm_docker_uninstall_desktop() {
@@ -369,6 +569,7 @@ atm_docker_uninstall_desktop() {
         fi
     fi
 
+    atm_docker_stop_running desktop || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_STOP_FAILED)"
     atm_docker_run_elevated "apt-get purge -y docker-desktop" \
         || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_UNINSTALL_FAILED)"
     atm_run rm -rf -- "$user_home/.docker/desktop" \
@@ -394,6 +595,7 @@ atm_docker_desktop_menu() {
     local idx=1
     local custom_option=""
     local uninstall_option=""
+    local signin_option=""
     local versions=()
 
     ATM_DOCKER_DESKTOP_RELEASES="$(atm_docker_desktop_releases)"
@@ -415,8 +617,10 @@ atm_docker_desktop_menu() {
         done
         custom_option="$idx"
         uninstall_option="$((idx + 1))"
+        signin_option="$((idx + 2))"
         printf '%s) %s\n' "$custom_option" "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_CUSTOM_VERSION)"
         printf '%s) %s\n' "$uninstall_option" "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_UNINSTALL)"
+        printf '%s) %s\n' "$signin_option" "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_SETUP)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -433,6 +637,7 @@ atm_docker_desktop_menu() {
                 atm_docker_install_desktop "$version"
                 ;;
             "$uninstall_option") atm_docker_uninstall_desktop ;;
+            "$signin_option") atm_docker_setup_desktop_signin ;;
             b|B) return 0 ;;
             q|Q) exit 0 ;;
             *)
@@ -498,6 +703,7 @@ atm_docker_menu() {
         printf '3) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_INSTALL_DESKTOP)"
         printf '4) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_INSTALL_ALL)"
         printf '5) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_UNINSTALL)"
+        printf '6) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_SETUP)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -519,6 +725,9 @@ atm_docker_menu() {
                 ;;
             5)
                 atm_docker_uninstall_desktop
+                ;;
+            6)
+                atm_docker_setup_desktop_signin
                 ;;
             b|B)
                 return 0
