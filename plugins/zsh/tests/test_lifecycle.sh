@@ -12,6 +12,7 @@ ATM_ZSH_USER_HOME="$task_root/user home"
 ATM_ZSH_DOT_DIR="$ATM_ZSH_USER_HOME/dot files"
 ATM_ZSH_OMZ_DIR="$ATM_ZSH_USER_HOME/framework"
 ATM_ZSH_CUSTOM_DIR="$ATM_ZSH_OMZ_DIR/custom"
+ATM_ZSH_BACKUP_DIR="$ATM_APPS_DIR/Backups"
 source lib/atm_core.sh
 source lib/atm_i18n.sh
 source lib/atm_manifest.sh
@@ -23,6 +24,7 @@ export TEST_LOG="$task_root/commands"
 mkdir -p "$ATM_ZSH_DOT_DIR" "$task_root/bin"
 touch "$TEST_LOG"
 printf 'export MY_CONFIG=preserved\n' > "$ATM_ZSH_DOT_DIR/.zshrc"
+printf 'my shell history\n' > "$ATM_ZSH_DOT_DIR/.zsh_history"
 printf '/bin/bash\n' > "$task_root/login-shell"
 export PATH="$task_root/bin:$PATH"
 
@@ -39,6 +41,7 @@ atm_zsh_login_shell() { cat "$task_root/login-shell"; }
 chsh() {
     printf 'chsh %s\n' "$*" >> "$TEST_LOG"
     [[ "${TEST_CHSH_FAIL:-0}" == 0 ]] || return 2
+    [[ "${TEST_CHSH_NO_CHANGE:-0}" == 0 ]] || return 0
     printf '%s\n' "$2" > "$task_root/login-shell"
 }
 atm_zsh_run_elevated() {
@@ -97,9 +100,13 @@ if grep -q '# >>> ATM Oh My Zsh >>>' "$ATM_ZSH_DOT_DIR/.zshrc"; then exit 1; fi
 printf 'PASS removal switches login shell safely, retains settings and backups, and removes framework/manifest\n'
 
 archive="$(atm_zsh_list_backups | tail -n 1)"
+printf 'changed config\n' > "$ATM_ZSH_DOT_DIR/.zshrc"
+printf 'changed history\n' > "$ATM_ZSH_DOT_DIR/.zsh_history"
 before_count="$(atm_zsh_list_backups | wc -l)"
 output="$(atm_zsh_restore "$archive" <<< y)"
 [[ -f "$ATM_ZSH_OMZ_DIR/oh-my-zsh.sh" ]]
+grep -q 'MY_CONFIG=preserved' "$ATM_ZSH_DOT_DIR/.zshrc"
+grep -q 'my shell history' "$ATM_ZSH_DOT_DIR/.zsh_history"
 [[ "$(atm_zsh_list_backups | wc -l)" == $((before_count + 1)) ]]
 printf 'PASS restore validates snapshots, saves current files first, and restores framework/configuration\n'
 
@@ -133,15 +140,51 @@ if output="$(TEST_CURL_FAIL=1 atm_zsh_install 2>&1)"; then exit 1; fi
 printf 'PASS package-manager and download failures do not report success\n'
 
 (
-    atm_zsh_bin() { printf '/bin/bash\n'; }
-    output="$(atm_zsh_set_default <<< y)"
-    [[ "$output" == *'Default shell changed'* && "$(atm_zsh_login_shell)" == /bin/bash ]]
+    printf '# registered shells\n/bin/bash\n/bin/sh\n/bin/bash\n/missing/shell\nrelative-shell\n' > "$task_root/shells"
+    [[ "$(atm_zsh_available_shells "$task_root/shells")" == $'/bin/bash\n/bin/sh' ]]
+    [[ -z "$(atm_zsh_available_shells "$task_root/missing-shells")" ]]
+    atm_zsh_available_shells() { printf '/bin/bash\n/bin/sh\n'; }
+    output="$(atm_zsh_set_default <<< $'2\ny')"
+    [[ "$output" == *'/bin/bash (current)'* && "$(atm_zsh_login_shell)" == /bin/sh ]]
+    [[ "$output" == *'You must log out and log back in for the new default shell to take effect.'* ]]
     before="$(cksum "$TEST_LOG")"
-    output="$(atm_zsh_set_default <<< n)"
+    output="$(atm_zsh_set_default <<< 2)"
+    [[ "$output" == *'already your default shell'* && "$(cksum "$TEST_LOG")" == "$before" ]]
+    output="$(atm_zsh_set_default <<< $'1\nn')"
+    output="$(atm_zsh_set_default <<< b)"
+    output="$(atm_zsh_set_default <<< '1+1' 2>&1)"
+    output="$(atm_zsh_set_default < /dev/null)"
     [[ "$(cksum "$TEST_LOG")" == "$before" ]]
-    if output="$(TEST_CHSH_FAIL=1 atm_zsh_set_default <<< y 2>&1)"; then exit 1; fi
+    output="$(ATM_DRY_RUN=1 atm_zsh_set_default <<< $'1\ny')"
+    [[ "$output" == *'DRY-RUN: chsh -s /bin/bash'* && "$output" != *'You must log out'* ]]
+    [[ "$(cksum "$TEST_LOG")" == "$before" && "$(atm_zsh_login_shell)" == /bin/sh ]]
+    if output="$(TEST_CHSH_FAIL=1 atm_zsh_set_default <<< $'1\ny' 2>&1)"; then exit 1; fi
+    [[ "$output" != *'You must log out'* ]]
+    if output="$(TEST_CHSH_NO_CHANGE=1 atm_zsh_set_default <<< $'1\ny' 2>&1)"; then exit 1; fi
+    [[ "$output" != *'You must log out'* ]]
+    output="$(ATM_DRY_RUN=1 atm_zsh_menu <<< $'7\n1\ny\nxb')"
+    [[ "$output" == *'7) Choose default shell'* && "$output" == *'DRY-RUN: chsh -s /bin/bash'* ]]
+    [[ "$output" != *'[missing:'* ]]
+    atm_zsh_available_shells() { :; }
+    output="$(atm_zsh_set_default 2>&1)"
+    [[ "$output" == *'No installed login shells'* ]]
 )
-printf 'PASS default-shell action requires confirmation and verifies success\n'
+printf 'PASS shell picker filters/deduplicates paths, marks current shell, verifies changes, and handles cancellation/failure/dry-run\n'
+
+(
+    unset ATM_ZSH_BACKUP_DIR
+    source plugins/zsh/plugin.conf
+    [[ "$ATM_ZSH_BACKUP_DIR" == "$ATM_APPS_DIR/Backups" ]]
+    mkdir -p "$ATM_APPS_DIR/backups/zsh"
+    legacy_archive="$ATM_APPS_DIR/backups/zsh/zsh-legacy.tar.gz"
+    cp "$archive" "$legacy_archive"
+    output="$(atm_zsh_list_backups)"
+    [[ "$output" == *"$legacy_archive"* && "$output" == *"$ATM_ZSH_BACKUP_DIR"* ]]
+    ATM_ZSH_BACKUP_DIR="$task_root/custom backups"
+    source plugins/zsh/plugin.conf
+    [[ "$ATM_ZSH_BACKUP_DIR" == "$task_root/custom backups" && -z "$(atm_zsh_list_backups)" ]]
+)
+printf 'PASS default backups use Apps/Backups, legacy archives remain listed, and custom backup paths are respected\n'
 
 (
     source plugins/zsh/plugin.sh

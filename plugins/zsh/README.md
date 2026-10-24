@@ -12,7 +12,7 @@ Open ATM's main menu and select **Zsh + Oh My Zsh**:
 4. Create backup
 5. Restore backup
 6. List backups
-7. Set Zsh as default shell
+7. Choose default shell
 
 Installation is also available with `atm install zsh`. The plugin is excluded
 from Full Setup. APT manages Zsh's version; ATM does not switch shell versions.
@@ -25,9 +25,20 @@ preserving an existing `.zshrc`. It adds a guarded loader only when no standard
 Oh My Zsh loader is present. Your account's login shell is not changed unless
 you select option 7 and confirm it. Updates use APT and Oh My Zsh's own updater.
 
+Option 7 lists the installed executable shells registered in `/etc/shells` and
+marks the current login shell. Select a shell, then confirm the change. No
+change is made when you select the current shell or cancel. After verifying a
+successful change, ATM displays:
+
+> You must **log out and log back in** for the new default shell to take effect.
+
 ## Backups And Restore
 
-Default backup location: `~/Apps/backups/zsh/zsh-<timestamp>-<id>.tar.gz`.
+Default backup location: `~/Apps/Backups/zsh-<timestamp>-<id>.tar.gz`.
+Options 4 and 5 back up and restore `.zsh_history`, `.zshrc`, `.oh-my-zsh`, and
+the other configuration listed below. Older ATM Zsh archives in
+`~/Apps/backups/zsh` remain discoverable when using the default backup location;
+they are not moved or deleted. Explicit custom backup locations are preserved.
 Archives are private (mode `0600`), but **not encrypted**. They can contain shell
 history, tokens, and private settings. Keep copies somewhere safe.
 
@@ -74,7 +85,7 @@ Override these variables before launching ATM or in its trusted configuration:
 | `ATM_ZSH_DOT_DIR` | `$ZDOTDIR`, otherwise home |
 | `ATM_ZSH_OMZ_DIR` | `$ZSH`, otherwise `~/.oh-my-zsh` |
 | `ATM_ZSH_CUSTOM_DIR` | `$ZSH_CUSTOM`, otherwise `<omz>/custom` |
-| `ATM_ZSH_BACKUP_DIR` | `$ATM_APPS_DIR/backups/zsh` |
+| `ATM_ZSH_BACKUP_DIR` | `$ATM_APPS_DIR/Backups` |
 
 Backups must be outside the framework and external custom directories.
 Shell configuration is never executed by the backup/restore helper.

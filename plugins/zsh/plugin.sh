@@ -98,8 +98,13 @@ atm_zsh_backup() {
 }
 
 atm_zsh_list_backups() {
-    [[ -d "$ATM_ZSH_BACKUP_DIR" ]] || return 0
-    find "$ATM_ZSH_BACKUP_DIR" -maxdepth 1 -type f -name 'zsh-*.tar.gz' -print | sort
+    local directories=()
+    if [[ -d "$ATM_ZSH_BACKUP_DIR" ]]; then directories+=("$ATM_ZSH_BACKUP_DIR"); fi
+    if [[ "$ATM_ZSH_BACKUP_DIR" == "$ATM_APPS_DIR/Backups" && -d "$ATM_APPS_DIR/backups/zsh" ]]; then
+        directories+=("$ATM_APPS_DIR/backups/zsh")
+    fi
+    ((${#directories[@]} > 0)) || return 0
+    find "${directories[@]}" -maxdepth 1 -type f -name 'zsh-*.tar.gz' -print | sort
 }
 
 atm_zsh_install() {
@@ -177,17 +182,58 @@ atm_zsh_remove() { atm_zsh_uninstall; }
 atm_zsh_path_entries() { return 0; }
 atm_zsh_use() { atm_warn "$(atm_t ATM_PLUGIN_ZSH_USE_UNSUPPORTED)"; }
 
+atm_zsh_available_shells() {
+    local shells_file="${1:-/etc/shells}" candidate="" extra=""
+    [[ -r "$shells_file" ]] || return 0
+    while read -r candidate extra || [[ -n "$candidate" ]]; do
+        [[ "$candidate" == /* && -f "$candidate" && -x "$candidate" ]] || continue
+        printf '%s\n' "$candidate"
+    done < "$shells_file" | sort -u
+}
+
 atm_zsh_set_default() {
-    local shell_bin=""
+    local shell_bin="" current="" choice="" item="" marker="" idx=1
+    local shells=()
     atm_zsh_require_user
-    shell_bin="$(atm_zsh_bin)" || { atm_warn "$(atm_t ATM_PLUGIN_ZSH_INSTALL_FIRST)"; return 0; }
-    atm_zsh_confirm "$(atm_t ATM_PLUGIN_ZSH_DEFAULT_WARNING)" || return 0
-    grep -Fxq "$shell_bin" /etc/shells || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
-    atm_run chsh -s "$shell_bin" || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
-    if [[ "${ATM_DRY_RUN:-0}" != 1 && "$(atm_zsh_login_shell)" != "$shell_bin" ]]; then
-        atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
+    current="$(atm_zsh_login_shell)" || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
+    [[ "$current" == /* ]] || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
+    mapfile -t shells < <(atm_zsh_available_shells)
+    if ((${#shells[@]} == 0)); then
+        atm_warn "$(atm_t ATM_PLUGIN_ZSH_NO_SHELLS)"
+        return 0
     fi
+    printf '%s %s\n' "$(atm_t ATM_PLUGIN_ZSH_CURRENT_SHELL)" "$current"
+    printf '%s\n' "$(atm_t ATM_PLUGIN_ZSH_SELECT_SHELL)"
+    for item in "${shells[@]}"; do
+        marker=""
+        if [[ "$item" == "$current" ]]; then marker=" $(atm_t ATM_PLUGIN_ZSH_SHELL_CURRENT)"; fi
+        printf '%s) %s%s\n' "$idx" "$item" "$marker"
+        idx=$((idx + 1))
+    done
+    printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+    printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
+    printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+    read -r choice || return 0
+    case "$choice" in b|B) return 0 ;; q|Q) exit 0 ;; esac
+    idx=1
+    for item in "${shells[@]}"; do
+        if [[ "$choice" == "$idx" ]]; then shell_bin="$item"; break; fi
+        idx=$((idx + 1))
+    done
+    [[ -n "$shell_bin" ]] || { atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; return 0; }
+    if [[ "$shell_bin" == "$current" ]]; then
+        atm_info "$(atm_t ATM_PLUGIN_ZSH_SHELL_UNCHANGED)"
+        return 0
+    fi
+    atm_zsh_confirm "$(atm_t ATM_PLUGIN_ZSH_DEFAULT_WARNING) $shell_bin" || return 0
+    [[ -f "$shell_bin" && -x "$shell_bin" ]] && grep -Fxq "$shell_bin" /etc/shells \
+        || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
+    atm_require_commands chsh
+    atm_run chsh -s "$shell_bin" || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
+    [[ "${ATM_DRY_RUN:-0}" != 1 ]] || return 0
+    [[ "$(atm_zsh_login_shell)" == "$shell_bin" ]] || atm_fail "$(atm_t ATM_PLUGIN_ZSH_SHELL_FAILED)"
     atm_success "$(atm_t ATM_PLUGIN_ZSH_DEFAULT_DONE)"
+    atm_info "$(atm_t ATM_PLUGIN_ZSH_LOGIN_REQUIRED)"
 }
 
 atm_zsh_restore() {
