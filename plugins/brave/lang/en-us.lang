@@ -34,3 +34,7 @@ ATM_PLUGIN_BRAVE_EXISTING_PROFILE_BACKED_UP="Existing Brave profile was moved to
 ATM_PLUGIN_BRAVE_RESTORED="Brave profile restored from backup"
 ATM_PLUGIN_BRAVE_BACKUP_FAILED="Brave profile backup failed"
 ATM_PLUGIN_BRAVE_RESTORE_FAILED="Brave profile restore failed"
+ATM_PLUGIN_BRAVE_BACKUP_BOOKMARKS="Backup bookmarks (all profiles)"
+ATM_PLUGIN_BRAVE_BOOKMARKS_NOT_FOUND="No Bookmarks files found in Default or numbered Brave profiles."
+ATM_PLUGIN_BRAVE_BOOKMARKS_PROFILES="Profiles with bookmarks:"
+ATM_PLUGIN_BRAVE_BOOKMARKS_CREATED="Brave bookmarks backup created"
