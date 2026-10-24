@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# shellcheck source=plugins/ai/codex.sh
+source "${BASH_SOURCE[0]%/*}/codex.sh"
+
 atm_ai_manifest_file() {
     printf '%s\n' "${ATM_AI_MANIFEST_FILE:-$ATM_MANIFEST_DIR/ai.manifest}"
 }
@@ -14,7 +17,7 @@ atm_ai_run_elevated() {
 
     if [[ "${EUID:-$(id -u)}" == "0" ]]; then
         bash -c "$command_text"
-        return 0
+        return $?
     fi
 
     command -v sudo >/dev/null 2>&1 || atm_fail "$(atm_t ATM_PLUGIN_AI_SUDO_NOT_FOUND)"
@@ -76,6 +79,14 @@ atm_ai_status() {
 
     if atm_ai_picoclaw_installed; then
         parts+=("PicoClaw")
+    fi
+
+    if atm_ai_codex_cli_installed; then
+        parts+=("Codex CLI")
+    fi
+
+    if atm_ai_codex_desktop_installed; then
+        parts+=("Codex Desktop")
     fi
 
     if ((${#parts[@]} > 0)); then
@@ -177,14 +188,23 @@ atm_ai_write_manifest() {
     local desktop_version=""
     local ollama_version=""
     local picoclaw_version=""
+    local codex_cli_installed="0"
+    local codex_desktop_installed="0"
+    local codex_cli_version=""
+    local codex_desktop_version=""
+    local installed="0"
 
-    hermes_version="$(hermes-agent --version 2>/dev/null || true)"
-    desktop_version="$(hermes-desktop --version 2>/dev/null || true)"
-    ollama_version="$(ollama version 2>/dev/null || true)"
-    if [[ -x "$(atm_ai_picoclaw_install_dir)/picoclaw" ]]; then
-        picoclaw_version="$("$(atm_ai_picoclaw_install_dir)/picoclaw" --version 2>/dev/null || true)"
-    else
-        picoclaw_version="$(picoclaw --version 2>/dev/null || true)"
+    if [[ "${ATM_DRY_RUN:-0}" != 1 ]]; then
+        hermes_version="$(hermes-agent --version 2>/dev/null || true)"
+        desktop_version="$(hermes-desktop --version 2>/dev/null || true)"
+        ollama_version="$(ollama version 2>/dev/null || true)"
+        if [[ -x "$(atm_ai_picoclaw_install_dir)/picoclaw" ]]; then
+            picoclaw_version="$("$(atm_ai_picoclaw_install_dir)/picoclaw" --version 2>/dev/null || true)"
+        else
+            picoclaw_version="$(picoclaw --version 2>/dev/null || true)"
+        fi
+        codex_cli_version="$(atm_ai_codex_cli_version)"
+        codex_desktop_version="$(atm_ai_codex_desktop_version)"
     fi
 
     if atm_ai_hermes_installed; then
@@ -207,20 +227,35 @@ atm_ai_write_manifest() {
         picoclaw_installed="1"
     fi
 
+    if atm_ai_codex_cli_installed; then
+        codex_cli_installed="1"
+    fi
+    if atm_ai_codex_desktop_installed; then
+        codex_desktop_installed="1"
+    fi
+    if [[ "$hermes_installed$desktop_installed$ollama_installed$picoclaw_installed$codex_cli_installed$codex_desktop_installed" != 000000 ]]; then
+        installed="1"
+    fi
+
     atm_manifest_write "ai" \
-        "ATM_PLUGIN_NAME=AI Tools" \
+        'ATM_PLUGIN_NAME="AI Tools"' \
         "ATM_PLUGIN_VERSION=0.0.1" \
-        "ATM_INSTALLED=1" \
+        "ATM_INSTALLED=$installed" \
         "ATM_AI_HERMES_AGENT_INSTALLED=$hermes_installed" \
-        "ATM_AI_HERMES_AGENT_VERSION=$hermes_version" \
+        "ATM_AI_HERMES_AGENT_VERSION=$(printf '%q' "$hermes_version")" \
         "ATM_AI_HERMES_DESKTOP_INSTALLED=$desktop_installed" \
         "ATM_AI_HERMES_DESKTOP_PORTABLE_INSTALLED=$desktop_portable_installed" \
-        "ATM_AI_HERMES_DESKTOP_VERSION=$desktop_version" \
+        "ATM_AI_HERMES_DESKTOP_VERSION=$(printf '%q' "$desktop_version")" \
         "ATM_AI_OLLAMA_INSTALLED=$ollama_installed" \
-        "ATM_AI_OLLAMA_VERSION=$ollama_version" \
+        "ATM_AI_OLLAMA_VERSION=$(printf '%q' "$ollama_version")" \
         "ATM_AI_PICOCLAW_INSTALLED=$picoclaw_installed" \
-        "ATM_AI_PICOCLAW_VERSION=$picoclaw_version" \
-        "ATM_AI_PICOCLAW_INSTALL_DIR=$(atm_ai_picoclaw_install_dir)"
+        "ATM_AI_PICOCLAW_VERSION=$(printf '%q' "$picoclaw_version")" \
+        "ATM_AI_PICOCLAW_INSTALL_DIR=$(printf '%q' "$(atm_ai_picoclaw_install_dir)")" \
+        "ATM_AI_CODEX_CLI_INSTALLED=$codex_cli_installed" \
+        "ATM_AI_CODEX_CLI_VERSION=$(printf '%q' "$codex_cli_version")" \
+        "ATM_AI_CODEX_CLI_PREFIX=$(printf '%q' "$(atm_ai_codex_cli_prefix)")" \
+        "ATM_AI_CODEX_DESKTOP_INSTALLED=$codex_desktop_installed" \
+        "ATM_AI_CODEX_DESKTOP_VERSION=$(printf '%q' "$codex_desktop_version")"
 }
 
 atm_ai_install_hermes_agent() {
@@ -535,6 +570,7 @@ atm_ai_menu() {
         printf '1) %s\n' "$(atm_t ATM_PLUGIN_AI_HERMES_MENU_OPTION)"
         printf '2) %s\n' "$(atm_t ATM_PLUGIN_AI_OLLAMA_MENU_OPTION)"
         printf '3) %s\n' "$(atm_t ATM_PLUGIN_AI_PICOCLAW_MENU_OPTION)"
+        printf '4) %s\n' "$(atm_t ATM_PLUGIN_AI_CODEX_MENU_TITLE)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -549,6 +585,10 @@ atm_ai_menu() {
                 ;;
             3)
                 atm_ai_install_picoclaw
+                ;;
+            4)
+                atm_ai_codex_menu
+                continue
                 ;;
             b|B)
                 return 0
@@ -570,5 +610,8 @@ atm_ai_menu() {
 atm_ai_path_entries() {
     if [[ -x "$(atm_ai_picoclaw_install_dir)/picoclaw" ]]; then
         printf '%s\n' "$(atm_ai_picoclaw_install_dir)"
+    fi
+    if atm_ai_codex_cli_installed; then
+        printf '%s/bin\n' "$(atm_ai_codex_cli_prefix)"
     fi
 }
