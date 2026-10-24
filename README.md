@@ -56,6 +56,7 @@ Desktop apps: ~/.local/share/applications
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 | Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
+| [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Local Safe/Full/Main/Custom backups, verification, and staged restore with a retained recovery copy. |
 
 ## Features
 

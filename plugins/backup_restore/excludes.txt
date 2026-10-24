@@ -1,0 +1,10 @@
+# Safe backups only. Patterns match relative paths or individual basenames.
+.cache
+.local/share/Trash
+.gvfs
+.thumbnails
+npm-cache
+node_modules
+__pycache__
+*.tmp
+*.swp
