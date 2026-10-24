@@ -8,6 +8,7 @@ atm_config_init() {
     local env_atm_apps_dir="${ATM_APPS_DIR:-}"
     local env_atm_cache_dir="${ATM_CACHE_DIR:-}"
     local env_atm_state_dir="${ATM_STATE_DIR:-}"
+    local env_atm_plugin_sort_order="${ATM_PLUGIN_SORT_ORDER:-}"
 
     if [[ ! -f "$ATM_CONFIG_FILE" ]]; then
         atm_debug "Creating config file: $ATM_CONFIG_FILE"
@@ -21,6 +22,7 @@ ATM_APPS_DIR="$ATM_APPS_DIR"
 ATM_CACHE_DIR="$ATM_CACHE_DIR"
 ATM_STATE_DIR="$ATM_STATE_DIR"
 ATM_LANG=""
+ATM_PLUGIN_SORT_ORDER="default"
 ATM_REPO_URL="$ATM_REPO_URL"
 ATM_SELF_UPDATE_BRANCH="main"
 ATM_SELF_UPDATE_MODE="git"
@@ -57,6 +59,8 @@ EOF
     [[ -n "$env_atm_apps_dir" ]] && ATM_APPS_DIR="$env_atm_apps_dir"
     [[ -n "$env_atm_cache_dir" ]] && ATM_CACHE_DIR="$env_atm_cache_dir"
     [[ -n "$env_atm_state_dir" ]] && ATM_STATE_DIR="$env_atm_state_dir"
+    [[ -n "$env_atm_plugin_sort_order" ]] && ATM_PLUGIN_SORT_ORDER="$env_atm_plugin_sort_order"
+    return 0
 }
 
 atm_config_set_key() {

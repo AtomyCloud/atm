@@ -30,7 +30,7 @@ atm_path_collect_entries() {
     printf '%s\n' "$HOME/.local/bin"
     printf '%s\n' "$(atm_path_portable_home)/bin"
 
-    for id in $(atm_plugin_list_sorted_ids); do
+    for id in $(atm_plugin_list_sorted_ids default); do
         func="${ATM_PLUGIN_PATH_FUNC[$id]:-}"
 
         if [[ -n "$func" ]] && declare -F "$func" >/dev/null 2>&1; then

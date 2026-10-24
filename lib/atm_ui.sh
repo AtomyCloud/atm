@@ -188,7 +188,7 @@ atm_install_menu() {
 atm_full_setup() {
     local id=""
 
-    for id in $(atm_plugin_list_sorted_ids); do
+    for id in $(atm_plugin_list_sorted_ids default); do
         [[ "${ATM_PLUGIN_FULL_SETUP[$id]:-0}" == "1" ]] || continue
         atm_info "▶ ${ATM_PLUGIN_NAME[$id]}"
         atm_plugin_run_install "$id"

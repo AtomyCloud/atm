@@ -5,8 +5,61 @@ atm_plugins_official_source() {
 }
 
 atm_plugins_catalog_rows() {
+    local rows="" mode="$(atm_plugin_sort_mode)"
     atm_require_commands python3
-    python3 -B "$ATM_HOME/lib/plugin_catalog.py" search -- "${1:-}"
+    rows="$(python3 -B "$ATM_HOME/lib/plugin_catalog.py" search -- "${1:-}")" || return 1
+    [[ -n "$rows" ]] || return 0
+    case "$mode" in
+        az) printf '%s\n' "$rows" | LC_ALL=C sort -t $'\t' -k2,2f -k1,1 ;;
+        za) printf '%s\n' "$rows" | LC_ALL=C sort -t $'\t' -k2,2fr -k1,1 ;;
+        *) printf '%s\n' "$rows" ;;
+    esac
+}
+
+atm_plugins_sort_label() {
+    case "$(atm_plugin_sort_mode)" in
+        az) printf 'A-Z\n' ;;
+        za) printf 'Z-A\n' ;;
+        *) atm_t ATM_PLUGINS_SORT_DEFAULT ;;
+    esac
+}
+
+atm_plugins_set_sort() {
+    local mode=""
+    case "${1:-}" in
+        az|AZ|a-z|A-Z|za|ZA|z-a|Z-A|default) mode="$(atm_plugin_sort_mode "$1")" ;;
+        *) atm_warn "$(atm_t ATM_PLUGINS_SORT_USAGE)"; return 1 ;;
+    esac
+    if ! atm_config_set_key "$ATM_CONFIG_FILE" ATM_PLUGIN_SORT_ORDER "$mode"; then
+        atm_warn "$(atm_t ATM_PLUGINS_SORT_FAILED)"
+        return 1
+    fi
+    [[ "${ATM_DRY_RUN:-0}" != 1 ]] || return 0
+    if ! grep -Fxq "ATM_PLUGIN_SORT_ORDER=\"$mode\"" "$ATM_CONFIG_FILE"; then
+        atm_warn "$(atm_t ATM_PLUGINS_SORT_FAILED)"
+        return 1
+    fi
+    ATM_PLUGIN_SORT_ORDER="$mode"
+    printf '%s %s\n' "$(atm_t ATM_PLUGINS_SORT_SAVED)" "$(atm_plugins_sort_label)"
+}
+
+atm_plugins_sort_menu() {
+    local choice=""
+    printf '%s %s\n' "$(atm_t ATM_PLUGINS_SORT_CURRENT)" "$(atm_plugins_sort_label)"
+    printf '1) A-Z\n2) Z-A\n'
+    printf '3) %s\n' "$(atm_t ATM_PLUGINS_SORT_DEFAULT)"
+    printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+    printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
+    printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+    read -r choice || return 0
+    case "$choice" in
+        1) atm_plugins_set_sort az ;;
+        2) atm_plugins_set_sort za ;;
+        3) atm_plugins_set_sort default ;;
+        b|B) return 0 ;;
+        q|Q) exit 0 ;;
+        *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
+    esac
 }
 
 atm_plugins_local_present() {
@@ -106,6 +159,7 @@ atm_plugins_menu() {
         printf '%s\n' "$(atm_t ATM_MENU_PLUGINS)"
         printf '1) %s\n' "$(atm_t ATM_PLUGINS_LIST_LOCAL)"
         printf '2) %s\n' "$(atm_t ATM_PLUGINS_SEARCH_TITLE)"
+        printf '3) %s [%s]\n' "$(atm_t ATM_PLUGINS_SORT_MENU)" "$(atm_plugins_sort_label)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -113,6 +167,7 @@ atm_plugins_menu() {
         case "$choice" in
             1) atm_plugins_cli list ;;
             2) atm_plugins_search_menu ;;
+            3) atm_plugins_sort_menu ;;
             b|B) return 0 ;;
             q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; continue ;;

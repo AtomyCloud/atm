@@ -177,6 +177,7 @@ Usage:
   atm doctor
   atm plugins list
   atm plugins menu
+  atm plugins sort [az|za|default]
   atm plugins search [text]
   atm plugins download <id>
   atm install [plugin] [--version VERSION]

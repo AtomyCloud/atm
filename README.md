@@ -151,6 +151,25 @@ through the environment; ATM does not save it. Metadata searches use read-only
 network requests even with `--dry-run`; download dry-run prints the plan without
 network requests, files, or confirmation prompts.
 
+Change plugin ordering under **p) Plugins > 3) Sort plugins**:
+
+```bash
+atm plugins sort az
+atm plugins sort za
+atm plugins sort default
+atm plugins sort
+```
+
+A-Z and Z-A sort by display name, ignoring ASCII letter case and using the
+plugin ID to break ties. The preference is saved as `ATM_PLUGIN_SORT_ORDER`
+in ATM's configuration and applies to the main/install menus, local lists,
+and official catalog results. `default` restores metadata order; existing
+installations keep that original order until a preference is selected.
+The metadata files and their order values are never rewritten. Full Setup,
+PATH precedence, and desktop processing retain metadata order independently.
+Use `ATM_PLUGIN_SORT_ORDER=az atm plugins list` for a temporary override.
+`--dry-run plugins sort za` previews the setting without saving or applying it.
+
 Apply PATH, CLI links, and desktop launchers:
 
 ```bash

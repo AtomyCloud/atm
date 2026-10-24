@@ -151,12 +151,28 @@ atm_plugin_load_all() {
     done
 }
 
-atm_plugin_list_sorted_ids() {
-    local id=""
+atm_plugin_sort_mode() {
+    case "${1:-${ATM_PLUGIN_SORT_ORDER:-default}}" in
+        az|AZ|a-z|A-Z) printf 'az\n' ;;
+        za|ZA|z-a|Z-A) printf 'za\n' ;;
+        *) printf 'default\n' ;;
+    esac
+}
 
+atm_plugin_list_sorted_ids() {
+    local id="" mode="$(atm_plugin_sort_mode "${1:-}")"
+    local keys=(-k1,1n -k2,2)
+    case "$mode" in
+        az) keys=(-k1,1f -k2,2) ;;
+        za) keys=(-k1,1fr -k2,2) ;;
+    esac
     for id in "${ATM_PLUGIN_IDS[@]}"; do
-        printf '%s\t%s\n' "${ATM_PLUGIN_ORDER["$id"]:-999}" "$id"
-    done | sort -n | awk -F'\t' '{ print $2 }'
+        if [[ "$mode" == default ]]; then
+            printf '%s\t%s\n' "${ATM_PLUGIN_ORDER["$id"]:-999}" "$id"
+        else
+            printf '%s\t%s\n' "${ATM_PLUGIN_NAME["$id"]:-$id}" "$id"
+        fi
+    done | LC_ALL=C sort -t $'\t' "${keys[@]}" | awk -F'\t' '{ print $2 }'
 }
 
 atm_plugin_status() {
@@ -216,7 +232,7 @@ atm_plugin_run_desktop() {
 atm_plugin_run_all_desktop() {
     local id=""
 
-    for id in $(atm_plugin_list_sorted_ids); do
+    for id in $(atm_plugin_list_sorted_ids default); do
         atm_plugin_run_desktop "$id"
     done
 }
@@ -237,6 +253,14 @@ atm_plugins_cli() {
     local id=""
 
     case "$subcmd" in
+        sort)
+            [[ "$#" -le 2 ]] || atm_fail "$(atm_t ATM_PLUGINS_SORT_USAGE)"
+            if [[ "$#" == 1 ]]; then
+                printf '%s %s\n' "$(atm_t ATM_PLUGINS_SORT_CURRENT)" "$(atm_plugins_sort_label)"
+            else
+                atm_plugins_set_sort "$2"
+            fi
+            ;;
         search)
             atm_plugins_remote_search "${*:2}"
             ;;
