@@ -55,6 +55,7 @@ Desktop apps: ~/.local/share/applications
 | Docker | `docker` | `0.0.1` | Install Docker Engine, Docker Compose, and Docker Desktop from official sources. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 | Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
+| [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 
 ## Features
 
