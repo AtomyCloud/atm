@@ -272,6 +272,37 @@ Main menu actions:
 | `u` | Check self-update status. |
 | `q` | Exit. |
 
+### Self-update Indicator
+
+ATM automatically compares its installed Git commit with the latest commit on
+`ATM_REPO_URL` / `ATM_SELF_UPDATE_BRANCH` (default: the official repository's
+`main` branch). A remote tip not contained locally adds **Update** beside
+`u) Self-update`, in blue on color-capable terminals. A local checkout that
+already contains the remote commit does not get an update label.
+
+The check uses `git ls-remote`, never fetches/pulls or changes checkout files,
+and caches the result in memory for 60 seconds. Requests have a five-second
+timeout with a one-second forced-stop grace period. Git and GNU `timeout`
+(normally supplied by coreutils on Linux) are required. Offline/unavailable
+checks and non-Git copies show no label; they do not claim to be up to date.
+Shallow/partial clones may report a different remote tip without being able to
+prove ancestry. Diverged history is flagged and explained under `u`.
+
+Selecting `u`, or running `atm self-update --check`, forces a fresh check and
+shows both commit IDs. Updating is explicit:
+
+```bash
+atm self-update --git
+```
+
+This uses the same configured repository/branch and fast-forward only. The
+checkout must already be on that branch; detached HEAD/other branches are not
+switched automatically. No reset, force update, or local-file cleanup is done.
+Restart ATM after updating to load the new code. Tarball updates remain pending.
+Configure the source/branch in `~/.config/atm/atm.conf`.
+`--dry-run` skips the network check and writes nothing. `NO_COLOR=1`, a `dumb`
+terminal, and redirected output use a plain-text label instead of ANSI color.
+
 ## Plugin Submenus
 
 Each plugin owns its submenu. Menus show the current detected version/status, then tool-specific install and maintenance actions.

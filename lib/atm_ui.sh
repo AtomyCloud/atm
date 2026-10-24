@@ -43,6 +43,9 @@ atm_menu_main() {
 
     while true; do
         idx=1
+        if declare -F atm_self_update_refresh >/dev/null 2>&1; then
+            atm_self_update_refresh
+        fi
         atm_menu_header
 
         ids=()
@@ -67,7 +70,12 @@ atm_menu_main() {
         printf 'p) 🔌 %s\n' "$(atm_t ATM_MENU_PLUGINS)"
         printf 'l) 🌐 %s\n' "$(atm_t ATM_MENU_CHANGE_LANGUAGE)"
         printf 'd) 🩺 %s\n' "$(atm_t ATM_MENU_DOCTOR)"
-        printf 'u) ♻️  %s\n' "$(atm_t ATM_MENU_SELF_UPDATE)"
+        if declare -F atm_self_update_menu_label >/dev/null 2>&1; then
+            printf 'u) ♻️  '
+            atm_self_update_menu_label
+        else
+            printf 'u) ♻️  %s\n' "$(atm_t ATM_MENU_SELF_UPDATE)"
+        fi
         printf 'q) ❌ %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s\n' "------------------------------------------"
 
