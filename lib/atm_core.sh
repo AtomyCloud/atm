@@ -176,6 +176,9 @@ Usage:
   atm menu
   atm doctor
   atm plugins list
+  atm plugins menu
+  atm plugins search [text]
+  atm plugins download <id>
   atm install [plugin] [--version VERSION]
   atm remove <plugin> <version>
   atm uninstall <plugin|atm>

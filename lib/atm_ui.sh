@@ -83,8 +83,7 @@ atm_menu_main() {
                 atm_setup_menu
                 ;;
             p|P)
-                atm_plugins_cli list
-                atm_prompt_continue
+                atm_plugins_menu
                 ;;
             l|L)
                 atm_i18n_select_cli

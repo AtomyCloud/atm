@@ -92,7 +92,10 @@ Optional commands used by specific workflows:
 xdg-mime
 update-desktop-database
 sudo
+python3
 ```
+
+`python3` is required for the official plugin catalog (Python standard library only).
 
 `sudo` is not used for desktop launchers. It is only needed for optional system-level command setup.
 
@@ -119,6 +122,34 @@ List available plugins:
 ```bash
 ATM_LANG=en-us atm plugins list
 ```
+
+Search and download new plugins from the fixed official source,
+[AtomyCloud/atm, main/plugins](https://github.com/AtomyCloud/atm/tree/main/plugins):
+
+```bash
+ATM_LANG=en-us atm plugins search brave
+ATM_LANG=en-us atm plugins download brave
+ATM_LANG=en-us atm plugins menu
+```
+
+The same workflow is in **Main Menu > p) Plugins > 2) Search and download official plugins**.
+Search is case-insensitive and matches plugin IDs, display names, descriptions,
+and file paths. An empty search lists the catalog; it does not search file bodies.
+Results show which plugins are already local. Existing plugins are never replaced.
+
+Downloads require confirmation because plugins contain Bash code that ATM sources
+on startup. Files are pinned to one `main` commit, verified against Git blob hashes,
+and checked with `bash -n` before publication under ATM's local `plugins` directory.
+Search/download does not execute the downloaded code or install its application.
+Restart ATM to load the new plugin, then use its regular menu. No sudo is used for
+catalog operations; the local plugin directory must be writable by your account.
+
+The source is fixed; custom repository URLs and third-party plugins are not
+supported by this downloader. Public access needs no token. If GitHub limits
+requests or the repository requires authentication, `GITHUB_TOKEN` can be supplied
+through the environment; ATM does not save it. Metadata searches use read-only
+network requests even with `--dry-run`; download dry-run prints the plan without
+network requests, files, or confirmation prompts.
 
 Apply PATH, CLI links, and desktop launchers:
 
@@ -214,7 +245,7 @@ Main menu actions:
 | `f` | Run Full Setup for plugins enabled for stack installation. |
 | `c` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
-| `p` | List loaded plugins. |
+| `p` | Open plugin management: list local plugins or search/download official plugins. |
 | `l` | Change the configured ATM language. |
 | `d` | Run doctor checks. |
 | `u` | Check self-update status. |

@@ -237,6 +237,16 @@ atm_plugins_cli() {
     local id=""
 
     case "$subcmd" in
+        search)
+            atm_plugins_remote_search "${*:2}"
+            ;;
+        download)
+            [[ "$#" == 2 ]] || atm_fail "$(atm_t ATM_PLUGINS_DOWNLOAD_USAGE)"
+            atm_plugins_remote_download "$2"
+            ;;
+        menu)
+            atm_plugins_menu
+            ;;
         list)
             printf '%-18s %-8s %-8s %s\n' "ID" "VERSION" "ORDER" "NAME"
 
