@@ -664,8 +664,278 @@ atm_docker_desktop_menu() {
     done
 }
 
+atm_docker_images_daemon() {
+    command -v docker >/dev/null 2>&1 || return 1
+    local daemon=""
+    daemon="$(docker info --format '{{.ID}}' 2>/dev/null)" || return 1
+    [[ -n "$daemon" && "$daemon" != *$'\n'* ]] || return 1
+    printf '%s\n' "$daemon"
+}
+
+atm_docker_image_rows() {
+    docker image ls --all --no-trunc --format '{{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}'
+}
+
+atm_docker_images_confirm() {
+    local answer=""
+    printf '%s ' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_CONFIRM)"
+    read -r answer || return 1
+    case "$answer" in y|Y|yes|YES) return 0 ;; esac
+    return 1
+}
+
+atm_docker_images_same_daemon() {
+    local daemon=""
+    daemon="$(atm_docker_images_daemon)" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_NO_DAEMON)"; return 1; }
+    if [[ "$daemon" != "$1" ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_DAEMON_CHANGED)"
+        return 1
+    fi
+}
+
+atm_docker_image_default_archive() {
+    local scope="${1:-all-images}" slug=""
+    slug="$(atm_safe_slug "$scope")"
+    printf '%s/docker-%s-%s-%s-%s.tar\n' "$ATM_DOCKER_IMAGE_BACKUP_DIR" "${slug:0:80}" \
+        "$(date +%Y%m%d-%H%M%S)" "$RANDOM" "$RANDOM"
+}
+
+atm_docker_image_export() {
+    local image="${1:-}" output="${2:-}" all="${3:-0}" daemon="" rows="" repository="" tag="" id="" size="" ref="" parent="" temporary=""
+    local refs=()
+    local -A seen=()
+    [[ -n "$output" ]] || output="$(atm_docker_image_default_archive "${image:-all-images}")"
+    if [[ "$output" != /*.tar || "$all" != 0 && "$all" != 1 \
+        || "$all" == 0 && ( -z "$image" || "$image" == -* || "$image" =~ [[:space:]] ) \
+        || "$all" == 1 && -n "$image" ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INVALID)"; return 1
+    fi
+    if [[ -e "$output" || -L "$output" ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_EXISTS)"; return 1
+    fi
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
+        if [[ "$all" == 1 ]]; then
+            atm_info "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_PLAN_ALL)"
+            atm_run docker image save --output "$output" -- '<all-local-tags-and-untagged-IDs>'
+        else
+            atm_info "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_PLAN_ONE)"
+            atm_run docker image save --output "$output" -- "$image"
+        fi
+        return 0
+    fi
+    daemon="$(atm_docker_images_daemon)" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_NO_DAEMON)"; return 1; }
+    if [[ "$all" == 1 ]]; then
+        rows="$(atm_docker_image_rows)" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_LIST_FAILED)"; return 1; }
+        while IFS=$'\t' read -r repository tag id size; do
+            [[ -n "$id" ]] || continue
+            if [[ "$repository" != '<none>' && "$tag" != '<none>' ]]; then ref="$repository:$tag"; else ref="$id"; fi
+            [[ -z "${seen[$ref]:-}" ]] || continue
+            seen["$ref"]=1
+            refs+=("$ref")
+        done <<< "$rows"
+        if ((${#refs[@]} == 0)); then atm_info "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_NONE)"; return 0; fi
+    else
+        if ! docker image inspect -- "$image" >/dev/null 2>&1; then
+            atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INVALID)"; return 1
+        fi
+        refs=("$image")
+    fi
+    printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_DAEMON)" "$daemon"
+    printf '%s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_EXPORT_WARNING)" "$output"
+    printf '  %s\n' "${refs[@]}"
+    if ! atm_docker_images_confirm; then atm_info "$(atm_t ATM_PLUGIN_DOCKER_CANCELLED)"; return 0; fi
+    atm_docker_images_same_daemon "$daemon" || return 1
+    parent="${output%/*}"
+    parent="${parent:-/}"
+    # Publish only a complete archive; the existing Brave backup uses this pattern.
+    if ! (
+        umask 077
+        mkdir -p -- "$parent" || exit 1
+        temporary="$(mktemp "$parent/.atm-docker-images-XXXXXX.tar.part")" || exit 1
+        trap 'rm -f -- "$temporary"' EXIT
+        docker image save --output "$temporary" -- "${refs[@]}" || exit 1
+        [[ -f "$temporary" && ! -L "$temporary" && -s "$temporary" ]] || exit 1
+        chmod 600 -- "$temporary" || exit 1
+        mv -n -- "$temporary" "$output" || exit 1
+        [[ ! -e "$temporary" ]] || exit 1
+    ); then
+        atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_FAILED)"; return 1
+    fi
+    atm_success "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_EXPORTED) $output"
+}
+
+atm_docker_image_archive_valid() {
+    [[ "$1" == /*.tar && -f "$1" && ! -L "$1" && -r "$1" && -s "$1" ]]
+}
+
+atm_docker_image_archives() {
+    local directory="$1"
+    [[ -d "$directory" ]] || return 0
+    find "$directory" -maxdepth 1 -type f -name '*.tar' -print0 | sort -z
+}
+
+atm_docker_images_restore() {
+    local archive="" daemon=""
+    (($# > 0)) || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_NO_ARCHIVES)"; return 0; }
+    for archive in "$@"; do
+        atm_docker_image_archive_valid "$archive" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INVALID)"; return 1; }
+    done
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
+        for archive in "$@"; do atm_run docker image load --input "$archive"; done
+        return 0
+    fi
+    daemon="$(atm_docker_images_daemon)" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_NO_DAEMON)"; return 1; }
+    printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_DAEMON)" "$daemon"
+    printf '%s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_LOAD_WARNING)"
+    printf '  %s\n' "$@"
+    if ! atm_docker_images_confirm; then atm_info "$(atm_t ATM_PLUGIN_DOCKER_CANCELLED)"; return 0; fi
+    for archive in "$@"; do
+        atm_docker_images_same_daemon "$daemon" || return 1
+        atm_docker_image_archive_valid "$archive" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INVALID)"; return 1; }
+        if ! docker image load --input "$archive"; then
+            atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_FAILED)"; return 1
+        fi
+        atm_success "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_RESTORED) $archive"
+    done
+}
+
+atm_docker_images_cli() {
+    local action="${1:-menu}" image="" output="" input="" directory="$ATM_DOCKER_IMAGE_BACKUP_DIR" all=0
+    local archives=()
+    if (($# > 0)); then shift; fi
+    while (($# > 0)); do
+        case "$action:$1" in
+            export:--image|export:--output|export:--all|restore:--input|restore-all:--directory) ;;
+            *) atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_USAGE)"; return 1 ;;
+        esac
+        case "$1" in
+            --all) all=1; shift ;;
+            --image|--output|--input|--directory)
+                (($# >= 2)) || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_USAGE)"; return 1; }
+                case "$1" in
+                    --image) image="$2" ;; --output) output="$2" ;; --input) input="$2" ;; --directory) directory="$2" ;;
+                esac
+                shift 2 ;;
+            *) atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_USAGE)"; return 1 ;;
+        esac
+    done
+    case "$action" in
+        menu) atm_docker_images_menu ;;
+        export) atm_docker_image_export "$image" "$output" "$all" ;;
+        restore) atm_docker_images_restore "$input" ;;
+        restore-all)
+            [[ "$directory" == /* ]] || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INVALID)"; return 1; }
+            mapfile -d '' -t archives < <(atm_docker_image_archives "$directory")
+            atm_docker_images_restore "${archives[@]}" ;;
+        *) atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_USAGE)"; return 1 ;;
+    esac
+}
+
+atm_docker_image_export_prompt() {
+    local all="${1:-0}" image="" output="" default="" rows="" repository="" tag="" id="" size="" choice="" ref="" idx=1
+    local refs=()
+    if [[ "$all" == 0 ]]; then
+        if [[ "${ATM_DRY_RUN:-0}" != 1 ]]; then
+            rows="$(atm_docker_image_rows)" || { atm_warn "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_LIST_FAILED)"; return 1; }
+            while IFS=$'\t' read -r repository tag id size; do
+                [[ -n "$id" ]] || continue
+                if [[ "$repository" != '<none>' && "$tag" != '<none>' ]]; then ref="$repository:$tag"; else ref="$id"; fi
+                refs+=("$ref")
+                printf '%s) %s [%s]\n' "$idx" "$ref" "$size"
+                idx=$((idx + 1))
+            done <<< "$rows"
+            if ((${#refs[@]} == 0)); then atm_info "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_NONE)"; return 0; fi
+        fi
+        printf '0) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_EXPORT_ALL)"
+        printf 'm) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_MANUAL)"
+        printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+        printf '%s ' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_SELECT)"
+        read -r choice || return 0
+        case "$choice" in
+            b|B|'') return 0 ;;
+            0) all=1 ;;
+            m|M)
+                printf '%s ' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_ENTER)"
+                read -r image || return 0
+                [[ -n "$image" ]] || return 0 ;;
+            *)
+                for ((idx=0; idx<${#refs[@]}; idx++)); do
+                    if [[ "$choice" == "$((idx + 1))" ]]; then image="${refs[$idx]}"; break; fi
+                done
+                [[ -n "$image" ]] || { atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; return 1; } ;;
+        esac
+    fi
+    default="$(atm_docker_image_default_archive "${image:-all-images}")"
+    printf '%s [%s] ' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_OUTPUT)" "$default"
+    read -r output || return 0
+    atm_docker_image_export "$image" "${output:-$default}" "$all"
+}
+
+atm_docker_images_restore_prompt() {
+    local archive="" choice="" idx=1
+    local archives=()
+    mapfile -d '' -t archives < <(atm_docker_image_archives "$ATM_DOCKER_IMAGE_BACKUP_DIR")
+    for archive in "${archives[@]}"; do
+        printf '%s) %s\n' "$idx" "${archive##*/}"
+        idx=$((idx + 1))
+    done
+    printf 'm) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INPUT)"
+    printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+    printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+    read -r choice || return 0
+    archive=""
+    case "$choice" in
+        b|B|'') return 0 ;;
+        m|M)
+            printf '%s ' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_INPUT)"
+            read -r archive || return 0
+            [[ -n "$archive" ]] || return 0 ;;
+        *)
+            for ((idx=0; idx<${#archives[@]}; idx++)); do
+                if [[ "$choice" == "$((idx + 1))" ]]; then archive="${archives[$idx]}"; break; fi
+            done
+            [[ -n "$archive" ]] || { atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; return 1; } ;;
+    esac
+    atm_docker_images_restore "$archive"
+}
+
+atm_docker_images_menu() {
+    local choice="" directory=""
+    while true; do
+        printf '\n%s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGES)"
+        printf '1) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_EXPORT_ONE)"
+        printf '2) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_EXPORT_ALL)"
+        printf '3) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_RESTORE)"
+        printf '4) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_RESTORE_ALL)"
+        printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
+        printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
+        printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
+        read -r choice || return 0
+        case "$choice" in
+            1) atm_docker_image_export_prompt || true ;;
+            2) atm_docker_image_export_prompt 1 || true ;;
+            3) atm_docker_images_restore_prompt || true ;;
+            4)
+                printf '%s [%s] ' "$(atm_t ATM_PLUGIN_DOCKER_IMAGE_FOLDER)" "$ATM_DOCKER_IMAGE_BACKUP_DIR"
+                read -r directory || return 0
+                atm_docker_images_cli restore-all --directory "${directory:-$ATM_DOCKER_IMAGE_BACKUP_DIR}" || true ;;
+            b|B) return 0 ;;
+            q|Q) exit 0 ;;
+            *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; continue ;;
+        esac
+        printf '\n%s' "$(atm_t ATM_MENU_PRESS_ANY_KEY)"
+        read -r -n 1 _ || true
+        printf '\n'
+    done
+}
+
 atm_docker_install() {
-    atm_docker_install_engine "$@"
+    if [[ "${1:-}" == --images ]]; then
+        shift
+        atm_docker_images_cli "$@"
+    else
+        atm_docker_install_engine "$@"
+    fi
 }
 
 atm_docker_use() {
@@ -704,6 +974,7 @@ atm_docker_menu() {
         printf '4) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_INSTALL_ALL)"
         printf '5) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_UNINSTALL)"
         printf '6) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_SETUP)"
+        printf '7) %s\n' "$(atm_t ATM_PLUGIN_DOCKER_IMAGES)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -728,6 +999,10 @@ atm_docker_menu() {
                 ;;
             6)
                 atm_docker_setup_desktop_signin
+                ;;
+            7)
+                atm_docker_images_menu
+                continue
                 ;;
             b|B)
                 return 0

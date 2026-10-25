@@ -52,7 +52,7 @@ Desktop apps: ~/.local/share/applications
 | Android Studio | `android_studio` | `0.0.1` | Install and switch Android Studio versions and create desktop launchers. |
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
-| Docker | `docker` | `0.0.1` | Install Docker Engine, Docker Compose, and Docker Desktop from official sources. |
+| [Docker](plugins/docker/README.md) | `docker` | `0.0.1` | Install Docker Engine, Compose, and Desktop; export and restore image archives. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 | Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
@@ -480,11 +480,27 @@ Current: <status>
 2) Install Docker Compose
 3) Install Docker Desktop
 4) Install ALL
+5) Uninstall Docker Desktop completely
+6) Set up Docker Desktop sign-in
+7) Export / Restore images
 b) Back
 q) Exit
 ```
 
-In this phase, `Install Docker Engine`, `Install Docker Compose`, and `Install Docker Desktop` are implemented. Docker Engine follows the provided Ansible flow: run the official Docker install script, add the target user to the `docker` group, and enable/start the Docker service. Docker Compose downloads the latest official standalone binary from GitHub into `/usr/local/bin/docker-compose` and marks it executable. Docker Desktop follows the official Ubuntu DEB flow: download the latest `docker-desktop-amd64.deb`, run `apt-get update`, and install the local package with `apt`. Install ALL remains a placeholder for a later patch.
+Docker Engine uses the official installer. Compose installs the latest official standalone binary into `/usr/local/bin/docker-compose`. Desktop offers the five latest Linux DEB releases or a custom version, complete removal, and sign-in prerequisites; browser authentication remains interactive. Install/update checks stop running local Docker services before replacing packages. Install ALL remains a placeholder.
+
+Option **7** manages images in the active Docker daemon without stopping it:
+
+```text
+1) Export a selected image to .tar
+2) Export ALL images to one .tar
+3) Restore images from a .tar archive
+4) Restore ALL .tar archives in a folder
+b) Back
+q) Exit
+```
+
+Archives default to `~/Apps/Backups/docker`; custom absolute paths are supported. Exports preserve existing files, and imports require confirmation because tags can be replaced. Archives contain images, not containers or volumes. Only restore trusted archives. See the [Docker plugin guide](plugins/docker/README.md) for CLI examples and limitations.
 
 ### Node.js
 
