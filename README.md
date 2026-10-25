@@ -532,6 +532,10 @@ Each major-version submenu fetches the latest three available versions from the 
 installed version (optionally prefixed with `v`); `b` or Enter cancels. The same
 selector is used for removal and the major-version submenu shortcuts. Switching
 updates `current` and the manifest without downloading another Node.js version.
+Portable activation also refreshes ATM's user-shell PATH blocks so `current/bin`
+precedes user-local Node installations, without replacing their executables.
+For an already-open terminal, run the PATH refresh/cache-reset commands printed
+by ATM; new terminals load the saved selection automatically.
 
 Option 4 also reports installed origins/paths and the command selected by PATH.
 Option 8 offers ATM portable installation (default) or the system package via APT

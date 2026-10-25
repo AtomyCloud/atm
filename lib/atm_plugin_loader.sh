@@ -14,6 +14,7 @@ atm_plugin_arrays_init() {
     unset ATM_PLUGIN_STATUS_FUNC
     unset ATM_PLUGIN_INSTALL_FUNC
     unset ATM_PLUGIN_PATH_FUNC
+    unset ATM_PLUGIN_PATH_PRIORITY
     unset ATM_PLUGIN_DESKTOP_FUNC
     unset ATM_PLUGIN_REMOVE_FUNC
     unset ATM_PLUGIN_UNINSTALL_FUNC
@@ -34,6 +35,7 @@ atm_plugin_arrays_init() {
     declare -gA ATM_PLUGIN_STATUS_FUNC=()
     declare -gA ATM_PLUGIN_INSTALL_FUNC=()
     declare -gA ATM_PLUGIN_PATH_FUNC=()
+    declare -gA ATM_PLUGIN_PATH_PRIORITY=()
     declare -gA ATM_PLUGIN_DESKTOP_FUNC=()
     declare -gA ATM_PLUGIN_REMOVE_FUNC=()
     declare -gA ATM_PLUGIN_UNINSTALL_FUNC=()
@@ -79,6 +81,7 @@ atm_plugin_load_metadata() {
     ATM_PLUGIN_STATUS_FUNC_VALUE=""
     ATM_PLUGIN_INSTALL_FUNC_VALUE=""
     ATM_PLUGIN_PATH_FUNC_VALUE=""
+    ATM_PLUGIN_PATH_PRIORITY_VALUE=""
     ATM_PLUGIN_DESKTOP_FUNC_VALUE=""
     ATM_PLUGIN_REMOVE_FUNC_VALUE=""
     ATM_PLUGIN_UNINSTALL_FUNC_VALUE=""
@@ -95,6 +98,11 @@ atm_plugin_load_metadata() {
         atm_debug "Plugin disabled: $plugin_id"
         return 0
     fi
+
+    case "${ATM_PLUGIN_PATH_PRIORITY_VALUE:-default}" in
+        default|prepend) ;;
+        *) atm_fail "Invalid plugin PATH priority: $plugin_id" ;;
+    esac
 
     plugin_conf="$plugin_dir/plugin.conf"
     plugin_sh="$plugin_dir/${ATM_PLUGIN_ENTRYPOINT:-plugin.sh}"
@@ -131,6 +139,7 @@ atm_plugin_load_metadata() {
     ATM_PLUGIN_STATUS_FUNC["$plugin_id"]="${ATM_PLUGIN_STATUS_FUNC_VALUE:-}"
     ATM_PLUGIN_INSTALL_FUNC["$plugin_id"]="${ATM_PLUGIN_INSTALL_FUNC_VALUE:-}"
     ATM_PLUGIN_PATH_FUNC["$plugin_id"]="${ATM_PLUGIN_PATH_FUNC_VALUE:-}"
+    ATM_PLUGIN_PATH_PRIORITY["$plugin_id"]="${ATM_PLUGIN_PATH_PRIORITY_VALUE:-default}"
     ATM_PLUGIN_DESKTOP_FUNC["$plugin_id"]="${ATM_PLUGIN_DESKTOP_FUNC_VALUE:-}"
     ATM_PLUGIN_REMOVE_FUNC["$plugin_id"]="${ATM_PLUGIN_REMOVE_FUNC_VALUE:-}"
     ATM_PLUGIN_UNINSTALL_FUNC["$plugin_id"]="${ATM_PLUGIN_UNINSTALL_FUNC_VALUE:-}"

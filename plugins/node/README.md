@@ -43,9 +43,36 @@ atm --dry-run install node --location system
 ```
 
 Portable mode preserves the existing official release archives, major-version
-menus and default version. It writes only its Apps/current/cache/manifest paths.
+menus and default version. Activation also refreshes ATM's managed PATH blocks
+in `~/.profile`, `~/.bashrc`, and an existing `~/.zshrc`.
 Version switching/removal and plugin uninstall continue to manage **ATM portable
 versions only**, not distribution packages or user-local files.
+
+## Activate A Portable Version
+
+```bash
+atm use node 26.2.0
+```
+
+Portable install and version switching put `current/bin` before `~/.local/bin`
+in the managed PATH block. External Node/npm/npx executables and links are never
+replaced. Other plugins retain their usual order; desktop files/system profiles
+are not touched. Version switches remain effective through the same `current`
+link once this PATH is loaded.
+
+An executable cannot change its parent terminal's environment or command cache.
+ATM prints a shell-escaped refresh command for the already-open terminal, e.g.:
+
+```bash
+export PATH="$HOME/Apps/node/current/bin:$PATH"
+hash -r
+node --version
+```
+
+New terminals load the persisted PATH. Aliases/functions or later shell setup
+may still override it; inspect `type -a node` if necessary. Global npm packages
+belong to each runtime and are not migrated. Run the patched ATM copy: a separate
+portable `~/Apps/atm` deployment must also be updated from the checkout.
 
 ## System Package
 
@@ -97,5 +124,9 @@ They cover selector PTY visibility, switching/removal, origins/probe failures,
 location defaults/cancel/dispatch, rejected version flags, confirmed system
 installation, privilege/package/verification failures, separate manifests,
 preserved external files/current, and actual CLI no-write dry-run in both modes.
-No real package installation or user runtime switch is performed. New labels
+PATH fixtures additionally reproduce a competing user-local Node, verify fresh
+Bash/Zsh resolution, cached-parent refresh and subsequent switching, npm's selected
+runtime, profile preservation, generic priority defaults/reset/order, and no-write
+activation dry-run. Automated fixtures perform no real package installation or
+user runtime switch. New labels
 use en-us fallback until translations stabilize; plugin version stays `0.0.1`.

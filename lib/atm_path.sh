@@ -26,16 +26,23 @@ atm_path_portable_home() {
 atm_path_collect_entries() {
     local id=""
     local func=""
+    local priority=""
+    local ids=()
 
-    printf '%s\n' "$HOME/.local/bin"
-    printf '%s\n' "$(atm_path_portable_home)/bin"
-
-    for id in $(atm_plugin_list_sorted_ids default); do
-        func="${ATM_PLUGIN_PATH_FUNC[$id]:-}"
-
-        if [[ -n "$func" ]] && declare -F "$func" >/dev/null 2>&1; then
-            "$func"
+    mapfile -t ids < <(atm_plugin_list_sorted_ids default)
+    for priority in prepend default; do
+        if [[ "$priority" == default ]]; then
+            printf '%s\n' "$HOME/.local/bin"
+            printf '%s\n' "$(atm_path_portable_home)/bin"
         fi
+        for id in "${ids[@]}"; do
+            [[ "${ATM_PLUGIN_PATH_PRIORITY[$id]:-default}" == "$priority" ]] || continue
+            func="${ATM_PLUGIN_PATH_FUNC[$id]:-}"
+
+            if [[ -n "$func" ]] && declare -F "$func" >/dev/null 2>&1; then
+                "$func"
+            fi
+        done
     done
 }
 

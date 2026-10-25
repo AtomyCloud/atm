@@ -104,7 +104,17 @@ ATM_PLUGIN_DESCRIPTION_VALUE   Short description.
 ATM_PLUGIN_ENTRYPOINT          Shell file sourced after plugin.conf.
 ATM_PLUGIN_FULL_SETUP_VALUE    1 to include in Full Setup, 0 to skip.
 ATM_PLUGIN_*_FUNC_VALUE        Function names exported by plugin.sh.
+ATM_PLUGIN_PATH_PRIORITY_VALUE Optional: default or prepend (before ~/.local/bin).
 ```
+
+PATH callbacks normally follow `~/.local/bin` and `~/Apps/atm/bin`. Version
+managers needing their selected runtime to win may set
+`ATM_PLUGIN_PATH_PRIORITY_VALUE="prepend"`. Order within each priority group
+remains metadata order, independent of menu sorting. Defaults reset per plugin.
+Never overwrite another tool's executable to obtain precedence.
+To persist activation without desktop/system changes, a plugin may call
+`atm_path_apply_user_profiles "$(atm_path_generate_block)"`. This respects dry-run;
+the already-open parent shell still needs an explicit PATH refresh/cache reset.
 
 ## 5. Create plugin.conf
 

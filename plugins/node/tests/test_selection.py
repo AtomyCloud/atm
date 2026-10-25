@@ -21,6 +21,10 @@ source "$ATM_HOME/lang/en-us.lang"
 source "$ATM_HOME/plugins/node/plugin.conf"
 source "$ATM_HOME/plugins/node/plugin.sh"
 source "$ATM_HOME/plugins/node/lang/en-us.lang"
+source "$ATM_HOME/lib/atm_plugin_loader.sh"
+source "$ATM_HOME/lib/atm_path.sh"
+atm_plugin_arrays_init
+atm_plugin_load_metadata "$ATM_HOME/plugins/node"
 clear() { :; }
 '''
 

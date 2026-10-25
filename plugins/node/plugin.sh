@@ -354,6 +354,13 @@ atm_node_version_from_args() {
     atm_node_normalize_version "$version"
 }
 
+atm_node_activate_path() {
+    atm_path_apply_user_profiles "$(atm_path_generate_block)"
+    atm_info "$(atm_t ATM_PLUGIN_NODE_SHELL_REFRESH)"
+    printf '  export PATH=%q:"$PATH"\n' "$(atm_node_current_path)/bin"
+    printf '  hash -r\n'
+}
+
 atm_node_install_portable() {
     local version=""
     local url=""
@@ -388,11 +395,12 @@ atm_node_install_portable() {
     fi
 
     atm_node_write_manifest "$version"
+    atm_node_activate_path
     atm_success "$(atm_t ATM_PLUGIN_NODE_INSTALLED): $version"
 
     if [[ "${ATM_DRY_RUN:-0}" != "1" && -x "$(atm_node_current_path)/bin/node" ]]; then
         "$(atm_node_current_path)/bin/node" --version
-        "$(atm_node_current_path)/bin/npm" --version 2>/dev/null || true
+        PATH="$(atm_node_current_path)/bin:$PATH" "$(atm_node_current_path)/bin/npm" --version 2>/dev/null || true
     fi
 }
 
@@ -413,6 +421,7 @@ atm_node_use() {
     fi
 
     atm_node_write_manifest "$version"
+    atm_node_activate_path
     atm_success "$(atm_t ATM_PLUGIN_NODE_USING): $version"
 }
 
