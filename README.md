@@ -57,6 +57,7 @@ Desktop apps: ~/.local/share/applications
 | Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
+| [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Portable music player with yt-dlp/EJS, FFmpeg and JavaScript runtime checks before installation. |
 
 ## Features
 
@@ -245,6 +246,11 @@ Language: en-us
 8) 🐳 Docker                           <status>
 9) 🧠 AI Tools                         <status>
 10) 🟢 Node.js                          <status>
+11) 🦁 Brave Browser                    <status>
+12) 🐚 Zsh + Oh My Zsh                   <status>
+13) 🔍 Trivy                            <status>
+14) 💾 ATM - Backup & Restore            <status>
+15) 🎵 spotatui                         <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -262,7 +268,7 @@ Main menu actions:
 
 | Option | Action |
 |---|---|
-| `1` to `10` | Open the selected plugin submenu. |
+| `1` to `15` | Open the selected plugin submenu; numbering follows enabled plugins and the configured sort order. |
 | `f` | Run Full Setup for plugins enabled for stack installation. |
 | `c` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
@@ -557,6 +563,32 @@ q) Exit
 ```
 
 `Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `Install Ollama` runs `curl -fsSL https://ollama.com/install.sh | sh` and prints run/pull usage examples after installation. `PicoClaw` downloads the official latest `.tar.gz` release for the detected OS/architecture and extracts it into `~/Apps/ai/picoclaw`. `--dry-run` prints commands without downloading or installing.
+
+### spotatui
+
+```text
+spotatui Installer
+https://spotatui.com/
+<status>
+1) Install / Update latest stable
+2) Install a specific version
+3) Check playback dependencies
+4) Change active version
+5) List installed versions
+6) Remove an inactive version
+7) Uninstall ATM-managed spotatui
+8) Show usage
+b) Back
+q) Exit
+```
+
+Installs official checksum-verified Linux binaries under `~/Apps/spotatui`.
+Before any download, checks `curl`, Python, FFmpeg/ffprobe, modern `yt-dlp` with
+EJS, and Deno >=2.3 or Node >=22. Missing dependencies block installation and
+show correction commands; no automatic sudo/package installation occurs.
+The managed launcher enables the chosen runtime without editing global settings.
+Existing spotatui installations and profiles are preserved. See the
+[plugin guide](plugins/spotatui/README.md) for setup and limitations.
 
 ## Setup Menu
 
