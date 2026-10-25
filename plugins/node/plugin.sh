@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# Keep new labels available while translated plugin locales are being stabilized.
+source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
+
 atm_node_install_root() {
     printf '%s\n' "${ATM_NODE_INSTALL_ROOT:-$ATM_APPS_DIR/node}"
 }
@@ -91,17 +94,118 @@ atm_node_cache_file() {
 }
 
 atm_node_status() {
-    local current=""
-    local version_output=""
-
-    current="$(atm_node_current_path)"
-
-    if [[ -x "$current/bin/node" ]]; then
-        version_output="$("$current/bin/node" --version 2>/dev/null || true)"
-        printf '✅ %s\n' "${version_output#v}"
-    else
-        printf '%s\n' "$(atm_t ATM_PLUGIN_NODE_STATUS_NOT_INSTALLED)"
+    local version="$(atm_node_current_version 2>/dev/null || true)" path="" label="" parts=()
+    if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ && -x "$(atm_node_current_path)/bin/node" ]]; then
+        parts+=("ATM: $version")
     fi
+    for label in LOCAL SYSTEM; do
+        if [[ "$label" == LOCAL ]]; then path="$ATM_NODE_LOCAL_BINARY"; else path="$ATM_NODE_SYSTEM_BINARY"; fi
+        if [[ -e "$path" || -L "$path" ]]; then
+            parts+=("$(atm_t "ATM_PLUGIN_NODE_$label"): $(atm_node_probe_version "$path")")
+        fi
+    done
+    if ((${#parts[@]})); then printf '✅ %s\n' "${parts[*]}"; else atm_t ATM_PLUGIN_NODE_STATUS_NOT_INSTALLED; fi
+}
+
+atm_node_probe_version() {
+    local path="$1" output=""
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then atm_t ATM_PLUGIN_NODE_NOT_PROBED; return 0; fi
+    if [[ -x "$path" ]] && command -v timeout >/dev/null 2>&1; then
+        output="$(timeout --kill-after=1 3 "$path" --version < /dev/null 2>/dev/null)" || output=""
+    fi
+    if [[ "$output" =~ ^v?([0-9]+\.[0-9]+\.[0-9]+)(-[[:alnum:].-]+)?$ ]]; then
+        printf '%s\n' "${output#v}"
+    else
+        atm_t ATM_PLUGIN_NODE_UNKNOWN_VERSION
+    fi
+}
+
+atm_node_show_installations() {
+    printf '%s\nATM: %s\n' "$(atm_node_status)" "$(atm_node_install_root)"
+    atm_node_list_installed_versions
+    printf '%s: %s\n%s: %s\n' "$(atm_t ATM_PLUGIN_NODE_LOCAL)" "$ATM_NODE_LOCAL_BINARY" \
+        "$(atm_t ATM_PLUGIN_NODE_SYSTEM)" "$ATM_NODE_SYSTEM_BINARY"
+    printf '%s %s\n' "$(atm_t ATM_PLUGIN_NODE_PATH_COMMAND)" "$(command -v node || true)"
+    atm_info "$(atm_t ATM_PLUGIN_NODE_PATH_WARNING)"
+}
+
+atm_node_choose_location() {
+    local choice=""
+    printf '1) %s: %s\n2) %s\n%s ' "$(atm_t ATM_PLUGIN_NODE_ATM_LOCATION)" "$(atm_node_install_root)" \
+        "$(atm_t ATM_PLUGIN_NODE_SYSTEM_LOCATION)" "$(atm_t ATM_PLUGIN_NODE_CHOOSE_LOCATION)" >&2
+    read -r choice || return 1
+    case "$choice" in
+        ''|1) printf 'atm\n' ;; 2) printf 'system\n' ;;
+        b|B) return 1 ;; *) atm_warn "$(atm_t ATM_PLUGIN_NODE_INVALID_LOCATION)"; return 1 ;;
+    esac
+}
+
+atm_node_require_apt() {
+    [[ "$(uname -s)" == Linux && -r /etc/debian_version ]] && command -v apt-get >/dev/null 2>&1 \
+        || { atm_warn "$(atm_t ATM_PLUGIN_NODE_APT_ONLY)"; return 1; }
+}
+
+atm_node_install_system() {
+    local answer="" version="" privileged=()
+    atm_node_require_apt || return 1
+    [[ "${EUID:-$(id -u)}" == 0 ]] || privileged=(sudo --)
+    atm_info "$(atm_t ATM_PLUGIN_NODE_SYSTEM_WARNING)"
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
+        atm_run "${privileged[@]}" apt-get update
+        atm_run "${privileged[@]}" apt-get --no-remove install nodejs npm
+        printf 'DRY-RUN: %s\n' "$ATM_NODE_SYSTEM_BINARY"
+        return 0
+    fi
+    printf '%s ' "$(atm_t ATM_PLUGIN_NODE_SYSTEM_CONFIRM)"
+    read -r answer || return 0
+    case "$answer" in y|Y|yes|YES) ;; *) atm_info "$(atm_t ATM_PLUGIN_NODE_CANCELLED)"; return 0 ;; esac
+    if ((${#privileged[@]})); then
+        atm_info "$(atm_t ATM_PLUGIN_NODE_SUDO_REQUIRED)"
+        command -v sudo >/dev/null 2>&1 && sudo --validate \
+            || { atm_warn "$(atm_t ATM_PLUGIN_NODE_SUDO_FAILED)"; return 1; }
+    fi
+    if ! atm_run "${privileged[@]}" apt-get update \
+        || ! atm_run "${privileged[@]}" apt-get --no-remove install nodejs npm; then
+        atm_warn "$(atm_t ATM_PLUGIN_NODE_SYSTEM_FAILED)"; return 1
+    fi
+    version="$(atm_node_probe_version "$ATM_NODE_SYSTEM_BINARY")"
+    if [[ ! "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ || ! -x "$ATM_NODE_SYSTEM_NPM" ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_NODE_SYSTEM_FAILED)"; return 1
+    fi
+    atm_manifest_write node_system 'ATM_PLUGIN_NAME="Node.js (system)"' 'ATM_PLUGIN_VERSION="0.0.1"' \
+        'ATM_INSTALLED=1' 'ATM_INSTALL_METHOD=apt' "ATM_CURRENT_VERSION=$(printf '%q' "$version")" \
+        "ATM_CURRENT_PATH=$(printf '%q' "$ATM_NODE_SYSTEM_BINARY")" \
+        "ATM_INSTALL_ROOT=$(printf '%q' "${ATM_NODE_SYSTEM_BINARY%/*}")" \
+        "ATM_INSTALLED_VERSIONS=$(printf '%q' "$version")" || return 1
+    atm_success "$(atm_t ATM_PLUGIN_NODE_SYSTEM_DONE) $version ($ATM_NODE_SYSTEM_BINARY)"
+    atm_info "$(atm_t ATM_PLUGIN_NODE_PATH_WARNING)"
+}
+
+atm_node_install() {
+    local location=atm explicit=0 version_requested=0
+    local args=()
+    while (($#)); do
+        case "$1" in
+            --location) (($# >= 2)) || return 1; location="$2"; explicit=1; shift ;;
+            --location=*) location="${1#*=}"; explicit=1 ;;
+            --version|--major)
+                (($# >= 2)) || return 1
+                version_requested=1; args+=("$1" "$2"); shift ;;
+            --version=*|--major=*) version_requested=1; args+=("$1") ;;
+            *) atm_warn "$(atm_t ATM_PLUGIN_NODE_INVALID_LOCATION)"; return 1 ;;
+        esac
+        shift
+    done
+    if [[ "$explicit" == 0 && "$version_requested" == 0 && -t 0 ]]; then
+        location="$(atm_node_choose_location)" || return 0
+    fi
+    case "$location" in
+        atm) atm_node_install_portable "${args[@]}" ;;
+        system)
+            [[ "$version_requested" == 0 ]] || { atm_warn "$(atm_t ATM_PLUGIN_NODE_INVALID_LOCATION)"; return 1; }
+            atm_node_install_system ;;
+        *) atm_warn "$(atm_t ATM_PLUGIN_NODE_INVALID_LOCATION)"; return 1 ;;
+    esac
 }
 
 atm_node_list_installed_versions() {
@@ -250,7 +354,7 @@ atm_node_version_from_args() {
     atm_node_normalize_version "$version"
 }
 
-atm_node_install() {
+atm_node_install_portable() {
     local version=""
     local url=""
     local cache_file=""
@@ -267,11 +371,11 @@ atm_node_install() {
         atm_warn "$(atm_t ATM_PLUGIN_NODE_ALREADY_INSTALLED): $dest"
     else
         atm_run mkdir -p "$(atm_node_cache_dir)" "$(atm_node_install_root)"
-        atm_download_file "$url" "$cache_file"
-
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
+            atm_run curl --fail --location "$url" -o "$cache_file"
             printf 'DRY-RUN: install Node.js %s into %s\n' "$version" "$dest"
         else
+            atm_download_file "$url" "$cache_file"
             atm_require_commands tar xz
             atm_node_extract_archive "$cache_file" "$dest"
         fi
@@ -488,6 +592,7 @@ atm_node_menu() {
     local choice=""
     local current=""
     local version=""
+    local location=""
 
     while true; do
         clear
@@ -496,7 +601,7 @@ atm_node_menu() {
         printf '%s\n' "=========================================="
         printf '    🟢 %s\n' "$(atm_t ATM_PLUGIN_NODE_MENU_TITLE)"
         printf '%s\n' "=========================================="
-        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_NODE_CURRENT)" "$current"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_NODE_ORIGINS)" "$current"
         printf '%s\n' "------------------------------------------"
         printf '1) Node.js v26.x\n'
         printf '2) Node.js v25.x\n'
@@ -505,6 +610,7 @@ atm_node_menu() {
         printf '5) %s\n' "$(atm_t ATM_PLUGIN_NODE_CHANGE_VERSION)"
         printf '6) %s\n' "$(atm_t ATM_PLUGIN_NODE_REMOVE_VERSION)"
         printf '7) %s\n' "$(atm_t ATM_PLUGIN_NODE_UNINSTALL)"
+        printf '8) %s\n' "$(atm_t ATM_PLUGIN_NODE_INSTALL_LOCATION)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -521,7 +627,7 @@ atm_node_menu() {
                 atm_node_major_menu "24" "v24.x (LTS)"
                 ;;
             4)
-                atm_node_list_installed_versions
+                atm_node_show_installations
                 ;;
             5)
                 if version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_USE)")"; then
@@ -535,6 +641,11 @@ atm_node_menu() {
                 ;;
             7)
                 atm_node_uninstall
+                ;;
+            8)
+                if location="$(atm_node_choose_location)"; then
+                    atm_node_install --location "$location" || true
+                fi
                 ;;
             b|B)
                 return 0

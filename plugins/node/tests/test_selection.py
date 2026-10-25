@@ -44,6 +44,7 @@ class SelectionTests(unittest.TestCase):
         self.env.update(ATM_HOME=str(REPO), HOME=str(self.home), ATM_APPS_DIR=str(self.apps),
                         ATM_STATE_DIR=str(self.root / "state"), ATM_CACHE_DIR=str(self.root / "cache"),
                         ATM_CONFIG_DIR=str(self.root / "config"), ATM_LANG="en-us", TERM="dumb")
+        self.env["ATM_NODE_SYSTEM_BINARY"] = str(self.root / "absent-system-node")
 
     def run_shell(self, script, input=""):
         return subprocess.run(["bash", "-c", PRELUDE + script], input=input,

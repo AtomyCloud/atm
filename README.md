@@ -54,7 +54,7 @@ Desktop apps: ~/.local/share/applications
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 | [Docker](plugins/docker/README.md) | `docker` | `0.0.1` | Install Docker Engine, Compose, and Desktop; export and restore image archives. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
-| Node.js | `node` | `0.0.1` | Install, switch, remove, and uninstall Node.js versions from official releases. |
+| [Node.js](plugins/node/README.md) | `node` | `0.0.1` | Manage portable Node.js releases or install the system APT package; identify ATM, user-local and system versions. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
 | [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Portable music player with yt-dlp/EJS, FFmpeg and JavaScript runtime checks before installation. |
@@ -521,6 +521,7 @@ Current: <status>
 5) Change active version
 6) Remove installed version
 7) Uninstall Node.js completely
+8) Install Node.js (ATM / system package)
 b) Back
 q) Exit
 ```
@@ -531,6 +532,13 @@ Each major-version submenu fetches the latest three available versions from the 
 installed version (optionally prefixed with `v`); `b` or Enter cancels. The same
 selector is used for removal and the major-version submenu shortcuts. Switching
 updates `current` and the manifest without downloading another Node.js version.
+
+Option 4 also reports installed origins/paths and the command selected by PATH.
+Option 8 offers ATM portable installation (default) or the system package via APT
+on Debian/Ubuntu/Zorin. The latter installs `nodejs` and `npm` from configured
+repositories after confirmation, requesting sudo when necessary. Its version is
+chosen by APT, not the portable v24/v25/v26 menu. User-local binaries and ATM's
+active link are not overwritten. See the [Node plugin guide](plugins/node/README.md).
 
 ### AI Tools
 
