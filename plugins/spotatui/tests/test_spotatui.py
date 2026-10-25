@@ -250,10 +250,10 @@ atm_spotatui_uninstall <<< y
         env["PATH"] = str(tools) + os.pathsep + os.environ.get("PATH", os.defpath)
         before = {str(p.relative_to(self.root)): p.read_bytes() if p.is_file() else None
                   for p in self.root.rglob("*")}
-        for version, locale in (("latest", "en-us"), ("0.46.0", "de")):
+        for version, locale, location in (("latest", "en-us", "atm"), ("0.46.0", "de", "local")):
             env["ATM_LANG"] = locale
             result = subprocess.run(["bash", str(REPO / "bin/atm"), "--dry-run", "install", "spotatui",
-                                     "--version", version], env=env, cwd=REPO, capture_output=True, text=True, timeout=30)
+                                     "--version", version, "--location", location], env=env, cwd=REPO, capture_output=True, text=True, timeout=30)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
             self.assertIn("DRY-RUN:", result.stdout)
             self.assertNotIn("UNEXPECTED_TOOL_CALL", result.stdout + result.stderr)
@@ -261,6 +261,99 @@ atm_spotatui_uninstall <<< y
         after = {str(p.relative_to(self.root)): p.read_bytes() if p.is_file() else None
                  for p in self.root.rglob("*")}
         self.assertEqual(before, after)
+
+    def test_local_entry_backup_detection_races_and_symlink_launcher(self):
+        self.package()
+        for name in ("yt-dlp", "node", "ffmpeg"):
+            path = self.tools / name
+            path.write_text('#!/usr/bin/env bash\nprintf "<%s>\\n" "$@"\n')
+            path.chmod(0o755)
+        helper.install(self.archive, self.checksum, self.destination, self.deps)
+        entry = self.root / "user bin/spotatui"
+        target = self.destination / "bin/spotatui"
+        helper.publish_entry(entry, target, "missing")
+        result = subprocess.run([str(entry), "argument with spaces"], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("<--js-runtimes>", result.stdout)
+        self.assertIn("<argument with spaces>", result.stdout)
+        entry.unlink()
+        entry.write_text("original external binary")
+        expected = helper.fingerprint(entry)
+        helper.publish_entry(entry, target, expected)
+        self.assertEqual(next(entry.parent.glob(".spotatui-before-atm-*")).read_text(), "original external binary")
+        self.assertTrue(entry.is_symlink())
+        entry.unlink()
+        entry.write_text("concurrent creation")
+        with self.assertRaisesRegex(ValueError, "changed"):
+            helper.publish_entry(entry, target, "missing")
+        self.assertEqual(entry.read_text(), "concurrent creation")
+
+    def test_version_probe_bounds_invalid_output_failure_and_timeout(self):
+        player = self.root / "external spotatui"
+        player.write_text('#!/bin/sh\nprintf "spotatui 0.46.0\\n"\n')
+        player.chmod(0o755)
+        self.assertEqual(helper.installed_version(str(player)), "0.46.0")
+        player.write_text('#!/bin/sh\nprintf "invalid output\\n"\n')
+        self.assertEqual(helper.installed_version(str(player)), "")
+        with patch.object(helper.subprocess, "run", side_effect=subprocess.TimeoutExpired("spotatui", 3)):
+            self.assertEqual(helper.installed_version(str(player)), "")
+
+    def test_locations_menu_coexistence_and_local_uninstall_preserve_atm_and_backups(self):
+        self.package()
+        (self.root / "deps.json").write_text(json.dumps(self.deps))
+        script = r'''
+set -Eeuo pipefail
+source "$ATM_HOME/lib/atm_core.sh"
+source "$ATM_HOME/lib/atm_manifest.sh"
+source "$ATM_HOME/lib/atm_i18n.sh"
+source "$ATM_HOME/lang/en-us.lang"
+source "$ATM_HOME/plugins/spotatui/plugin.conf"
+source "$ATM_HOME/plugins/spotatui/plugin.sh"
+clear() { :; }
+atm_spotatui_dependency_info() { cat "$FIXTURE/deps.json"; }
+atm_spotatui_release() {
+    local version="${1/latest/0.46.0}"
+    printf '%s\thttps://fixture/spotatui-linux-x86_64.tar.gz\thttps://fixture/spotatui-linux-x86_64.tar.gz.sha256\n' "$version"
+}
+atm_download_file() { mkdir -p "${2%/*}"; cp "$FIXTURE/${1##*/}" "$2"; }
+[[ "$(atm_spotatui_choose_location <<< '')" == atm ]]
+[[ "$(atm_spotatui_choose_location <<< 2)" == local ]]
+if atm_spotatui_choose_location <<< b; then exit 1; fi
+if atm_spotatui_install --location bad; then exit 1; fi
+mkdir -p "${ATM_SPOTATUI_LOCAL_ENTRY%/*}"
+printf '#!/bin/sh\nprintf "spotatui 0.40.0\\n"\n' > "$ATM_SPOTATUI_LOCAL_ENTRY"
+chmod +x "$ATM_SPOTATUI_LOCAL_ENTRY"
+[[ "$(atm_spotatui_status)" == *'User local: 0.40.0'* ]]
+[[ "$(ATM_DRY_RUN=1 atm_spotatui_status)" == *'version not queried in dry-run'* ]]
+before="$(sha256sum "$ATM_SPOTATUI_LOCAL_ENTRY")"
+atm_spotatui_install --location local <<< n
+[[ "$(sha256sum "$ATM_SPOTATUI_LOCAL_ENTRY")" == "$before" && ! -e "$ATM_SPOTATUI_LOCAL_ROOT" ]]
+atm_spotatui_install --location atm
+output="$(atm_spotatui_status)"
+[[ "$output" == *'ATM: 0.46.0'* && "$output" == *'User local: 0.40.0'* ]]
+atm_spotatui_install --location local <<< y
+atm_spotatui_local_entry_owned
+[[ -f "$ATM_MANIFEST_DIR/spotatui.manifest" && -f "$ATM_MANIFEST_DIR/spotatui_local.manifest" ]]
+[[ "$(atm_spotatui_local_version)" == 0.46.0 ]]
+atm_spotatui_install --location=local --version 0.45.0
+[[ "$(atm_spotatui_current_version)" == 0.46.0 && "$(atm_spotatui_local_version)" == 0.45.0 ]]
+atm_spotatui_use 0.46.0 --location local
+ATM_DRY_RUN=1 atm_spotatui_remove 0.45.0 --location local
+[[ -x "$ATM_SPOTATUI_LOCAL_ROOT/0.45.0/bin/spotatui" ]]
+atm_spotatui_remove 0.45.0 --location local
+[[ ! -e "$ATM_SPOTATUI_LOCAL_ROOT/0.45.0" ]]
+output="$(ATM_DRY_RUN=1 atm_spotatui_menu <<< $'1\n\nxb')"
+[[ "$output" == *'DRY-RUN:'* && "$output" == *"$ATM_SPOTATUI_INSTALL_ROOT/latest"* ]]
+ATM_DRY_RUN=1 atm_spotatui_uninstall --location local <<< y
+[[ -L "$ATM_SPOTATUI_LOCAL_ENTRY" && -f "$ATM_MANIFEST_DIR/spotatui_local.manifest" ]]
+atm_spotatui_uninstall --location local <<< y
+[[ ! -L "$ATM_SPOTATUI_LOCAL_ENTRY" && -x "$ATM_SPOTATUI_INSTALL_ROOT/current/bin/spotatui" ]]
+[[ -f "$ATM_MANIFEST_DIR/spotatui.manifest" && ! -e "$ATM_MANIFEST_DIR/spotatui_local.manifest" ]]
+[[ -n "$(find "${ATM_SPOTATUI_LOCAL_ENTRY%/*}" -name '.spotatui-before-atm-*' -type f -print)" ]]
+'''
+        result = subprocess.run(["bash", "-c", script], env=self.isolated_env(), cwd=REPO,
+                                text=True, capture_output=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
 
 if __name__ == "__main__":

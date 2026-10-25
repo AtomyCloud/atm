@@ -574,7 +574,7 @@ https://spotatui.com/
 2) Install a specific version
 3) Check playback dependencies
 4) Change active version
-5) List installed versions
+5) Installed versions / locations
 6) Remove an inactive version
 7) Uninstall ATM-managed spotatui
 8) Show usage
@@ -582,7 +582,11 @@ b) Back
 q) Exit
 ```
 
-Installs official checksum-verified Linux binaries under `~/Apps/spotatui`.
+Shows installed versions from ATM and `~/.local/bin/spotatui`. Installation offers
+`~/Apps/spotatui` (default) or the user-local entry, with versioned support files
+under `~/.local/share/atm/spotatui`. Replacing an existing local executable requires
+confirmation and preserves a sibling backup. CLI: `atm install spotatui --location atm|local`.
+Downloads use official checksum-verified Linux binaries.
 Before any download, checks `curl`, Python, FFmpeg/ffprobe, modern `yt-dlp` with
 EJS, and Deno >=2.3 or Node >=22. Missing dependencies block installation and
 show correction commands; no automatic sudo/package installation occurs.

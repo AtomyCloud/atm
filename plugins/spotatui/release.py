@@ -10,10 +10,12 @@ from pathlib import Path, PurePosixPath
 import re
 import shlex
 import shutil
+import stat
 import subprocess
 import sys
 import tarfile
 import tempfile
+import uuid
 
 
 VERSION = re.compile(r"[0-9]+\.[0-9]+\.[0-9]+\Z")
@@ -95,7 +97,7 @@ def launcher_scripts(deps):
         raise ValueError("Invalid JavaScript runtime")
     shim = "#!/usr/bin/env bash\nexec " + shlex.quote(deps["ytdlp"]) + " --js-runtimes "
     shim += shlex.quote(deps["runtime"] + ":" + deps["runtime_path"]) + ' "$@"\n'
-    launcher = '#!/usr/bin/env bash\nset -e\nroot="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"\n'
+    launcher = '#!/usr/bin/env bash\nset -e\nself="$(readlink -f -- "${BASH_SOURCE[0]}")"\nroot="$(cd -- "$(dirname -- "$self")/.." && pwd)"\n'
     launcher += 'export PATH="$root/shims":' + shlex.quote(str(Path(deps["ffmpeg"]).parent)) + ':"$PATH"\n'
     launcher += 'exec "$root/libexec/spotatui" "$@"\n'
     return {"shims/yt-dlp": shim, "bin/spotatui": launcher}
@@ -176,6 +178,54 @@ def install(archive, checksum, destination, deps):
             stage.rename(destination)
 
 
+def installed_version(path):
+    if not os.path.isabs(path) or not os.access(path, os.X_OK):
+        return ""
+    try:
+        result = subprocess.run([path, "--version"], stdin=subprocess.DEVNULL, capture_output=True,
+                                text=True, timeout=3, env=dict(os.environ, PYTHONDONTWRITEBYTECODE="1"))
+    except (OSError, subprocess.SubprocessError):
+        return ""
+    match = re.fullmatch(r"spotatui\s+v?([0-9]+\.[0-9]+\.[0-9]+(?:[-+][A-Za-z0-9.-]+)?)", result.stdout.strip())
+    return match.group(1) if result.returncode == 0 and match else ""
+
+
+def fingerprint(path):
+    try:
+        info = Path(path).lstat()
+    except FileNotFoundError:
+        return "missing"
+    if not (stat.S_ISREG(info.st_mode) or stat.S_ISLNK(info.st_mode)):
+        raise ValueError("User-local entry must be a regular file or symlink")
+    return ":".join(map(str, (info.st_dev, info.st_ino, info.st_mode, info.st_size, info.st_mtime_ns, info.st_ctime_ns)))
+
+
+def publish_entry(entry, target, expected):
+    entry, target = Path(entry), Path(target)
+    if not entry.is_absolute() or not target.is_absolute() or not target.is_file():
+        raise ValueError("Invalid local entry or managed target")
+    if fingerprint(entry) != expected:
+        raise ValueError("User-local executable changed; retry the operation")
+    entry.parent.mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix=".atm-spotatui-entry-", dir=entry.parent) as scratch:
+        staged = Path(scratch) / "spotatui"
+        staged.symlink_to(target)
+        if expected == "missing":
+            # link() creates the entry without replacing a concurrently created file.
+            os.link(staged, entry, follow_symlinks=False)
+        else:
+            owned = entry.is_symlink() and os.readlink(entry) == str(target)
+            if not owned:
+                backup = entry.with_name(".spotatui-before-atm-" + uuid.uuid4().hex)
+                os.link(entry, backup, follow_symlinks=False)
+                if fingerprint(entry) != expected:
+                    # Creating a hard link changes ctime; compare identity and content metadata.
+                    if fingerprint(entry).rsplit(":", 1)[0] != expected.rsplit(":", 1)[0]:
+                        raise ValueError("User-local executable changed; backup retained")
+                print(backup)
+            staged.replace(entry)
+
+
 def main():
     if sys.version_info < (3, 9):
         raise ValueError("Python 3.9 or newer is required")
@@ -186,6 +236,14 @@ def main():
     resolver.add_argument("platform")
     configuration = commands.add_parser("configure")
     configuration.add_argument("destination")
+    probe = commands.add_parser("installed-version")
+    probe.add_argument("path")
+    identity = commands.add_parser("fingerprint")
+    identity.add_argument("path")
+    publisher = commands.add_parser("publish-entry")
+    publisher.add_argument("entry")
+    publisher.add_argument("target")
+    publisher.add_argument("expected")
     installer = commands.add_parser("install")
     installer.add_argument("archive")
     installer.add_argument("checksum")
@@ -200,6 +258,12 @@ def main():
         print(resolve(release, args.platform))
     elif args.action == "configure":
         configure(args.destination, json.load(sys.stdin))
+    elif args.action == "installed-version":
+        print(installed_version(args.path))
+    elif args.action == "fingerprint":
+        print(fingerprint(args.path))
+    elif args.action == "publish-entry":
+        publish_entry(args.entry, args.target, args.expected)
     else:
         install(args.archive, args.checksum, args.destination, json.load(sys.stdin))
 
