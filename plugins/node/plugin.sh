@@ -382,24 +382,36 @@ atm_node_pick_installed_version() {
         return 1
     fi
 
-    printf '%s\n' "$prompt"
+    # Callers capture stdout; only the selected version belongs on that stream.
+    printf '%s\n' "$prompt" >&2
     for version in "${versions[@]}"; do
-        printf '%s) Node.js %s\n' "$idx" "$version"
+        printf '%s) Node.js %s\n' "$idx" "$version" >&2
         idx=$((idx + 1))
     done
 
-    printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
-    read -r choice
+    printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)" >&2
+    printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)" >&2
+    read -r choice || return 1
 
-    if [[ "$choice" =~ ^[0-9]+$ ]] && ((choice >= 1 && choice <= ${#versions[@]})); then
-        printf '%s\n' "${versions[$((choice - 1))]}"
-        return 0
-    fi
+    case "$choice" in ''|b|B) return 1 ;; esac
 
-    if [[ -n "$choice" ]]; then
-        atm_node_normalize_version "$choice"
-        return 0
-    fi
+    idx=1
+    for version in "${versions[@]}"; do
+        if [[ "$choice" == "$idx" ]]; then
+            printf '%s\n' "$version"
+            return 0
+        fi
+        idx=$((idx + 1))
+    done
+
+    choice="${choice#node-}"
+    choice="${choice#v}"
+    for version in "${versions[@]}"; do
+        if [[ "$choice" == "$version" ]]; then
+            printf '%s\n' "$version"
+            return 0
+        fi
+    done
 
     atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
     return 1
@@ -435,7 +447,7 @@ atm_node_major_menu() {
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
-        read -r choice
+        read -r choice || return 0
 
         case "$choice" in
             1|2|3)
@@ -446,12 +458,14 @@ atm_node_major_menu() {
                 fi
                 ;;
             c|C)
-                version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_USE)" || true)"
-                [[ -n "$version" ]] && atm_node_use "$version"
+                if version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_USE)")"; then
+                    atm_node_use "$version"
+                fi
                 ;;
             r|R)
-                version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_REMOVE)" || true)"
-                [[ -n "$version" ]] && atm_node_remove "$version"
+                if version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_REMOVE)")"; then
+                    atm_node_remove "$version"
+                fi
                 ;;
             b|B)
                 return 0
@@ -494,7 +508,7 @@ atm_node_menu() {
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
-        read -r choice
+        read -r choice || return 0
 
         case "$choice" in
             1)
@@ -510,12 +524,14 @@ atm_node_menu() {
                 atm_node_list_installed_versions
                 ;;
             5)
-                version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_USE)" || true)"
-                [[ -n "$version" ]] && atm_node_use "$version"
+                if version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_USE)")"; then
+                    atm_node_use "$version"
+                fi
                 ;;
             6)
-                version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_REMOVE)" || true)"
-                [[ -n "$version" ]] && atm_node_remove "$version"
+                if version="$(atm_node_pick_installed_version "$(atm_t ATM_PLUGIN_NODE_SELECT_VERSION_TO_REMOVE)")"; then
+                    atm_node_remove "$version"
+                fi
                 ;;
             7)
                 atm_node_uninstall

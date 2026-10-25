@@ -527,6 +527,11 @@ q) Exit
 
 Each major-version submenu fetches the latest three available versions from the official Node.js distribution index at `https://nodejs.org/dist/index.json`. Installations use official `node-v<version>-<platform>.tar.xz` archives, extract into `~/Apps/node/<version>`, and update `~/Apps/node/current`.
 
+`Change active version` lists installed versions. Choose a number or enter an
+installed version (optionally prefixed with `v`); `b` or Enter cancels. The same
+selector is used for removal and the major-version submenu shortcuts. Switching
+updates `current` and the manifest without downloading another Node.js version.
+
 ### AI Tools
 
 ```text
