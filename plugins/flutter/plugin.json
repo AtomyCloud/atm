@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "flutter",
+  "name": "Flutter SDK",
+  "version": "0.0.1",
+  "description": "Install and manage Flutter SDK versions",
+  "order": 2,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}

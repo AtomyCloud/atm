@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "backup_restore",
+  "name": "ATM - Backup & Restore",
+  "version": "0.0.1",
+  "description": "Local user backups and staged restore, adapted from atool",
+  "order": 14,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}

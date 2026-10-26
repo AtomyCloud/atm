@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "zsh",
+  "name": "Zsh + Oh My Zsh",
+  "version": "0.0.1",
+  "description": "Manage Zsh, Oh My Zsh, backups, and restore",
+  "order": 12,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "android_sdk",
+  "name": "Android SDK",
+  "version": "0.0.1",
+  "description": "Install and manage Android SDK packages",
+  "order": 6,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}

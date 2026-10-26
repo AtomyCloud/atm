@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "spotatui",
+  "name": "spotatui",
+  "version": "0.0.1",
+  "description": "Install spotatui with YouTube dependency checks",
+  "order": 15,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}

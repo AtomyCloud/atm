@@ -1,0 +1,73 @@
+name: Go migration checks
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - run: go vet ./...
+      - name: Linux race checks
+        if: runner.os == 'Linux'
+        run: go test -race ./...
+      - name: Legacy CORE regression checks
+        if: runner.os == 'Linux'
+        env:
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: |
+          bash -n libexec/atm-legacy.sh
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          bash tests/test_plugin_sort.sh
+          bash tests/test_plugin_catalog.sh
+          bash tests/test_updates_menu.sh
+          bash tests/test_self_update.sh
+      - name: Terminal integration
+        if: runner.os == 'Linux'
+        run: |
+          go build -o "$RUNNER_TEMP/atm" ./cmd/atm
+          python3 tests/test_go_tui.py "$RUNNER_TEMP/atm"
+
+  packages:
+    needs: test
+    if: github.repository == 'AtomyCloud/atm' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            arch: amd64
+          - os: linux
+            arch: arm64
+          - os: windows
+            arch: amd64
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+      - run: go run ./tools/package -os ${{ matrix.os }} -arch ${{ matrix.arch }} -out "$RUNNER_TEMP/packages"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: atm-0.0.2-${{ matrix.os }}-${{ matrix.arch }}
+          path: ${{ runner.temp }}/packages/*
+          if-no-files-found: error
+          retention-days: 14

@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "java",
+  "name": "Java / JDK",
+  "version": "0.0.1",
+  "description": "Install and manage Java/JDK versions",
+  "order": 1,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}

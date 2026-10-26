@@ -1,0 +1,22 @@
+{
+  "schema": 1,
+  "id": "os_packages",
+  "name": "OS Packages",
+  "version": "0.0.1",
+  "description": "Install and remove common operating system packages",
+  "order": 7,
+  "min_core_api": 1,
+  "platforms": [
+    "linux"
+  ],
+  "executor": "legacy-bash",
+  "protocol": "tty-v1",
+  "operations": [
+    "menu",
+    "status",
+    "install",
+    "remove",
+    "uninstall",
+    "use"
+  ]
+}
