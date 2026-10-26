@@ -14,6 +14,12 @@ ATM_BIN_DIR="$(cd "$(dirname "$ATM_BIN_SOURCE")" && pwd)"
 ATM_HOME="$(cd "$ATM_BIN_DIR/.." && pwd)"
 export ATM_HOME
 
+if [[ -e "$ATM_HOME/.atm-core-update-pending" || -L "$ATM_HOME/.atm-core-update-pending" ]]; then
+    printf 'ATM CORE update was interrupted; normal startup is blocked.\nRead %s for the standalone recovery command.\n' \
+        "$ATM_HOME/.atm-core-update-pending" >&2
+    exit 1
+fi
+
 # shellcheck source=../lib/atm_core.sh
 source "$ATM_HOME/lib/atm_core.sh"
 

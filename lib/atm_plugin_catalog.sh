@@ -160,6 +160,10 @@ atm_plugins_menu() {
         printf '1) %s\n' "$(atm_t ATM_PLUGINS_LIST_LOCAL)"
         printf '2) %s\n' "$(atm_t ATM_PLUGINS_SEARCH_TITLE)"
         printf '3) %s [%s]\n' "$(atm_t ATM_PLUGINS_SORT_MENU)" "$(atm_plugins_sort_label)"
+        if declare -F atm_updates_cli >/dev/null 2>&1; then
+            printf '4) %s\n5) %s\n6) %s\n' "$(atm_updates_t ATM_UPDATES_CHECK)" \
+                "$(atm_updates_t ATM_UPDATES_PLUGIN)" "$(atm_updates_t ATM_UPDATES_ALL)"
+        fi
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -168,10 +172,14 @@ atm_plugins_menu() {
             1) atm_plugins_cli list ;;
             2) atm_plugins_search_menu ;;
             3) atm_plugins_sort_menu ;;
+            4) atm_updates_cli check || true ;;
+            5) atm_updates_refresh --force; atm_updates_pick_plugin || true ;;
+            6) atm_updates_cli all || true ;;
             b|B) return 0 ;;
             q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; continue ;;
         esac
+        [[ "${ATM_UPDATES_RESTART_REQUIRED:-0}" != 1 ]] || return 0
         atm_prompt_continue
     done
 }

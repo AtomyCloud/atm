@@ -99,6 +99,10 @@ atm_self_update_menu_label() {
 }
 
 atm_self_update_cli() {
+    if declare -F atm_updates_cli >/dev/null 2>&1 && [[ "${1:---check}" == --check ]]; then
+        atm_updates_cli check
+        return
+    fi
     local mode="check"
 
     if (($# > 0)); then

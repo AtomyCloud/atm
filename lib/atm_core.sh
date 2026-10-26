@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 ATM_VERSION="0.0.1"
+ATM_CORE_PLUGIN_API=1
 ATM_REPO_URL="${ATM_REPO_URL:-https://github.com/atomycloud/atm}"
 
 ATM_APPS_DIR="${ATM_APPS_DIR:-$HOME/Apps}"
@@ -187,6 +188,12 @@ Usage:
   atm path apply
   atm setup [portable|system|status]
   atm self-update [--git|--tarball|--check]
+  atm updates [menu|check|core|all|changes|backups]
+  atm updates plugin <id>
+  atm updates restore <backup-id>
+  atm updates verify <core|plugin-id> <official-commit>
+  atm plugins check-updates
+  atm plugins update <id|--all>
   atm lang list
   atm lang current
   atm lang set <locale>
@@ -224,6 +231,9 @@ atm_core_dispatch() {
             ;;
         self-update)
             atm_self_update_cli "${ATM_ARGS[@]:1}"
+            ;;
+        updates)
+            atm_updates_cli "${ATM_ARGS[@]:1}"
             ;;
         remove)
             atm_remove_cli "${ATM_ARGS[@]:1}"

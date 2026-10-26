@@ -105,7 +105,20 @@ ATM_PLUGIN_ENTRYPOINT          Shell file sourced after plugin.conf.
 ATM_PLUGIN_FULL_SETUP_VALUE    1 to include in Full Setup, 0 to skip.
 ATM_PLUGIN_*_FUNC_VALUE        Function names exported by plugin.sh.
 ATM_PLUGIN_PATH_PRIORITY_VALUE Optional: default or prepend (before ~/.local/bin).
+ATM_PLUGIN_MIN_CORE_API_VALUE  Optional positive integer; defaults to 1.
 ```
+
+Keep the minimum CORE API literal in metadata. Plugins requiring a higher API
+are not loaded or updated until CORE supports them. API levels are independent
+of the plugin's `0.0.1` version and represent backwards-compatible contracts.
+CORE declarations in `core-api.json` and `ATM_CORE_PLUGIN_API` must stay aligned.
+
+The update manager fingerprints each plugin directory independently, verifies
+official source receipts and preserves untracked files. Local edits to owned
+files block replacement; do not put user application data in the plugin source
+directory. See [component updates](COMPONENT-UPDATES-EN-US.md) for origin receipts,
+baseline verification, compatibility and recovery. Update checks/downloads do
+not execute newly fetched plugin code; it loads only after restarting ATM.
 
 PATH callbacks normally follow `~/.local/bin` and `~/Apps/atm/bin`. Version
 managers needing their selected runtime to win may set

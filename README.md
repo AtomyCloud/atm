@@ -260,7 +260,7 @@ s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 l) 🌐 Change Language
 d) 🩺 Doctor
-u) ♻️  Self-update
+u) ♻️  Updates
 q) ❌ Exit
 ------------------------------------------
 Choose an option:
@@ -270,46 +270,45 @@ Main menu actions:
 
 | Option | Action |
 |---|---|
-| `1` to `15` | Open the selected plugin submenu; numbering follows enabled plugins and the configured sort order. |
+| Plugin numbers | Open the selected plugin submenu; numbering follows enabled plugins and the configured sort order. |
 | `f` | Run Full Setup for plugins enabled for stack installation. |
 | `c` | Configure shell PATH, CLI links, and desktop launchers. |
 | `s` | Open ATM command setup. |
-| `p` | Open plugin management: list local plugins or search/download official plugins. |
+| `p` | List, search/download, sort or update official plugins. |
 | `l` | Change the configured ATM language. |
 | `d` | Run doctor checks. |
-| `u` | Check self-update status. |
+| `u` | Check/update CORE and individual/all installed plugins independently. |
 | `q` | Exit. |
 
-### Self-update Indicator
+### CORE And Plugin Updates
 
-ATM automatically compares its installed Git commit with the latest commit on
-`ATM_REPO_URL` / `ATM_SELF_UPDATE_BRANCH` (default: the official repository's
-`main` branch). A remote tip not contained locally adds **Update** beside
-`u) Self-update`, in blue on color-capable terminals. A local checkout that
-already contains the remote commit does not get an update label.
-
-The check uses `git ls-remote`, never fetches/pulls or changes checkout files,
-and caches the result in memory for 60 seconds. Requests have a five-second
-timeout with a one-second forced-stop grace period. Git and GNU `timeout`
-(normally supplied by coreutils on Linux) are required. Offline/unavailable
-checks and non-Git copies show no label; they do not claim to be up to date.
-Shallow/partial clones may report a different remote tip without being able to
-prove ancestry. Diverged history is flagged and explained under `u`.
-
-Selecting `u`, or running `atm self-update --check`, forces a fresh check and
-shows both commit IDs. Updating is explicit:
+`u) Updates` detects CORE and plugin updates separately by official file hashes,
+even while plugin versions remain `0.0.1`. Changed plugins show a blue `Update`
+badge; plugin-only commits do not flag unchanged CORE files. Checks use a pinned
+official `AtomyCloud/atm/main` snapshot and a five-minute cache. Offline or
+unverified installations are reported explicitly, not assumed current.
 
 ```bash
-atm self-update --git
+atm updates check
+atm updates core
+atm updates plugin brave
+atm updates all
+atm updates changes
+atm updates backups
+atm updates restore <backup-id>
 ```
 
-This uses the same configured repository/branch and fast-forward only. The
-checkout must already be on that branch; detached HEAD/other branches are not
-switched automatically. No reset, force update, or local-file cleanup is done.
-Restart ATM after updating to load the new code. Tarball updates remain pending.
-Configure the source/branch in `~/.config/atm/atm.conf`.
-`--dry-run` skips the network check and writes nothing. `NO_COLOR=1`, a `dumb`
-terminal, and redirected output use a plain-text label instead of ANSI color.
+Updates require confirmation, stage/validate downloaded code, retain recovery
+backups, block local edits and preserve application settings/data. The `all` action updates
+installed plugins only (including disabled ones); it does not download new
+plugins or update CORE implicitly. Restart ATM after successful changes.
+
+Selective updates refuse Git checkouts. `atm self-update --git` remains an explicit
+whole-repository fast-forward action, not a CORE-only update. Non-Git runtimes
+use verified installation receipts; older copies can verify a known official
+baseline. `atm self-update --check` aliases the independent component check.
+See the [update and recovery guide](docs/en-us/COMPONENT-UPDATES-EN-US.md) for
+compatibility, local-edit handling, interrupted CORE recovery and limitations.
 
 ## Plugin Submenus
 

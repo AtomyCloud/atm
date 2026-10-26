@@ -100,11 +100,31 @@ Language: en-us
 s) ⚙️  Setup ATM Command
 p) 🔌 Plugins
 d) 🩺 Doctor
-u) ♻️  Self-update
+u) ♻️  Updates
 q) ❌ Exit
 ```
 
 Plugin order may change based on plugin metadata.
+
+### CORE And Plugin Updates
+
+Open `u) Updates` to check CORE and plugins independently, update CORE only,
+select one plugin, update all installed plugins, or inspect changes/backups.
+`p) Plugins` also exposes update actions. Blue Update badges mark affected
+plugins; code updates do not reinstall their applications.
+
+```bash
+atm updates check
+atm updates plugin brave
+atm updates all
+atm updates core
+```
+
+Local edits block automatic replacement; updates ask for confirmation and retain
+backups. Git installations use explicit whole-repository `atm self-update --git`,
+not selective replacement. Restart after success. See the
+[component update guide](COMPONENT-UPDATES-EN-US.md) before updating or recovering
+an interrupted CORE transaction.
 
 ## 5. Configure PATH, CLI and desktop launchers
 

@@ -43,7 +43,9 @@ atm_menu_main() {
 
     while true; do
         idx=1
-        if declare -F atm_self_update_refresh >/dev/null 2>&1; then
+        if declare -F atm_updates_refresh >/dev/null 2>&1; then
+            atm_updates_refresh
+        elif declare -F atm_self_update_refresh >/dev/null 2>&1; then
             atm_self_update_refresh
         fi
         atm_menu_header
@@ -53,11 +55,13 @@ atm_menu_main() {
         map_ids=()
 
         for id in "${ids[@]}"; do
-            printf '%s) %s %-32s %s\n' \
+            printf '%s) %s %-32s %s' \
                 "$idx" \
                 "${ATM_PLUGIN_ICON[$id]}" \
                 "${ATM_PLUGIN_NAME[$id]}" \
                 "$(atm_plugin_status "$id")"
+            if declare -F atm_updates_badge >/dev/null 2>&1; then atm_updates_badge "$id"; fi
+            printf '\n'
 
             map_ids[$idx]="$id"
             idx=$((idx + 1))
@@ -70,7 +74,10 @@ atm_menu_main() {
         printf 'p) 🔌 %s\n' "$(atm_t ATM_MENU_PLUGINS)"
         printf 'l) 🌐 %s\n' "$(atm_t ATM_MENU_CHANGE_LANGUAGE)"
         printf 'd) 🩺 %s\n' "$(atm_t ATM_MENU_DOCTOR)"
-        if declare -F atm_self_update_menu_label >/dev/null 2>&1; then
+        if declare -F atm_updates_menu_label >/dev/null 2>&1; then
+            printf 'u) ♻️  '
+            atm_updates_menu_label
+        elif declare -F atm_self_update_menu_label >/dev/null 2>&1; then
             printf 'u) ♻️  '
             atm_self_update_menu_label
         else
@@ -92,6 +99,7 @@ atm_menu_main() {
                 ;;
             p|P)
                 atm_plugins_menu
+                [[ "${ATM_UPDATES_RESTART_REQUIRED:-0}" != 1 ]] || return 0
                 ;;
             l|L)
                 atm_i18n_select_cli
@@ -103,8 +111,13 @@ atm_menu_main() {
                 atm_prompt_continue
                 ;;
             u|U)
-                atm_self_update_cli --check
-                atm_prompt_continue
+                if declare -F atm_updates_menu >/dev/null 2>&1; then
+                    atm_updates_menu
+                    [[ "${ATM_UPDATES_RESTART_REQUIRED:-0}" != 1 ]] || return 0
+                else
+                    atm_self_update_cli --check
+                    atm_prompt_continue
+                fi
                 ;;
             f|F)
                 atm_full_setup

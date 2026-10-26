@@ -28,6 +28,10 @@ MAX_FILE = 4 * 1024 * 1024
 MAX_TOTAL = 32 * 1024 * 1024
 
 
+def core_path(path):
+    return path == "core-api.json" or path.startswith(("bin/", "lib/", "lang/"))
+
+
 class CatalogError(ValueError):
     pass
 
@@ -110,18 +114,23 @@ class Catalog:
         if tree.get("truncated") is not False or not isinstance(tree.get("tree"), list):
             raise CatalogError("Incomplete GitHub tree; no plugin will be downloaded")
         self.plugins = {}
+        self.core_files = {}
         self.cache = {}
         seen = set()
         for entry in tree["tree"]:
             if not isinstance(entry, dict) or not isinstance(entry.get("path"), str):
                 raise CatalogError("Invalid repository tree entry")
             path = entry["path"]
-            if not path.startswith("plugins/"):
+            if not path.startswith("plugins/") and not core_path(path):
                 continue
             safe_path(path)
             if path in seen:
                 raise CatalogError("Duplicate repository path")
             seen.add(path)
+            if core_path(path):
+                if entry.get("type") != "tree":
+                    self.core_files[path] = entry
+                continue
             parts = path.split("/")
             if not ID.fullmatch(parts[1]):
                 continue
@@ -230,7 +239,8 @@ class Catalog:
                     result = subprocess.run(["bash", "-n", str(path)], capture_output=True, timeout=10)
                     if result.returncode:
                         raise CatalogError("Bash syntax validation failed: " + relative)
-            receipt = {"source": SOURCE, "branch": "main", "commit": self.revision, "plugin": plugin_id}
+            receipt = {"schema": 1, "source": SOURCE, "branch": "main", "commit": self.revision, "plugin": plugin_id,
+                       "files": {name: {"sha": entry["sha"], "mode": entry["mode"]} for name, entry in files.items()}}
             (stage / ".atm-origin.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
             if os.path.lexists(target):
                 raise CatalogError("Existing local plugin will not be overwritten")

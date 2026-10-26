@@ -106,6 +106,12 @@ atm_setup_install_project_to_portable_home() {
 
     chmod +x "$tmp_home/bin/atm"
 
+    if [[ -f "$ATM_HOME/lib/component_updates.py" ]] && command -v python3 >/dev/null 2>&1; then
+        python3 -B "$ATM_HOME/lib/component_updates.py" --home "$tmp_home" --plugins "$tmp_home/plugins" \
+            --state "$ATM_STATE_DIR" --cache "$ATM_CACHE_DIR" record --source "$source_home" \
+            || atm_warn "Some update baselines could not be recorded; automatic updates will require verification."
+    fi
+
     rm -rf "$target_home"
     mv "$tmp_home" "$target_home"
 }

@@ -82,6 +82,7 @@ atm_plugin_load_metadata() {
     ATM_PLUGIN_INSTALL_FUNC_VALUE=""
     ATM_PLUGIN_PATH_FUNC_VALUE=""
     ATM_PLUGIN_PATH_PRIORITY_VALUE=""
+    ATM_PLUGIN_MIN_CORE_API_VALUE=""
     ATM_PLUGIN_DESKTOP_FUNC_VALUE=""
     ATM_PLUGIN_REMOVE_FUNC_VALUE=""
     ATM_PLUGIN_UNINSTALL_FUNC_VALUE=""
@@ -96,6 +97,14 @@ atm_plugin_load_metadata() {
 
     if ! atm_plugin_enabled "$plugin_id"; then
         atm_debug "Plugin disabled: $plugin_id"
+        return 0
+    fi
+
+    if [[ ! "${ATM_PLUGIN_MIN_CORE_API_VALUE:-1}" =~ ^[1-9][0-9]{0,5}$ ]]; then
+        atm_fail "Invalid CORE API requirement: $plugin_id"
+    fi
+    if (( ${ATM_PLUGIN_MIN_CORE_API_VALUE:-1} > ${ATM_CORE_PLUGIN_API:-1} )); then
+        atm_warn "Plugin $plugin_id requires CORE API ${ATM_PLUGIN_MIN_CORE_API_VALUE}; not loaded."
         return 0
     fi
 
@@ -262,6 +271,14 @@ atm_plugins_cli() {
     local id=""
 
     case "$subcmd" in
+        check-updates)
+            [[ "$#" == 1 ]] || return 1
+            atm_updates_cli check
+            ;;
+        update)
+            [[ "$#" == 2 ]] || return 1
+            if [[ "$2" == --all ]]; then atm_updates_cli all; else atm_updates_cli plugin "$2"; fi
+            ;;
         sort)
             [[ "$#" -le 2 ]] || atm_fail "$(atm_t ATM_PLUGINS_SORT_USAGE)"
             if [[ "$#" == 1 ]]; then
