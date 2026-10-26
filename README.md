@@ -58,6 +58,7 @@ Desktop apps: ~/.local/share/applications
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
 | [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Portable music player with yt-dlp/EJS, FFmpeg and JavaScript runtime checks before installation. |
+| [REA: Reverse Engineer Anything](plugins/rea/README.md) | `rea` | `0.0.1` | Install, update and remove REA in an ATM/custom directory; check dependencies and ask before installing missing prerequisites. |
 
 ## Features
 
@@ -251,6 +252,7 @@ Language: en-us
 13) 🔍 Trivy                            <status>
 14) 💾 ATM - Backup & Restore            <status>
 15) 🎵 spotatui                         <status>
+16) 🔬 REA: Reverse Engineer Anything   <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
@@ -610,6 +612,27 @@ show correction commands; no automatic sudo/package installation occurs.
 The managed launcher enables the chosen runtime without editing global settings.
 Existing spotatui installations and profiles are preserved. See the
 [plugin guide](plugins/spotatui/README.md) for setup and limitations.
+
+### REA: Reverse Engineer Anything
+
+```text
+1) Install REA (choose destination)
+2) Update REA
+3) Remove ATM-managed REA
+4) Check / install missing dependencies
+5) Installation details / usage
+b) Back
+q) Exit
+```
+
+Choose `~/Apps/rea` or a dedicated custom directory. The destination is remembered
+for updates/removal. Required Node.js/npm, Python, coreutils and Linux procps
+checks run before installation; missing dependencies require confirmation.
+REA is installed from the official `rea-agents` npm package. Agent/MCP setup and
+optional analysis engines are separate; existing settings/data are preserved.
+CLI: `atm install rea`, `atm install rea --update`, `atm uninstall rea`.
+See the [REA plugin guide](plugins/rea/README.md) for runtime requirements,
+dependency repair, PATH activation and scoped removal.
 
 ## Setup Menu
 
