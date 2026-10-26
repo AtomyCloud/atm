@@ -27,13 +27,41 @@ atm_rea_valid_path() {
         && "$1" != *\"* && "$1" != *'$'* && "$1" != *'`'* && "$1" != *\\* ]]
 }
 
-atm_rea_status() {
-    local root="" version=""
-    root="$(atm_rea_root 2>/dev/null)" || { atm_t ATM_PLUGIN_REA_FAILED; return 0; }
+atm_rea_detect() {
+    local root="" candidate="" version=""
+    ATM_REA_DETECTED_PATH="" ATM_REA_DETECTED_VERSION="" ATM_REA_DETECTED_MANAGED=0
+    root="$(atm_rea_root 2>/dev/null)" || return 2
     if [[ -f "$root/.atm-rea-root" ]] && command -v python3 >/dev/null 2>&1; then
-        version="$(atm_rea_manage version "$root" 2>/dev/null)" || { atm_t ATM_PLUGIN_REA_FAILED; return 0; }
+        version="$(atm_rea_manage version "$root" 2>/dev/null)" || return 2
+        if [[ -n "$version" && -f "$root/bin/rea" && -x "$root/bin/rea" ]]; then
+            ATM_REA_DETECTED_PATH="$root/bin/rea" ATM_REA_DETECTED_VERSION="$version" ATM_REA_DETECTED_MANAGED=1
+            return 0
+        fi
     fi
-    if [[ -n "$version" ]]; then printf 'REA %s (%s)\n' "$version" "$root"; else atm_t ATM_PLUGIN_REA_NOT_INSTALLED; fi
+    for candidate in "$root/bin/rea" "$ATM_APPS_DIR/rea/bin/rea" "$HOME/Apps/rea/bin/rea" \
+        "$HOME/.local/bin/rea" "$(type -P rea || true)"; do
+        [[ -f "$candidate" && -x "$candidate" ]] || continue
+        ATM_REA_DETECTED_PATH="$candidate"
+        if command -v python3 >/dev/null 2>&1; then
+            ATM_REA_DETECTED_VERSION="$(atm_rea_manage external-version "$candidate" 2>/dev/null)" || true
+        fi
+        return 0
+    done
+    return 1
+}
+
+atm_rea_status() {
+    local result=0 label=""
+    atm_rea_detect || result=$?
+    case "$result" in
+        1) atm_t ATM_PLUGIN_REA_NOT_DETECTED; return 0 ;;
+        2) atm_t ATM_PLUGIN_REA_FAILED; return 0 ;;
+    esac
+    if ((ATM_REA_DETECTED_MANAGED)); then label="$(atm_t ATM_PLUGIN_REA_MANAGED)"
+    else label="$(atm_t ATM_PLUGIN_REA_EXTERNAL)"; fi
+    printf 'REA %s (%s; %s)\n' "${ATM_REA_DETECTED_VERSION:-$(atm_t ATM_PLUGIN_REA_UNKNOWN_VERSION)}" \
+        "$ATM_REA_DETECTED_PATH" "$label"
+    if ! type -P rea >/dev/null 2>&1; then atm_t ATM_PLUGIN_REA_NOT_ON_PATH; fi
 }
 
 atm_rea_choose_path() {
@@ -142,11 +170,11 @@ atm_rea_write_manifest() {
 }
 
 atm_rea_usage() {
-    local root="$1"
+    local executable="${2:-$1/bin/rea}"
     atm_info "$(atm_t ATM_PLUGIN_REA_PATH_HINT)"
-    printf '  %q --help\n' "$root/bin/rea"
+    printf '  %q --help\n' "$executable"
     atm_info "$(atm_t ATM_PLUGIN_REA_SETUP_HINT)"
-    printf '  %q setup\n' "$root/bin/rea"
+    printf '  %q setup\n' "$executable"
 }
 
 atm_rea_publish_install() (
@@ -202,12 +230,16 @@ atm_rea_install() {
             "$action" "$requested" "$root"
         return 0
     fi
-    atm_rea_dependencies || return 1
     old_root="$(atm_rea_root)" || return 1
     if [[ "$action" == install && "$explicit" == 0 && -t 0 ]]; then
         root="$(atm_rea_choose_path)" || return 0
     fi
     [[ -n "$root" ]] || root="$old_root"
+    if [[ -f "$root/bin/rea" && -x "$root/bin/rea" && ! -e "$root/.atm-rea-root" && ! -L "$root/.atm-rea-root" ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_REA_EXTERNAL_PROTECTED) $root/bin/rea"
+        return 1
+    fi
+    atm_rea_dependencies || return 1
     root="$(atm_rea_manage validate "$root")" || return 1
     current="$(atm_rea_manage version "$old_root")" || return 1
     if [[ -n "$current" && "$root" != "$old_root" ]]; then
@@ -253,7 +285,12 @@ atm_rea_menu() {
             2) atm_rea_install --update || atm_warn "$(atm_t ATM_PLUGIN_REA_FAILED)" ;;
             3) atm_rea_uninstall || atm_warn "$(atm_t ATM_PLUGIN_REA_FAILED)" ;;
             4) atm_rea_dependencies || atm_warn "$(atm_t ATM_PLUGIN_REA_MISSING)" ;;
-            5) root="$(atm_rea_root)" || return 1; atm_rea_usage "$root"; atm_info "$(atm_t ATM_PLUGIN_REA_OPTIONAL)" ;;
+            5)
+                atm_rea_status
+                root="$(atm_rea_root)" || return 1
+                atm_rea_usage "$root" "${ATM_REA_DETECTED_PATH:-$root/bin/rea}"
+                atm_info "$(atm_t ATM_PLUGIN_REA_OPTIONAL)"
+                ;;
             b|B) return 0 ;; q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
         esac

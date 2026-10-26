@@ -95,6 +95,120 @@ if [ "$1" = --version ]; then printf 'v26.12.1\\n'; else printf 'RUNTIME26\\n'; 
         self.assert_ok(result)
         return result
 
+    def manual_install(self, root):
+        package = root / "lib/node_modules/rea-agents"
+        (package / "scripts").mkdir(parents=True)
+        (package / "package.json").write_text(json.dumps({"name": "rea-agents", "version": "6.8.0"}))
+        script = package / "scripts/rea.mjs"
+        script.write_text('#!/bin/sh\nprintf EXECUTED > "$HOME/unexpected-rea"\nexit 99\n')
+        script.chmod(0o755)
+        (root / "bin").mkdir()
+        (root / "bin/rea").symlink_to("../lib/node_modules/rea-agents/scripts/rea.mjs")
+        return package
+
+    def test_manual_default_install_detected_without_path_or_receipt_and_never_executed(self):
+        self.manual_install(self.prefix)
+        before = self.snapshot()
+        for dry in ("0", "1"):
+            result = self.run_shell('ATM_DRY_RUN=' + dry + '\natm_rea_install --status\n')
+            self.assert_ok(result)
+            self.assertIn("REA 6.8.0", result.stdout)
+            self.assertIn(str(self.prefix / "bin/rea"), result.stdout)
+            self.assertIn("manual/external installation", result.stdout)
+            self.assertIn("not on PATH", result.stdout)
+            self.assertNotIn("not detected", result.stdout)
+            self.assertEqual(before, self.snapshot())
+
+    def test_manual_home_apps_user_local_and_path_only_detection(self):
+        cases = (self.home / "Apps/rea", self.home / ".local", self.root / "external")
+        for root in cases:
+            with self.subTest(root=root):
+                self.manual_install(root)
+                original_path = self.env["PATH"]
+                if root.name == "external":
+                    self.env["PATH"] = str(root / "bin") + ":" + original_path
+                before = self.snapshot()
+                result = self.run_shell("atm_rea_status\n")
+                self.assert_ok(result)
+                self.assertIn("REA 6.8.0", result.stdout)
+                self.assertIn(str(root / "bin/rea"), result.stdout)
+                self.assertEqual("not on PATH" in result.stdout, root.name != "external")
+                self.assertEqual(before, self.snapshot())
+                self.env["PATH"] = original_path
+                shutil.rmtree(root)
+
+    def test_saved_manual_custom_root_and_details_use_detected_executable(self):
+        custom = self.root / "REA custom's folder"
+        self.manual_install(custom)
+        state = self.root / "state/rea/install.json"
+        state.parent.mkdir(parents=True)
+        state.write_text(json.dumps({"schema": 1, "root": str(custom)}))
+        before = self.snapshot()
+        result = self.run_shell("atm_rea_menu\n", "5\nb\n")
+        self.assert_ok(result)
+        self.assertIn(str(custom / "bin/rea"), result.stdout)
+        self.assertIn("--help", result.stdout)
+        self.assertEqual(before, self.snapshot())
+        state.unlink()
+        shutil.rmtree(custom)
+        local = self.home / ".local"
+        self.manual_install(local)
+        result = self.run_shell("atm_rea_menu\n", "5\nb\n")
+        self.assert_ok(result)
+        self.assertIn(str(local / "bin/rea") + " --help", result.stdout)
+
+    def test_manual_prefix_is_not_adopted_updated_or_removed(self):
+        self.manual_install(self.prefix)
+        before = self.snapshot()
+        for action in ("atm_rea_install", "atm_rea_install --update", "atm_rea_uninstall"):
+            result = self.run_shell('atm_rea_dependencies() { printf UNEXPECTED_DEPENDENCIES; return 99; }\n' + action + '\n', "y\n")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertNotIn("UNEXPECTED_DEPENDENCIES", result.stdout)
+            self.assertEqual(before, self.snapshot())
+        self.assertIn("not installed by ATM", result.stdout + result.stderr)
+
+    def test_external_unknown_or_invalid_metadata_remains_detected_without_execution(self):
+        package = self.manual_install(self.prefix)
+        for data in ('$(touch unsafe)', '{"name":"other","version":"6.8.0"}',
+                     '{"name":"rea-agents","version":"$(touch unsafe)"}'):
+            (package / "package.json").write_text(data)
+            before = self.snapshot()
+            result = self.run_shell("atm_rea_status\n")
+            self.assert_ok(result)
+            self.assertIn("version unavailable", result.stdout)
+            self.assertIn("manual/external installation", result.stdout)
+            self.assertEqual(before, self.snapshot())
+        result = self.run_shell(r'''
+command() { if [[ "$*" == '-v python3' ]]; then return 1; fi; builtin command "$@"; }
+atm_rea_status
+''')
+        self.assert_ok(result)
+        self.assertIn("version unavailable", result.stdout)
+        self.assertFalse((self.home / "unexpected-rea").exists())
+
+    def test_missing_nonexecutable_and_broken_entries_are_not_installations(self):
+        self.assertIn("not detected", self.run_shell("atm_rea_status\n").stdout)
+        entry = self.prefix / "bin/rea"
+        entry.parent.mkdir(parents=True)
+        entry.write_text("not executable\n")
+        self.assertIn("not detected", self.run_shell("atm_rea_status\n").stdout)
+        entry.unlink()
+        entry.symlink_to("missing")
+        self.assertIn("not detected", self.run_shell("atm_rea_status\n").stdout)
+        entry.unlink()
+        entry.mkdir()
+        self.assertIn("not detected", self.run_shell("atm_rea_status\n").stdout)
+
+    def test_managed_install_status_without_path_retains_ownership(self):
+        self.install()
+        before = self.snapshot()
+        result = self.run_shell("atm_rea_status\n")
+        self.assert_ok(result)
+        self.assertIn("REA 6.8.0", result.stdout)
+        self.assertIn("ATM-managed", result.stdout)
+        self.assertIn("not on PATH", result.stdout)
+        self.assertEqual(before, self.snapshot())
+
     def test_install_update_launcher_and_removal_preserve_data_and_external_programs(self):
         external = self.home / ".local/bin/rea"
         external.parent.mkdir(parents=True)

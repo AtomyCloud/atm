@@ -91,6 +91,23 @@ def current_version(root):
     return selected
 
 
+def external_version(executable):
+    """Inspect a manual npm entrypoint without executing any installed code."""
+    try:
+        script = Path(executable).resolve(strict=True)
+        if not script.is_file() or not os.access(script, os.X_OK):
+            return ""
+        package = script.parent.parent
+        if script != package / "scripts/rea.mjs":
+            return ""
+        data = regular_json(package / "package.json")
+        if data.get("name") == "rea-agents":
+            return version(data.get("version"))
+    except (OSError, ValueError, RuntimeError):
+        pass
+    return ""
+
+
 def read_state(state):
     if not state.exists() and not state.is_symlink():
         return None
@@ -254,6 +271,9 @@ def main():
     if action == "root":
         state = read_state(Path(args[0]))
         print(root_path(state["root"] if state else args[1]))
+        return
+    if action == "external-version":
+        print(external_version(args[0]))
         return
     root = root_path(args[0])
     if action == "validate":

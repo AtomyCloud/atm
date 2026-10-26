@@ -115,6 +115,19 @@ the upstream prefix in place can invalidate ATM's version/ownership metadata.
 
 ## PATH And Agent Setup
 
+Installation status does not require `rea` on PATH. It checks the saved/configured
+root, `ATM_APPS_DIR/rea/bin/rea`, `~/Apps/rea/bin/rea`, `~/.local/bin/rea` and the
+PATH executable, in that order (an active ATM-managed installation takes priority).
+Only executable files count; broken links and directories do not. Manual npm
+installations are labelled manual/external, with their absolute command and the
+version read from the entrypoint's `rea-agents/package.json`. Unknown layouts or
+missing/invalid metadata show version unavailable, not an absent installation.
+Detection never executes REA, runs npm, modifies PATH, or creates ownership state.
+When no PATH executable exists, status says so; menu option 5 prints commands for
+the detected executable. This reports installation presence, not runtime readiness.
+Manual installations remain external: ATM refuses to overwrite, update or remove
+their prefix. Use a different empty destination for an ATM-managed installation.
+
 Run `atm path apply` and reload the shell to include the remembered `bin` path,
 or use the absolute launcher printed after installation. REA opts into ATM's
 prepend PATH priority so the selected managed command precedes a user-local
