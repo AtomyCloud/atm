@@ -6,6 +6,11 @@ private signed 0.0.3 candidate was used only for isolated upgrade testing.
 
 ## Safe Human Session
 
+Accepted checkpoint (2026-10-27): the maintainer reported the test passed and the
+binary works. Patch v27.11 is Stable; the Linux amd64 native CORE milestone is
+Complete. No additional per-check transcript, host coverage or production update
+is inferred. The following checklist remains available for future regression tests.
+
 Build from the reviewed checkout, without installing over an existing ATM:
 
 ```bash

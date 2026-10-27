@@ -1,6 +1,6 @@
 # ATM - Atomy Tools Modules
 
-> **Native Go CORE v0.0.2 (final Linux acceptance):** an opt-in Bubble Tea interface and
+> **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Existing Linux plugins run
 > through a compatibility backend; native Windows application installation remains
@@ -19,8 +19,9 @@
 > source checkouts and modified owned files are never automatically replaced.
 > The plugin integration contract is native; application backends and real-platform
 > acceptance remain pending. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
-> Linux amd64 signed upgrade/recovery has passed automated tests. The remaining
-> human checks have an [isolated dry-run harness](docs/en-us/LINUX-CORE-ACCEPTANCE.md).
+> Linux amd64 signed upgrade/recovery passed automated tests; the maintainer confirmed
+> the final binary test passed on 2026-10-27. The [isolated acceptance harness](docs/en-us/LINUX-CORE-ACCEPTANCE.md)
+> remains available for regression checks. Release publication/deployment is separate.
 > Windows, macOS and Linux ARM64 runtime acceptance remains **Pending**.
 
 ## Legacy v0.0.1 (Linux / Bash)

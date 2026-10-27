@@ -1,6 +1,8 @@
 # ATM 0.0.2: Go Migration
 
-Status: **Native CORE implemented; final Linux human acceptance Pending.**
+Status: **Native CORE migration complete for Linux amd64; accepted and Stable.**
+The maintainer confirmed the final binary test passed on 2026-10-27. This closes
+the Linux-first milestone, not other-platform acceptance or release publication.
 The Go entrypoint uses native administrative services, not a Bash CORE fallback.
 The legacy entrypoint and Linux application compatibility remain intentionally
 available; this is not a completed migration of application plugin backends.
@@ -9,13 +11,12 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 
 ## Current Completion Priority
 
-Complete and validate the native CORE on Linux first. Linux amd64 is the current
-runtime acceptance reference; this milestone is still **In Progress**, not a claim
-that every Linux architecture or every platform has been accepted.
+The Linux-first CORE milestone is complete. Linux amd64 is the validated runtime
+reference, not a claim that every Linux architecture or platform has been accepted.
 
 | Runtime target | Acceptance status |
 | --- | --- |
-| Linux amd64 | Native implementation with automated route and signed upgrade/recovery coverage; final human acceptance Pending. |
+| Linux amd64 | Complete / Stable: native implementation, automated evidence and maintainer-confirmed final binary test. |
 | Linux arm64 | Pending: package build and signature verification do not establish runtime acceptance. |
 | Windows amd64 | Pending: runtime, file-in-use replacement and standard-user acceptance deferred. |
 | macOS Intel (amd64) | Pending: target-host acceptance deferred. |
