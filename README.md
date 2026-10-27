@@ -9,6 +9,28 @@
 > macOS Terminal packages are also built for Intel and Apple Silicon. Native
 > installation services are under development; application plugin ports remain pending.
 
+## Legacy v0.0.1 (Linux / Bash)
+
+To use ATM before the Go migration, check out commit
+[`05673e6`](https://github.com/AtomyCloud/atm/commit/05673e6d9c370ca0b7972011dd0be1f435c8754a),
+the last commit before migration to `v0.0.2`. This version requires Git and the
+Linux/Bash dependencies listed below, but does not require Go.
+
+For a fresh installation (`~/Apps/atm` must not already contain an installation):
+
+```bash
+mkdir -p "$HOME/Apps" &&
+git clone https://github.com/AtomyCloud/atm.git "$HOME/Apps/atm" &&
+git -C "$HOME/Apps/atm" checkout --detach 05673e6d9c370ca0b7972011dd0be1f435c8754a &&
+ATM_LANG=en-us "$HOME/Apps/atm/bin/atm"
+```
+
+**New versions:** [Download ATM releases](https://github.com/AtomyCloud/atm/releases).
+
+The legacy command pins a historical snapshot in detached HEAD mode, not a
+`v0.0.1` tag. Do not pull `main` or apply CORE/plugin code updates if you want
+to keep this exact snapshot. Preserve any existing installation before switching.
+
 <div align="center">
 
 #### _README in other languages._
@@ -114,7 +136,7 @@ python3
 
 ## Quick Start
 
-Clone the repository and run the menu:
+After cloning the legacy snapshot above, run the menu:
 
 ```bash
 cd ~/Apps/atm
