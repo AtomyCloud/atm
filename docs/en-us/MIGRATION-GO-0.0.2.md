@@ -13,7 +13,7 @@ that every Linux architecture or every platform has been accepted.
 
 | Runtime target | Acceptance status |
 | --- | --- |
-| Linux amd64 | In Progress: automated suites and signed enrollment/recovery passed; real signed upgrade between distinct versions and its recovery remain Pending. |
+| Linux amd64 | In Progress: automated signed 0.0.2 -> 0.0.3 -> 0.0.2 upgrade/recovery and interruption tests passed in isolated roots; final route/human acceptance remains Pending. |
 | Linux arm64 | Pending: package build and signature verification do not establish runtime acceptance. |
 | Windows amd64 | Pending: runtime, file-in-use replacement and standard-user acceptance deferred. |
 | macOS Intel (amd64) | Pending: target-host acceptance deferred. |
@@ -22,6 +22,8 @@ that every Linux architecture or every platform has been accepted.
 Existing cross-platform code, builds and CI remain in place. Deferred host tests
 do not block the Linux amd64 milestone, but prevent claiming all-platform completion.
 Automatic Windows external-helper handoff is separately **Pending implementation**.
+See [Signed Linux Release Test](LINUX-SIGNED-RELEASE-TEST.md#two-version-acceptance)
+for the automated upgrade evidence and private-artifact reproduction requirements.
 Linux completion requires CLI/TUI CORE parity without Bash/Python delegation,
 isolated signed upgrade/recovery evidence, regression tests and human acceptance
 of the changed flow. Application plugin ports and release/publication approval

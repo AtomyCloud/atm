@@ -89,10 +89,59 @@ Expected checks:
 - In the TUI, exercise navigation, mouse/keyboard, Plugins/CORE menus and Cancel.
   All operations remain dry-run. Exit with `q`.
 
-This does not test a real installed-copy update/rollback. The candidate is 0.0.2,
-not a newer version than an existing 0.0.2 installation; automatic updates require
-a strictly newer stable version. Production activation and GitHub publication
-still need separate approval after the human test.
+This original script does not test an update/rollback between versions. Its
+candidate is 0.0.2; updates require a strictly newer stable version. Source route
+activation was separately approved in v27.9. GitHub publication and real installed
+copy updates remain separate authorizations.
+
+## Two-Version Acceptance
+
+Patch v27.10 adds opt-in automated acceptance of a private, officially signed
+Linux candidate: **0.0.2 -> 0.0.3 -> 0.0.2**. The maintainer explicitly authorized
+signing this local QA candidate. It is not a published release or a repository
+version bump. The production key was used through ssh-agent, without opening or
+exporting a private-key file. A separate temporary source repository records the
+exact version-only QA build; the original source/history remains unchanged.
+
+On Linux amd64, the external compiled CLI enrolled the baseline, applied the full
+candidate, executed each installed binary to check its version/commit, and recovered
+the exact enrolled baseline. The test checks signature/consent/version refusals,
+preserves unrelated data/configuration, retains post-upgrade edits in quarantine,
+and runs the candidate's doctor, plugin listing and dry-run CORE route without a
+shell in PATH. Four update interruption points and two recovery interruption points
+also passed with real signatures and subprocess exits. External recovery works
+even when the active installation root is absent.
+
+These are controlled process interruptions, not power-loss durability guarantees.
+Automated Linux amd64 acceptance is not human TUI acceptance, all-platform approval
+or permission to deploy. Linux ARM64, Windows and macOS runtime tests remain Pending.
+
+To repeat with the reviewed private artifacts, build a trusted updater from the
+approved source and provide absolute paths. Never download an untrusted verifier
+alongside an archive and assume it is safe. Candidate directory layout:
+
+```text
+atm-0.0.3-linux-amd64.tar.gz
+signatures/atm-0.0.3-linux-amd64.manifest.json
+signatures/atm-0.0.3-linux-amd64.manifest.sig
+```
+
+From the repository root:
+
+```bash
+export ATM_TEST_SIGNED_RELEASE_DIR="$PWD/binary/v0.0.2-6c8b9be"
+export ATM_TEST_SIGNED_UPGRADE_DIR="/absolute/private/candidate"
+export ATM_TEST_UPDATER_BIN="/absolute/trusted/atm"
+go test ./internal/cli ./internal/coreupdate \
+  -run '^TestSigned(ReleaseCLIUpgrade|UpgradeCrashRecovery)$' -count=1 -v
+```
+
+The tests skip when the candidate variable is absent; a skip is not acceptance.
+They verify inputs before extraction, operate only in fresh temporary roots, check
+that original artifacts remain unchanged, and delete their temporary installations
+on completion. They do not sign, publish, install apps or change personal profiles.
+The supplied artifacts/updater are not deleted. Keep the QA candidate private:
+its signature is production-valid, not a fixture key or a sandbox restriction.
 
 ## Reproducing Signatures
 

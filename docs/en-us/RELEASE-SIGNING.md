@@ -124,7 +124,9 @@ no automatic merge, force overwrite or rollback of those edits is provided.
 
 - The local signed Linux dry-run test was accepted; CI signing is not configured.
 - New enabled release build/publication and real installed-copy operation are separate actions.
-- Actual signed upgrade between distinct stable versions and recovery acceptance.
+- Automated signed 0.0.2 -> private QA 0.0.3 -> 0.0.2 upgrade/recovery and six
+  interruption scenarios passed on Linux amd64; changed-flow human acceptance
+  remains Pending. See [two-version acceptance](LINUX-SIGNED-RELEASE-TEST.md#two-version-acceptance).
 - Independent freshness/key rotation/revocation policy.
 - Actual target-platform and Windows file-in-use/external-updater acceptance.
 - User validation of conflict handling and independent plugin receipt rebaselining.
