@@ -35,6 +35,9 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 	if args[0] == "self-update" && len(args) == 2 && args[1] == "--check" {
 		p.Arguments = []string{"updates", "check"}
 	}
+	if args[0] == "self-update" && len(args) == 1 {
+		p.Arguments = []string{"updates", "core"}
+	}
 	if args[0] == "plugins" && len(args) >= 2 {
 		switch args[1] {
 		case "check-updates":
@@ -55,7 +58,7 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 	switch a[0] {
 	case "updates":
 		if len(a) == 2 {
-			valid = slices.Contains([]string{"check", "changes", "backups", "all", "core", "trust"}, a[1])
+			valid = slices.Contains([]string{"check", "check-core", "changes", "backups", "all", "core", "trust"}, a[1])
 			p.Mutating = a[1] == "all" || a[1] == "core"
 		}
 		if len(a) == 3 {
@@ -67,8 +70,9 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 			valid = plugin.IDPattern.MatchString(strings.TrimPrefix(a[2], "plugin:")) && commitID(a[3])
 			p.Mutating = true
 		}
-		if len(a) == 5 && a[1] == "verify-package" {
+		if len(a) == 5 && slices.Contains([]string{"verify-package", "enroll-core", "core"}, a[1]) {
 			valid = true
+			p.Mutating = a[1] != "verify-package"
 			for _, path := range a[2:] {
 				valid = valid && path != "" && !strings.ContainsAny(path, "\x00\r\n")
 			}
@@ -76,6 +80,9 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 	case "path":
 		valid = len(a) == 2 && (a[1] == "apply" || a[1] == "show")
 		p.Mutating = len(a) == 2 && a[1] == "apply"
+		if len(a) == 3 && a[1] == "apply" && a[2] == "--plugins" {
+			return IntegrationPlan(c, plugins)
+		}
 	case "setup":
 		valid = len(a) == 2 && a[1] == "portable"
 		if len(a) == 4 && a[1] == "portable" && a[2] == "--manifest-sha256" {

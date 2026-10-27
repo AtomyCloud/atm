@@ -57,6 +57,35 @@ func TestCoreTrustMenuIsReadOnly(t *testing.T) {
 	m.Close()
 }
 
+func TestCoreReplacementLocksSessionUntilExit(t *testing.T) {
+	m := model(t)
+	r := core.Result{RestartRequired: true, Operation: "updates core"}
+	updated, _ := m.receiveCore(catalogMessage{core: true, coreResult: &r})
+	m = updated.(Model)
+	if !m.restartRequired || m.screen != "message" {
+		t.Fatal(m.screen)
+	}
+	for _, key := range []rune{'p', 'u', 'l'} {
+		updated, cmd := m.Update(tea.KeyPressMsg{Code: key})
+		if cmd != nil || updated.(Model).screen != "message" {
+			t.Fatal("session continued after CORE replacement")
+		}
+	}
+	if _, cmd := m.prepareCore([]string{"install"}); cmd != nil {
+		t.Fatal("CORE execution after replacement")
+	}
+	if _, cmd := m.preparePlugin("install", nil); cmd != nil {
+		t.Fatal("plugin execution after replacement")
+	}
+	_, cmd := m.Update(tea.KeyPressMsg{Code: 'q'})
+	if cmd == nil {
+		t.Fatal("quit unavailable")
+	}
+	if _, ok := cmd().(tea.QuitMsg); !ok {
+		t.Fatal("expected quit")
+	}
+}
+
 func TestCoreUpdateResultsRequireRestart(t *testing.T) {
 	m := model(t)
 	s := &catalogSession{}

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/AtomyCloud/atm/internal/catalog"
@@ -55,14 +56,18 @@ func (c *catalogController) start() (*catalogSession, error) {
 }
 
 func (c *catalogController) task(publishing bool, run func(context.Context) catalogMessage) (*catalogSession, error) {
+	timeout := catalog.Timeout
+	if publishing {
+		timeout = catalog.DownloadTimeout
+	}
+	return c.taskWithTimeout(publishing, timeout, run)
+}
+
+func (c *catalogController) taskWithTimeout(publishing bool, timeout time.Duration, run func(context.Context) catalogMessage) (*catalogSession, error) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	if c.closed {
 		return nil, fmt.Errorf("catalog is closed")
-	}
-	timeout := catalog.Timeout
-	if publishing {
-		timeout = catalog.DownloadTimeout
 	}
 	ctx, cancel := context.WithTimeout(c.ctx, timeout)
 	s := &catalogSession{cancel: cancel, done: make(chan catalogMessage, 1), publishing: publishing}

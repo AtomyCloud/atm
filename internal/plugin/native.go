@@ -12,7 +12,7 @@ import (
 	"strings"
 )
 
-var NativeActions = []string{"status", "install", "update", "remove", "uninstall", "use"}
+var NativeActions = []string{"status", "install", "update", "remove", "uninstall", "use", "integrate"}
 var NativeTargets = []string{"linux/amd64", "linux/arm64", "windows/amd64", "darwin/amd64", "darwin/arm64"}
 
 func (m Manifest) validateNative() error {

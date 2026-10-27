@@ -50,7 +50,15 @@ Usage: atm [global options] <command>
   updates restore <backup-id>   Restore a native plugin code backup
   updates recover plugins      Recover an interrupted plugin transaction
   updates verify <id> <commit>  Explicitly verify an official plugin baseline
-  path show|apply               Inspect/apply native user PATH integration
+  updates check-core           Inspect signed CORE baseline/release candidate
+  updates core                 Apply a newer authenticated full package
+  updates core MANIFEST SIGNATURE ARCHIVE
+                               Apply an explicitly selected signed local package
+  updates enroll-core MANIFEST SIGNATURE ARCHIVE
+                               Register a matching signed installed baseline
+  recover-core --root PATH     Recover from an external trusted ATM executable
+  path show|apply               Inspect/apply native ATM user PATH integration
+  path apply --plugins         Run declared native plugin integration backends
   setup portable --manifest-sha256 <digest>
                                Install an explicitly approved local package
   install                       Full Setup, orchestrated natively
@@ -71,7 +79,9 @@ Linux application operations still require the existing Bash dependencies.
 updates trust                 Show the approved release signing identity
 updates verify-package MANIFEST SIGNATURE ARCHIVE
                               Verify a signed full package offline (no install)
-Compiled CORE full-package replacement is pending; bin/atm remains legacy.
+Full-package production mutation is disabled pending explicit owner authorization.
+Updates require a signed baseline; close other ATM sessions first.
+Windows replacement requires an external ATM executable, with installed ATM closed.
 `
 
 func Run(args []string, in *os.File, out, stderr io.Writer) int {
@@ -114,6 +124,15 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		fmt.Fprint(out, Help)
 		return nil
 	}
+	if args[0] == "recover-core" {
+		if *demo {
+			return fmt.Errorf("recovery does not support --demo")
+		}
+		if *timeout <= 0 {
+			return fmt.Errorf("--timeout must be positive")
+		}
+		return recoverCore(args[1:], in, out, stderr, *dry, *yes, *jsonOutput, *timeout)
+	}
 	home, err := config.ResolveHome(*homeArg)
 	if err != nil {
 		return err
@@ -155,7 +174,7 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 	}
 	if core.IsCommand(args) {
 		var items []plugin.Plugin
-		if args[0] == "install" {
+		if args[0] == "install" || (len(args) == 3 && args[0] == "path" && args[1] == "apply" && args[2] == "--plugins") {
 			items, err = plugin.Discover(c, runtime.GOOS)
 			if err != nil {
 				return err
@@ -164,7 +183,7 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		return executeCore(c, args, items, in, out, stderr, *jsonOutput)
 	}
 	if args[0] != "doctor" {
-		if err = coreupdate.StartupGuard(c.Home); err != nil {
+		if err = coreupdate.RuntimeGuard(c.Home); err != nil {
 			return err
 		}
 	}
@@ -205,8 +224,8 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			"compiled_core_updater": coreupdate.ProductionStatus, "discovery_executes_plugins": false,
 			"native_catalog_search": true, "native_catalog_download": true,
 			"native_component_updates": true, "native_setup": true, "native_full_setup": true,
-			"plugin_desktop_integration": "pending native contract"}
-		report["compiled_recovery_pending"] = coreupdate.StartupGuard(c.Home) != nil
+			"plugin_desktop_integration": "native integrate contract; application backends pending"}
+		report["compiled_recovery_pending"] = coreupdate.RuntimeGuard(c.Home) != nil
 		trust, err := coreupdate.OfficialTrust()
 		if err != nil {
 			return err

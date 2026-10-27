@@ -18,8 +18,9 @@
     "executor": {"const": "native"},
     "protocol": {"const": "jsonl-v1"},
     "operations": {
+      "description": "integrate is optional: plugin-owned user PATH/CLI/desktop integration, explicitly consented, with no arguments and no legacy fallback. A backend must report unsupported or incomplete integration as a non-success result.",
       "type": "array", "minItems": 1, "uniqueItems": true,
-      "items": {"enum": ["status", "install", "update", "remove", "uninstall", "use"]}
+      "items": {"enum": ["status", "install", "update", "remove", "uninstall", "use", "integrate"]}
     },
     "executables": {
       "type": "object", "minProperties": 1, "additionalProperties": false,

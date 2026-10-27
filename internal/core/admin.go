@@ -21,6 +21,7 @@ type Preview struct {
 	Updates     []catalog.DownloadInfo `json:"updates,omitempty"`
 	States      []updates.Result       `json:"states,omitempty"`
 	Destination string                 `json:"destination,omitempty"`
+	Release     any                    `json:"release,omitempty"`
 }
 
 // Execution retains pinned update plans through the confirmation boundary.
@@ -29,12 +30,14 @@ type Execution struct {
 	service *updates.Service
 	plans   []*updates.Plan
 	setup   setup.Options
+	release *releaseExecution
 }
 
 type Result struct {
-	Operation      string   `json:"operation"`
-	Value          any      `json:"result"`
-	ChangedPlugins []string `json:"changed_plugins,omitempty"`
+	Operation       string   `json:"operation"`
+	Value           any      `json:"result"`
+	ChangedPlugins  []string `json:"changed_plugins,omitempty"`
+	RestartRequired bool     `json:"restart_required,omitempty"`
 }
 
 func IsCommand(args []string) bool {
@@ -64,16 +67,19 @@ func Resolve(ctx context.Context, c config.Config, p Plan) (*Execution, error) {
 		return nil, err
 	}
 	if p.Mutating {
-		if err := coreupdate.StartupGuard(c.Home); err != nil {
+		if err := coreupdate.RuntimeGuard(c.Home); err != nil {
 			return nil, err
 		}
 	}
 	a := p.Arguments
+	if a[0] == "path" && len(a) == 3 && a[2] == "--plugins" {
+		return e, nil
+	}
 	if a[0] == "updates" {
-		if a[1] == "core" {
-			return nil, fmt.Errorf("%s", coreupdate.ProductionStatus)
+		if a[1] == "core" || a[1] == "enroll-core" {
+			return e, resolveRelease(ctx, c, e)
 		}
-		if a[1] == "trust" || a[1] == "verify-package" {
+		if a[1] == "trust" || a[1] == "verify-package" || a[1] == "check-core" {
 			return e, nil
 		}
 		state := c.StateDir
@@ -135,7 +141,7 @@ func Execute(ctx context.Context, c config.Config, e *Execution, consent bool) (
 		return r, fmt.Errorf("explicit CORE consent required")
 	}
 	if p.Mutating {
-		if err := coreupdate.StartupGuard(c.Home); err != nil {
+		if err := coreupdate.RuntimeGuard(c.Home); err != nil {
 			return r, err
 		}
 	}
@@ -145,6 +151,10 @@ func Execute(ctx context.Context, c config.Config, e *Execution, consent bool) (
 	var err error
 	switch a[0] {
 	case "path":
+		if len(a) == 3 && a[2] == "--plugins" {
+			r.Value, err = ExecuteIntegration(ctx, c, p, consent)
+			return r, err
+		}
 		o := e.setup
 		o.Consent = consent
 		if a[1] == "show" {
@@ -157,6 +167,16 @@ func Execute(ctx context.Context, c config.Config, e *Execution, consent bool) (
 		o.Consent = consent
 		r.Value, err = setup.Install(ctx, o)
 	case "updates":
+		if a[1] == "core" || a[1] == "enroll-core" {
+			result, err := executeRelease(ctx, e, consent)
+			r.Value = result
+			r.RestartRequired = result.Changed || result.State == "recovery-required"
+			return r, err
+		}
+		if a[1] == "check-core" {
+			r.Value, err = checkCoreRelease(ctx, c)
+			return r, err
+		}
 		if a[1] == "trust" {
 			r.Value, err = coreupdate.OfficialTrust()
 			return r, err
@@ -171,7 +191,7 @@ func Execute(ctx context.Context, c config.Config, e *Execution, consent bool) (
 		}
 		switch a[1] {
 		case "check":
-			r.Value, err = s.Check(ctx)
+			r.Value, err = checkComponents(ctx, c, s)
 		case "changes":
 			ids, e := s.Installed()
 			if e != nil {

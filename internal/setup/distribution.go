@@ -3,6 +3,7 @@ package setup
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -15,6 +16,7 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/version"
 )
@@ -123,11 +125,48 @@ type setupReceipt struct {
 // Installed command integration verifies the pinned manifest and every non-plugin
 // payload file. Plugins have independent update receipts and are not PATH inputs.
 func verifyInstalled(ctx context.Context, source, pin string) (distribution, error) {
+	key, err := coreupdate.OfficialPublicKey()
+	if err != nil {
+		return distribution{}, err
+	}
+	return verifyInstalledWithKey(ctx, source, pin, key)
+}
+
+// The public entrypoint always supplies the embedded key. A separate pure trust
+// parameter keeps fixture signatures out of the production identity.
+func verifyInstalledWithKey(ctx context.Context, source, pin string, key ed25519.PublicKey) (distribution, error) {
+	if err := coreupdate.RuntimeGuard(source); err != nil {
+		return distribution{}, err
+	}
 	r, err := os.OpenRoot(source)
 	if err != nil {
 		return distribution{}, err
 	}
 	defer r.Close()
+	// Signed full-package enrollment remains authoritative after an update.
+	// The old local setup receipt may retain its original release hash; never
+	// adopt a new hash merely by reading release.json from the installation.
+	signed, signedErr := readRegular(ctx, r, coreupdate.BundleManifestName, coreupdate.MaxManifestBytes)
+	if signedErr == nil {
+		sig, err := readRegular(ctx, r, coreupdate.BundleSignatureName, 64)
+		if err != nil {
+			return distribution{}, err
+		}
+		m, err := coreupdate.VerifyPackageManifest(signed, sig, key, runtime.GOOS, runtime.GOARCH)
+		if err != nil {
+			return distribution{}, err
+		}
+		if pin != "" && pin != m.ReleaseSHA256 {
+			return distribution{}, fmt.Errorf("explicit pin conflicts with signed installed release")
+		}
+		return verifyPayloadScope(ctx, source, m.ReleaseSHA256, true, true, true)
+	}
+	if !os.IsNotExist(signedErr) {
+		return distribution{}, signedErr
+	}
+	if _, err := r.Lstat(coreupdate.BundleSignatureName); !os.IsNotExist(err) {
+		return distribution{}, fmt.Errorf("orphaned or unreadable signed package receipt")
+	}
 	b, err := readRegular(ctx, r, receiptName, 4096)
 	hasReceipt := err == nil
 	if err != nil && !os.IsNotExist(err) {
@@ -147,6 +186,10 @@ func verifyInstalled(ctx context.Context, source, pin string) (distribution, err
 }
 
 func verifyPayload(ctx context.Context, source, pin string, allowReceipt, coreOnly bool) (distribution, error) {
+	return verifyPayloadScope(ctx, source, pin, allowReceipt, coreOnly, false)
+}
+
+func verifyPayloadScope(ctx context.Context, source, pin string, allowReceipt, coreOnly, allowUnowned bool) (distribution, error) {
 	d := distribution{files: map[string]payloadFile{}}
 	if !digestOK(pin) {
 		return d, fmt.Errorf("independently trusted release.json SHA-256 required")
@@ -224,9 +267,21 @@ func verifyPayload(ctx context.Context, source, pin string, allowReceipt, coreOn
 		if name == "." {
 			return nil
 		}
-		if allowReceipt && name == receiptName {
+		if allowReceipt && (name == receiptName || name == coreupdate.BundleManifestName || name == coreupdate.BundleSignatureName) {
 			return nil
 		} // Already bounded and checked by verifyInstalled.
+		if allowUnowned && name != "release.json" && name != "plugins" {
+			_, listed := m.Files[name]
+			if !listed {
+				ancestor := components[strings.ToLower(name)] == name
+				if !ancestor {
+					if e.IsDir() {
+						return fs.SkipDir
+					}
+					return nil
+				}
+			}
+		}
 		if !payloadPath(name) {
 			return fmt.Errorf("non-distribution file refused: %s", name)
 		}

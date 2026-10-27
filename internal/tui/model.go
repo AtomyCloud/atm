@@ -69,6 +69,7 @@ type Model struct {
 	corePlan          core.Plan
 	corePrepared      *core.Execution
 	updateStates      map[string]string
+	restartRequired   bool
 }
 
 func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool) Model {
@@ -145,6 +146,7 @@ func (m Model) rows() []row {
 			{"restore", m.words.T("ATM_TUI_CORE_RESTORE"), ""}, {"recover", m.words.T("ATM_TUI_CORE_RECOVER"), ""},
 			{"setup", m.words.T("ATM_TUI_CORE_SETUP"), ""}, {"core-update", m.words.T("ATM_TUI_CORE_UPDATE"), ""},
 			{"trust", m.words.T("ATM_TUI_CORE_SIGNING_KEY"), ""}}
+		rows = append(rows, row{"integration", m.words.T("ATM_TUI_CORE_INTEGRATION"), ""})
 	case "languages":
 		for _, locale := range m.locales {
 			rows = append(rows, row{locale, locale, ""})
@@ -224,6 +226,18 @@ func (m *Model) clamp() {
 }
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if m.restartRequired {
+		if key, ok := msg.(tea.KeyPressMsg); ok {
+			switch key.String() {
+			case "enter", "esc", "q", "ctrl+c":
+				return m, tea.Quit
+			}
+		}
+		if size, ok := msg.(tea.WindowSizeMsg); ok {
+			m.width, m.height = size.Width, size.Height
+		}
+		return m, nil
+	}
 	switch msg := msg.(type) {
 	case catalogMessage:
 		return m.receiveCatalog(msg)
@@ -501,7 +515,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "core":
 		switch key {
 		case "doctor":
-			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nApplication integration/backends: pending\nCompiled CORE updater: full-package replacement pending; public key approved", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
+			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nNative integration contract: available; app backends pending\nCompiled CORE updater: production blocked pending explicit authorization", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
 			m.navigate("message")
 		case "download":
 			m.navigate("download")
@@ -518,6 +532,8 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			return m.prepareCore([]string{"install"})
 		case "path":
 			return m.prepareCore([]string{"path", "apply"})
+		case "integration":
+			return m.prepareCore([]string{"path", "apply", "--plugins"})
 		case "changes", "backups", "trust":
 			return m.prepareCore([]string{"updates", key})
 		case "recover":
@@ -604,6 +620,9 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) preparePlugin(action string, args []string) (tea.Model, tea.Cmd) {
+	if m.restartRequired {
+		return m, nil
+	}
 	p, err := plugin.Find(m.plugins, m.selected)
 	if err == nil && p.Executor == "legacy-bash" && len(m.pendingPlugins) > 0 {
 		m.status = m.words.T("ATM_TUI_CATALOG_RESTART")
@@ -622,6 +641,9 @@ func (m Model) preparePlugin(action string, args []string) (tea.Model, tea.Cmd) 
 }
 
 func (m Model) prepareCore(args []string) (tea.Model, tea.Cmd) {
+	if m.restartRequired {
+		return m, nil
+	}
 	if len(args) == 1 && args[0] == "install" && len(m.pendingPlugins) > 0 {
 		for _, p := range m.plugins {
 			if p.Enabled && p.FullSetup && p.Executor == "legacy-bash" {

@@ -170,7 +170,7 @@ func interrupted(id string, err error) Outcome {
 }
 
 func validateNativePlan(c config.Config, p Plan) (string, error) {
-	if err := coreupdate.StartupGuard(c.Home); err != nil {
+	if err := coreupdate.RuntimeGuard(c.Home); err != nil {
 		return "", err
 	}
 	if _, err := os.Lstat(filepath.Join(c.PluginsDir, ".atm-update-pending.json")); !os.IsNotExist(err) {

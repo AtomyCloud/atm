@@ -76,7 +76,7 @@ func Command(c config.Config, plan Plan) (*exec.Cmd, error) {
 		!plugin.IDPattern.MatchString(plan.Command[3]) || !slices.Contains(plugin.Actions, plan.Command[2]) {
 		return nil, fmt.Errorf("invalid execution plan")
 	}
-	if err := coreupdate.StartupGuard(c.Home); err != nil {
+	if err := coreupdate.RuntimeGuard(c.Home); err != nil {
 		return nil, err
 	}
 	if _, err := os.Lstat(filepath.Join(c.PluginsDir, ".atm-update-pending.json")); !os.IsNotExist(err) {

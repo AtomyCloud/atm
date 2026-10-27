@@ -1,6 +1,6 @@
 # Native CORE Administration
 
-ATM 0.0.2 migration build, Patch v27.5. CORE administrative commands now dispatch
+ATM 0.0.2 migration build, Patch v27.7. CORE administrative commands now dispatch
 to Go services rather than `bash bin/atm`. This does not claim that all application
 plugins or production self-update have migrated. No installed copy is replaced
 merely by starting the new executable.
@@ -9,6 +9,7 @@ merely by starting the new executable.
 
 ```bash
 atm updates check
+atm updates check-core
 atm plugins check-updates
 atm self-update --check
 atm updates changes
@@ -22,6 +23,7 @@ atm updates recover plugins
 atm updates verify brave <official-main-ancestor-commit>
 atm path show
 atm path apply
+atm path apply --plugins
 atm setup portable --manifest-sha256 <independently-approved-release-json-sha256>
 atm install
 ```
@@ -45,8 +47,9 @@ after a check. Nothing silently installs applications during a code update.
 Only `AtomyCloud/atm`, branch `main`, directory `plugins` is supported. Inspection
 uses pinned Git trees/blobs, not version labels alone. States distinguish current,
 available, modified, unmanaged, incompatible, removed upstream, ahead/diverged
-and unknown/offline. Compiled CORE is reported separately as unknown pending its
-approved release identity and signing policy.
+and unknown/offline. Compiled CORE is checked separately against authenticated
+release metadata after a signed installed baseline exists. Missing enrollment,
+damaged/unknown state and pending recovery are not reported as current.
 
 ALL includes installed disabled plugins and does not install new catalog entries
 or update CORE. Every prepared plugin is an independent transaction with a result;
@@ -86,13 +89,20 @@ within the selected user's home. Existing destinations are preserved, not adopte
 or overwritten. The compiled executable is at the package root (`atm` or
 `atm.exe`), not the legacy `bin/atm` shell entrypoint.
 
-`path apply` requires a verified native setup receipt. Unix shell integration uses
+`path apply` requires a verified native setup or signed package receipt. The
+destination recovery guard and indexed CORE hashes are checked before writes;
+independently updated plugins are not ATM PATH inputs. Unix shell integration uses
 managed blocks and private backups without discarding unrelated profile content;
 Windows uses the current user's PATH, without administrator privileges. Open a
 new terminal to observe changes. No `/etc/profile.d` or system installation is
-required. This command currently integrates ATM only: it does not claim that
-application PATH entries, VS Code CLI links or plugin desktop launchers migrated.
-Those plugin-owned integration contracts remain pending.
+required. This command integrates ATM only.
+
+`path apply --plugins` and the TUI integration action dispatch each plugin's
+optional native schema2 `integrate` operation in metadata order, after consent.
+Unavailable/legacy backends are reported, failures stop the batch and an empty
+or all-unavailable selection is not success. No Bash integration fallback is
+used. The generic contract is implemented; existing application PATH/CLI/desktop
+backends still need their separate native ports.
 
 ## Full Setup
 
@@ -132,20 +142,40 @@ There is no CLI/config/environment key override. `--dry-run` does not read input
 
 The target is now the complete runtime package, including bundled plugin code,
 not only the ATM executable. Package signatures have their own domain and schema;
-old binary-only manifests cannot authorize a full-package update. Private data,
-unmanaged files, edited configuration and independently updated plugins require
-explicit conflict handling before production replacement can be enabled.
+old binary-only manifests cannot authorize a full-package update. Unknown regular
+files/directories are preserved; edited owned files, independently updated
+bundled plugins and collisions block replacement.
 
-`updates core` still fails closed, including with `--yes`: approved identity is
-not the same as completed installation/receipt/recovery integration. No private
-key was accessed, created or published. See [release signing](RELEASE-SIGNING.md)
-for the exact format and offline preparation tool.
+These native routes are implemented, but their mutation gate remains disabled
+even with `--yes`, pending explicit release/cutover authorization:
+
+```bash
+atm updates enroll-core manifest.json manifest.sig archive.tar.gz
+atm updates core
+atm updates core manifest.json manifest.sig archive.tar.gz
+atm --yes recover-core --root /absolute/path/to/atm
+```
+
+Enrollment authenticates the matching current package before registering its
+baseline. Updates pin candidate/installed identities before confirmation and
+revalidate before publication. Recovery works from a trusted external executable
+even when the target root is missing, without loading its config/plugins. Windows
+requires that external executable for replacement too; automatic handoff is not
+implemented. After replacement or any result requiring recovery, the TUI locks
+the session until exit. Other ATM sessions must be stopped before updating.
+
+No private key was accessed, created or published. See
+[release signing](RELEASE-SIGNING.md) for formats, preservation limits,
+independent plugin receipts and remaining acceptance gates. Signed local
+enrollment/inspection and explicit plugin baseline verification remain CLI-only;
+the TUI provides discovery/update/trust and plugin recovery. CORE retained-history
+selection is not exposed as a menu; `recover-core` addresses the current journal.
 
 The earlier binary-only library remains experimental. Its Linux/macOS transactions
 can now be explicitly finalized into retained history after verification, allowing
 another transaction with a separately trusted baseline. It is not wired into the
-full-package updater. Windows replacement, production discovery, installed baseline,
-conflict policy, standalone recovery and release signing remain pending.
+full-package updater. Fixture tests exercise the full-package path independently.
+Actual signing, target-host acceptance and production enablement remain pending.
 
 ## Validation Boundaries
 

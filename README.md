@@ -12,10 +12,12 @@
 > Linux, macOS and Windows (`atm plugins search|download` and the TUI catalog).
 > Downloads require confirmation and never replace existing plugins. Component
 > checks, guarded plugin code updates/recovery, portable setup, ATM user PATH
-> integration and Full Setup orchestration now have native Go routes. Compiled
-> The release signing key is approved; signed full-package verification is available
-> offline. CORE replacement, application PATH/desktop integration and platform acceptance remain
-> incomplete. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
+> integration and Full Setup orchestration now have native Go routes. The release
+> signing key is approved; authenticated discovery, signed package verification,
+> staged full-package replacement and independent recovery services are implemented.
+> Production replacement remains explicitly disabled pending release/cutover approval.
+> The plugin integration contract is native; application backends and real-platform
+> acceptance remain pending. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
 
 ## Legacy v0.0.1 (Linux / Bash)
 

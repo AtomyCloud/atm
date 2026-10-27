@@ -42,7 +42,19 @@ func TestCoreAdministrativeDryRunsWithoutShellOrNetwork(t *testing.T) {
 }
 
 func TestCoreChecksAndBackupListingWithoutShell(t *testing.T) {
-	home, dir := fixture(t)
+	_, dir := fixture(t)
+	// Inspect an unsigned portable root, not the developer's Git checkout.
+	home, err := filepath.EvalSymlinks(t.TempDir())
+	if err != nil {
+		t.Fatal(err)
+	}
+	home = filepath.Join(home, "runtime")
+	if err := os.Mkdir(home, 0700); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(home, "core-api.json"), []byte(`{"schema":1,"plugin_api":1,"update_protocol":1}`), 0600); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("PATH", "")
 	t.Setenv("GITHUB_TOKEN", "")
 	plugins := t.TempDir()
@@ -89,7 +101,7 @@ func TestCoreConsentAndTrustBoundaries(t *testing.T) {
 		}
 	}
 	var out, stderr bytes.Buffer
-	if code := Run([]string{"--home", home, "--yes", "updates", "core"}, os.Stdin, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "full-package") {
+	if code := Run([]string{"--home", home, "--yes", "updates", "core"}, os.Stdin, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "baseline") {
 		t.Fatal(code, stderr.String())
 	}
 	files, _ := os.ReadDir(dir)

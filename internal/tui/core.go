@@ -11,12 +11,22 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/AtomyCloud/atm/internal/config"
 	"github.com/AtomyCloud/atm/internal/core"
+	"github.com/AtomyCloud/atm/internal/coreupdate"
+	"github.com/AtomyCloud/atm/internal/runner"
 	"github.com/AtomyCloud/atm/internal/updates"
 )
+
+func coreTimeout(c config.Config) time.Duration {
+	if c.NativeTimeout > 0 {
+		return c.NativeTimeout
+	}
+	return runner.DefaultTimeout
+}
 
 func (m Model) submitCoreInput() (tea.Model, tea.Cmd) {
 	v := strings.TrimSpace(m.input.Value())
@@ -32,7 +42,7 @@ func (m Model) submitCoreInput() (tea.Model, tea.Cmd) {
 }
 
 func (m Model) resolveCore() (tea.Model, tea.Cmd) {
-	s, err := m.catalogController.task(true, func(ctx context.Context) catalogMessage {
+	s, err := m.catalogController.taskWithTimeout(true, coreTimeout(m.c), func(ctx context.Context) catalogMessage {
 		e, err := core.Resolve(ctx, m.c, m.corePlan)
 		if err != nil {
 			return catalogMessage{core: true, err: err}
@@ -67,7 +77,7 @@ func (m Model) startCoreExecution() (tea.Model, tea.Cmd) {
 			}
 		}
 	}
-	s, err := m.catalogController.task(true, func(ctx context.Context) catalogMessage {
+	s, err := m.catalogController.taskWithTimeout(true, coreTimeout(m.c), func(ctx context.Context) catalogMessage {
 		var r core.Result
 		var err error
 		if m.corePlan.Arguments[0] == "install" {
@@ -114,6 +124,11 @@ func (m Model) receiveCore(msg catalogMessage) (tea.Model, tea.Cmd) {
 		if msg.err != nil {
 			m.status = m.words.T("ATM_TUI_FAILED") + ": " + msg.err.Error()
 		}
+		bundle, isBundle := msg.coreResult.Value.(coreupdate.BundleResult)
+		if msg.coreResult.RestartRequired || isBundle && bundle.State == "recovery-required" {
+			m.restartRequired = true
+			m.message += "\n\n" + m.words.T("ATM_TUI_CORE_RESTART")
+		}
 		m.results = append(m.results, m.planLabel()+": "+m.status)
 		if len(m.results) > 100 {
 			m.results = m.results[len(m.results)-100:]
@@ -151,6 +166,8 @@ func (b *terminalBatch) SetStderr(w io.Writer) { b.stderr = w }
 func (b *terminalBatch) Run() error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
+	ctx, cancel := context.WithTimeout(ctx, coreTimeout(b.c))
+	defer cancel()
 	r, err := core.FullSetup(ctx, b.c, b.plan, b.in, b.out, b.stderr)
 	_ = json.NewEncoder(b.out).Encode(r)
 	if err != nil {

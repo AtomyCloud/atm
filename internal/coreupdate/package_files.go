@@ -2,13 +2,20 @@ package coreupdate
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 )
 
 // ProductionStatus separates an approved signing identity from a working updater.
-const ProductionStatus = "blocked: public key approved; full-package replacement, baseline and recovery integration pending"
+const ProductionStatus = "blocked: native full-package services implemented; production authorization and signed release acceptance pending"
+
+// Enabling installed-copy mutation needs a separate, explicit owner decision.
+// Fixture tests call library services directly; no runtime key or gate override.
+const ProductionEnabled = false
+
+var ErrProductionDisabled = errors.New("full-package production mutation is disabled pending explicit release/cutover authorization")
 
 type VerifiedPackage struct {
 	Manifest           PackageManifest `json:"manifest"`

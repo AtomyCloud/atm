@@ -49,7 +49,16 @@ the current user's environment is inherited. Request fields, not ambient
 `ATM_*` variables, are authoritative for the selected ATM home/apps/language.
 App-specific URLs, package selection and installation remain plugin-owned.
 
-Operations are `status`, `install`, `update`, `remove`, `uninstall`, `use`.
+Operations are `status`, `install`, `update`, `remove`, `uninstall`, `use`, and
+optional `integrate`.
+
+`integrate` owns application-specific user PATH/CLI/desktop integration. CORE
+invokes it without arguments through `path apply --plugins` or the TUI, after
+explicit confirmation, in metadata order. Disabled/unavailable/legacy plugins
+are reported as unavailable; there is no fallback to shell integration. A backend
+must report unsupported, failed or incomplete integration as a non-success result.
+It must preserve unrelated user settings and avoid system-wide changes. Declaring
+this operation is optional and does not mean existing application ports are done.
 `remove` and `use` require one version argument; `status` and `uninstall` take
 none. Install/update accept up to 128 literal arguments within the request cap.
 `atm plugin ID` selects status when available, otherwise the first operation.

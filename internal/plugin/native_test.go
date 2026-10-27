@@ -2,14 +2,54 @@ package plugin
 
 import (
 	"encoding/binary"
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
 	"github.com/AtomyCloud/atm/internal/config"
 	"github.com/AtomyCloud/atm/internal/data"
 )
+
+func TestOptionalNativeIntegrationContract(t *testing.T) {
+	m := nativeSample()
+	if err := m.Validate(m.ID); err != nil {
+		t.Fatal("integrate must remain optional", err)
+	}
+	m.Operations = []string{"integrate"}
+	if err := m.Validate(m.ID); err != nil {
+		t.Fatal("native integrate rejected", err)
+	}
+	m.Operations = []string{"integrate", "integrate"}
+	if m.Validate(m.ID) == nil {
+		t.Fatal("duplicate integrate accepted")
+	}
+	m = Manifest{Schema: 1, MinAPI: 1, ID: "fixture", Name: "Fixture", Version: "0.0.1", Platforms: []string{"linux"}, Executor: "legacy-bash", Protocol: "tty-v1", Operations: []string{"integrate"}}
+	if m.Validate(m.ID) == nil {
+		t.Fatal("legacy integrate accepted")
+	}
+	b, err := os.ReadFile("../../docs/schema/plugin-v2.schema.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var schema struct {
+		Properties struct {
+			Operations struct {
+				Items struct {
+					Enum []string `json:"enum"`
+				} `json:"items"`
+			} `json:"operations"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(b, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if !reflect.DeepEqual(schema.Properties.Operations.Items.Enum, NativeActions) {
+		t.Fatal("schema and runtime native actions differ")
+	}
+}
 
 func nativeSample() Manifest {
 	return Manifest{Schema: 2, ID: "fixture", Name: "Fixture", Version: "0.0.1", MinAPI: 2, Platforms: []string{"linux", "windows", "darwin"}, Executor: "native", Protocol: "jsonl-v1", Operations: []string{"status", "install"}, Executables: map[string]string{"linux/amd64": "bin/fixture", "linux/arm64": "bin/fixture", "windows/amd64": "bin/fixture.exe", "darwin/amd64": "bin/fixture", "darwin/arm64": "bin/fixture"}}

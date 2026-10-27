@@ -13,6 +13,9 @@ const (
 	MaxPackageBytes        int64 = 256 << 20
 )
 
+// IsNewerRelease applies the stable canonical version policy, not source commits.
+func IsNewerRelease(candidate, installed string) bool { return newer(candidate, installed) }
+
 // PackageManifest authenticates the whole archive and its inner payload index.
 // It is deliberately incompatible with the earlier single-binary experiment.
 type PackageManifest struct {

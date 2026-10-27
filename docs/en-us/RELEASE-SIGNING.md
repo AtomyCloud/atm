@@ -1,8 +1,10 @@
 # ATM Release Signing
 
-Status: approved public identity and offline full-package verification. Automatic
-installation/replacement is not enabled. No signing secrets or CI signing jobs
-are provisioned by this change. Migration version remains 0.0.2.
+Status: approved public identity, authenticated discovery and native full-package
+transaction services (Patch v27.7). Production mutation is explicitly disabled
+until a real signed release is validated, per maintainer decision; production
+cutover remains a separate approval. No signing secrets or CI signing jobs are
+provisioned by this change. Migration version remains 0.0.2.
 
 ## Approved Identity
 
@@ -64,14 +66,62 @@ Verification is read-only and host-specific. Fixture signatures from tests are
 not accepted by the production CLI. No authentic release has been signed or
 verified with the maintainer's private key during this implementation.
 
+## Discovery And Installed Identity
+
+Discovery uses only the latest stable release endpoint of `AtomyCloud/atm`.
+For each target, publish these separately reviewed assets when authorized:
+
+```text
+atm-VERSION-OS-ARCH.manifest.json
+atm-VERSION-OS-ARCH.manifest.sig
+atm-VERSION-OS-ARCH.tar.gz  (Windows: .zip)
+```
+
+The metadata and raw signature bind the exact archive; metadata from a release
+listing alone is not trusted. Network reads are bounded, HTTPS redirects are
+restricted, and no authentication token or cookies are sent. A valid signature
+does not prove freshness: the check reports freshness as unknown. Automatic
+replacement requires a strictly greater stable version and refuses same-version
+identity conflicts and downgrades. Key rotation/revocation is not automated.
+
+Native baseline/enrollment and replacement require a signed package matching the
+entire indexed installation. An unregistered installation is not adopted from a
+version string or its own `release.json`. Source checkouts, changed owned files
+(including bundled plugins/configuration), unsafe links/hardlinks, unowned-path
+collisions and pending component transactions refuse replacement. Unknown regular
+files/directories are preserved. The signed installed index authenticates bytes;
+it does not record each historical file mode. Supported modes are validated and
+the prepared tree is rechecked before mutation. File contents, ordinary permissions
+and empty directories are preserved; ACLs, extended attributes and timestamps are
+not copied. Pre-publication crash reservations may remain for manual inspection.
+
+Staging occurs beside the installation, followed by two directory renames with
+a sibling journal. This is recoverable, not a single globally atomic operation
+or a power-loss guarantee. Recovery verifies the original snapshot and retains
+the displaced candidate, including edits, instead of deleting it. Completed
+transaction history is retained. Do not manually remove journals or locks.
+Stop other ATM sessions before updating; this is not a hostile-same-user sandbox.
+
+On Windows, apply/recovery requires a trusted executable outside the target
+installation. Automatic external-helper handoff is not implemented. Open-file
+rename failures must be resolved and recovered, not bypassed. On every platform,
+keep a trusted external copy: interruption between renames can leave the root
+temporarily absent. Independent `recover-core` does not load runtime/config/plugins.
+
+Independent plugin update receipts are preserved, not silently rebased after a
+full-package change. A changed plugin may consequently be reported as modified
+by plugin-only checks. Review it and use explicit `updates verify ID COMMIT`
+against the corresponding official commit to establish a new plugin baseline.
+Existing independently updated/edited owned plugins block full-package updates;
+no automatic merge, force overwrite or rollback of those edits is provided.
+
 ## Remaining Production Gates
 
 - An approved signing process and an actual signed release.
-- Authenticated release discovery, freshness and anti-rollback policy.
-- Trusted installed baseline and ownership receipts for complete packages.
-- Local-data/configuration preservation and conflicts with independent plugin updates.
-- Recoverable full-package replacement and Windows in-use handling.
-- Independent recovery, key rotation/revocation and real-platform acceptance.
+- Explicit authorization to enable production enrollment/replacement/recovery.
+- Real signed-release acceptance and independent freshness/key-lifecycle policy.
+- Actual target-platform and Windows file-in-use/external-updater acceptance.
+- User validation of conflict handling and independent plugin receipt rebaselining.
 
 Checksums and GitHub commit signatures do not replace package signatures. A valid
 package signature authenticates these bytes, not their safety, freshness or
