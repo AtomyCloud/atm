@@ -13,8 +13,8 @@
 > Downloads require confirmation and never replace existing plugins. Component
 > checks, guarded plugin code updates/recovery, portable setup, ATM user PATH
 > integration and Full Setup orchestration now have native Go routes. Compiled
-> CORE replacement remains blocked pending an approved signing key and release
-> policy; application PATH/desktop integration and platform acceptance remain
+> The release signing key is approved; signed full-package verification is available
+> offline. CORE replacement, application PATH/desktop integration and platform acceptance remain
 > incomplete. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
 
 ## Legacy v0.0.1 (Linux / Bash)

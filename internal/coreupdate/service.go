@@ -323,8 +323,9 @@ func (s *Service) Replace(ctx context.Context) (Result, error) {
 
 // Recover explicitly rolls back only this transaction. It re-verifies signature,
 // baseline, backup and current bytes; unrelated local edits block all writes to
-// the executable. Backups/journals are retained; automatic pruning, repeated
-// updates, archive migration and power-loss durability are not implemented.
+// the executable. Backups/journals are retained until explicit Finalize archives
+// them. Automatic pruning, archive restoration and power-loss durability are not
+// implemented.
 func (s *Service) Recover(ctx context.Context) (Result, error) {
 	if err := s.trust(); err != nil {
 		return Result{}, err

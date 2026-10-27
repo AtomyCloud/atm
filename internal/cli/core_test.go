@@ -2,13 +2,19 @@ package cli
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
+	"fmt"
 	"io"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 )
 
 func TestCoreAdministrativeDryRunsWithoutShellOrNetwork(t *testing.T) {
@@ -83,12 +89,92 @@ func TestCoreConsentAndTrustBoundaries(t *testing.T) {
 		}
 	}
 	var out, stderr bytes.Buffer
-	if code := Run([]string{"--home", home, "--yes", "updates", "core"}, os.Stdin, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "Ed25519") {
+	if code := Run([]string{"--home", home, "--yes", "updates", "core"}, os.Stdin, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "full-package") {
 		t.Fatal(code, stderr.String())
 	}
 	files, _ := os.ReadDir(dir)
 	if len(files) != 0 {
 		t.Fatal("unconfirmed operation wrote state")
+	}
+}
+
+func TestReleaseTrustAndPackageDryRunAreOffline(t *testing.T) {
+	_, _ = fixture(t)
+	root := t.TempDir()
+	home := filepath.Join(root, "runtime")
+	for _, name := range []string{"runtime", "state", "config", "apps", "inputs"} {
+		if err := os.Mkdir(filepath.Join(root, name), 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, name, "sentinel"), []byte("unchanged"), 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if err := os.WriteFile(filepath.Join(home, "core-api.json"), []byte(`{"schema":1,"plugin_api":1,"update_protocol":1}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ATM_CONFIG_DIR", filepath.Join(root, "config"))
+	t.Setenv("ATM_STATE_DIR", filepath.Join(root, "state"))
+	t.Setenv("ATM_APPS_DIR", filepath.Join(root, "apps"))
+	snapshot := func() map[string]string {
+		files := map[string]string{}
+		err := filepath.WalkDir(root, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			info, err := entry.Info()
+			if err != nil {
+				return err
+			}
+			var data []byte
+			if !entry.IsDir() {
+				data, err = os.ReadFile(path)
+				if err != nil {
+					return err
+				}
+			}
+			files[path] = fmt.Sprintf("%s:%s:%x", info.Mode(), info.ModTime().UTC(), sha256.Sum256(data))
+			return nil
+		})
+		if err != nil {
+			t.Fatal(err)
+		}
+		return files
+	}
+	before := snapshot()
+	t.Setenv("PATH", "")
+	t.Setenv("GITHUB_TOKEN", "invalid\ntoken")
+	old := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = old })
+	http.DefaultTransport = catalogTransport(func(*http.Request) (*http.Response, error) {
+		t.Fatal("offline trust inspection attempted network")
+		return nil, nil
+	})
+	var out, stderr bytes.Buffer
+	if code := Run([]string{"--home", home, "--json", "updates", "trust"}, os.Stdin, &out, &stderr); code != 0 {
+		t.Fatal(code, stderr.String())
+	}
+	var trust struct {
+		Value coreupdate.TrustIdentity `json:"result"`
+	}
+	if err := json.Unmarshal(out.Bytes(), &trust); err != nil || trust.Value.Fingerprint != coreupdate.OfficialKeyFingerprint || trust.Value.ReplacementEnabled {
+		t.Fatal(out.String(), err)
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Run([]string{"--home", home, "--dry-run", "updates", "verify-package", "absent.json", "absent.sig", "absent.tar.gz"}, os.Stdin, &out, &stderr); code != 0 {
+		t.Fatal(code, stderr.String())
+	}
+	if !strings.Contains(out.String(), `"mutating": false`) {
+		t.Fatal(out.String())
+	}
+	out.Reset()
+	stderr.Reset()
+	if code := Run([]string{"--home", home, "updates", "verify-package", "absent.json", "absent.sig", "absent.tar.gz"}, os.Stdin, &out, &stderr); code == 0 || strings.Contains(stderr.String(), "--yes") {
+		t.Fatal("verification should read inputs but not require mutation consent", code, stderr.String())
+	}
+	if !reflect.DeepEqual(before, snapshot()) {
+		t.Fatal("trust commands modified runtime, state, settings, apps or input files")
 	}
 }
 

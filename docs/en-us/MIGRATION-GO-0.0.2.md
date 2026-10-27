@@ -48,7 +48,7 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 | Plugin code inspection/update/recovery | Native Go | Native Go; real validation pending |
 | Portable setup and ATM user PATH | Native Go | Native Go; real validation pending |
 | Full Setup orchestration | Native Go; legacy apps explicitly bridged | Native plugins only; app ports pending |
-| Compiled CORE self-update | Library/fixtures; production trust pending | Verification/staging library; replacement pending |
+| Compiled CORE self-update | Approved key; offline full-package verification; replacement pending | Same verification; replacement and runtime acceptance pending |
 | Native Node, Go and VS Code application backends | Pending | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
@@ -184,8 +184,9 @@ from a reviewed checkout: local changes under runtime directories are included
 and builds from a dirty checkout are marked `-dirty`.
 
 Checksums detect corruption; they are **not signatures or proof of origin**.
-Release signing, source-to-artifact verification and an updater trust root are
-pending. CI runs Linux/Windows/macOS tests. With the repository owner's explicit
+The maintainer-approved Ed25519 public key is embedded, and signed full-package
+verification is available offline. Release signing, source-to-artifact verification
+and production replacement remain pending. CI runs Linux/Windows/macOS tests. With the repository owner's explicit
 approval, pushes and manual runs in `AtomyCloud/atm` also upload the five
 platform packages to GitHub Actions Artifacts for 14 days. Pull requests and
 fork repositories do not upload packages. There is no automatic public release
@@ -217,9 +218,10 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
    from the new native plugin backup format.
 3. Deliver native Node, then Go and VS Code backends with verified official
    artifacts, stable launchers, ownership checks and version switching.
-4. Approve the Ed25519 public key, signed payload/receipt and release policy;
-   complete production discovery/replacement and independent recovery integration,
-   including Windows file-in-use handling. The tested binary-only library is not
-   an operational production self-updater.
+4. Complete signed full-package discovery, installed baseline/receipt and local
+   conflict handling, replacement and independent recovery integration, including
+   Windows file-in-use handling. The Ed25519 key and full-package scope are approved;
+   offline verification and the experimental binary-only transaction library are
+   not an operational production self-updater.
 5. Validate on real Windows standard-user and ARM64 environments, finish
    translations and approve release publication before replacing legacy ATM.

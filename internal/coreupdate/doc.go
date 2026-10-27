@@ -1,7 +1,8 @@
 // Package coreupdate provides opt-in, offline compiled CORE verification,
-// staging and recoverable single-executable replacement. No production trust
-// anchor or production replacement integration is configured here. It is not a production
-// updater and cannot consume the existing unsigned full runtime packages.
+// staging and recoverable single-executable replacement, plus offline signed
+// full-package verification. The maintainer-approved public key is embedded;
+// production replacement integration is not enabled. Full packages use their
+// own signature contract and are never fed to the single-executable service.
 //
 // The caller must approve a key, baseline receipt, binary-only payload boundary,
 // version and user consent, and must quiesce other ATM sessions before replacing.
@@ -20,9 +21,11 @@
 // must supply a private per-user root, not a shared directory. POSIX modes do not
 // establish Windows ACL privacy. Same-host Linux/macOS replacement retains an
 // immutable journal, candidate and backup. Recovery only restores the pinned
-// baseline and refuses local edits. A root supports one retained transaction;
-// cleanup, subsequent updates, key rotation, downgrade/prerelease policy,
-// automatic restart and archive extraction are deliberately unsupported.
+// baseline and refuses local edits. Finalize can move a completed transaction
+// into retained history before another independently authorized binary-only
+// transaction. This is not a full-package replacement engine. Key rotation,
+// downgrade/prerelease policy, automatic restart and archive extraction remain
+// unsupported here.
 // Incomplete pre-journal stages or corrupt state require manual inspection.
 // Guarantees cover ordinary failure/process interruption on local filesystems,
 // not power-loss durability, external writers or hostile same-user processes.

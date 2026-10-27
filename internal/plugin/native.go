@@ -4,6 +4,7 @@ import (
 	"debug/macho"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -118,8 +119,18 @@ func (p Plugin) NativeExecutable(target string) (string, error) {
 }
 
 func CheckBinary(path, target string) error {
+	f, err := os.Open(path)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return CheckBinaryReader(f, target)
+}
+
+// CheckBinaryReader allows package inspection without extracting executables.
+func CheckBinaryReader(reader io.ReaderAt, target string) error {
 	if target == "darwin/amd64" || target == "darwin/arm64" {
-		f, err := macho.Open(path)
+		f, err := macho.NewFile(reader)
 		if err != nil {
 			return err
 		}
@@ -133,13 +144,8 @@ func CheckBinary(path, target string) error {
 		}
 		return nil
 	}
-	f, err := os.Open(path)
-	if err != nil {
-		return err
-	}
-	defer f.Close()
 	h := make([]byte, 64)
-	if _, err = f.ReadAt(h, 0); err != nil {
+	if _, err := reader.ReadAt(h, 0); err != nil {
 		return fmt.Errorf("invalid native binary: %w", err)
 	}
 	if strings.HasPrefix(target, "linux/") {
@@ -154,7 +160,7 @@ func CheckBinary(path, target string) error {
 	}
 	if target == "windows/amd64" && string(h[:2]) == "MZ" {
 		pe := make([]byte, 6)
-		if _, err = f.ReadAt(pe, int64(binary.LittleEndian.Uint32(h[60:64]))); err == nil && string(pe[:4]) == "PE\x00\x00" && binary.LittleEndian.Uint16(pe[4:]) == 0x8664 {
+		if _, err := reader.ReadAt(pe, int64(binary.LittleEndian.Uint32(h[60:64]))); err == nil && string(pe[:4]) == "PE\x00\x00" && binary.LittleEndian.Uint16(pe[4:]) == 0x8664 {
 			return nil
 		}
 	}

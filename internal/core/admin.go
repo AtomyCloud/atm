@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/AtomyCloud/atm/internal/catalog"
@@ -70,7 +71,10 @@ func Resolve(ctx context.Context, c config.Config, p Plan) (*Execution, error) {
 	a := p.Arguments
 	if a[0] == "updates" {
 		if a[1] == "core" {
-			return nil, coreupdate.ErrNoTrustAnchor
+			return nil, fmt.Errorf("%s", coreupdate.ProductionStatus)
+		}
+		if a[1] == "trust" || a[1] == "verify-package" {
+			return e, nil
 		}
 		state := c.StateDir
 		if state == "" {
@@ -153,6 +157,14 @@ func Execute(ctx context.Context, c config.Config, e *Execution, consent bool) (
 		o.Consent = consent
 		r.Value, err = setup.Install(ctx, o)
 	case "updates":
+		if a[1] == "trust" {
+			r.Value, err = coreupdate.OfficialTrust()
+			return r, err
+		}
+		if a[1] == "verify-package" {
+			r.Value, err = coreupdate.VerifyOfficialPackageFiles(ctx, a[2], a[3], a[4], runtime.GOOS, runtime.GOARCH)
+			return r, err
+		}
 		s := e.service
 		if s == nil {
 			return r, fmt.Errorf("missing update service")

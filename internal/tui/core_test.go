@@ -6,6 +6,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/AtomyCloud/atm/internal/core"
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 	"github.com/AtomyCloud/atm/internal/updates"
 )
 
@@ -27,6 +28,33 @@ func TestCoreDryRunConfirmationIsNative(t *testing.T) {
 	if cmd != nil || m.screen != "message" || !strings.Contains(m.message, "native-core") {
 		t.Fatal(m.screen, m.message)
 	}
+}
+
+func TestCoreTrustMenuIsReadOnly(t *testing.T) {
+	m := model(t)
+	m.c.DryRun = false
+	m.navigate("core")
+	index := -1
+	for i, item := range m.rows() {
+		if item.key == "trust" {
+			index = i
+		}
+	}
+	if index < 0 {
+		t.Fatal("missing trust menu item")
+	}
+	m.cursor = index
+	updated, cmd := m.activate()
+	m = updated.(Model)
+	if cmd == nil || m.screen != "core-running" || m.corePlan.Mutating {
+		t.Fatal(m.screen, m.corePlan)
+	}
+	updated, _ = m.Update(cmd())
+	m = updated.(Model)
+	if m.screen != "message" || !strings.Contains(m.message, coreupdate.OfficialKeyFingerprint) {
+		t.Fatal(m.screen, m.message)
+	}
+	m.Close()
 }
 
 func TestCoreUpdateResultsRequireRestart(t *testing.T) {

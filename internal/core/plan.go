@@ -55,7 +55,7 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 	switch a[0] {
 	case "updates":
 		if len(a) == 2 {
-			valid = slices.Contains([]string{"check", "changes", "backups", "all", "core"}, a[1])
+			valid = slices.Contains([]string{"check", "changes", "backups", "all", "core", "trust"}, a[1])
 			p.Mutating = a[1] == "all" || a[1] == "core"
 		}
 		if len(a) == 3 {
@@ -66,6 +66,12 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 		if len(a) == 4 && a[1] == "verify" {
 			valid = plugin.IDPattern.MatchString(strings.TrimPrefix(a[2], "plugin:")) && commitID(a[3])
 			p.Mutating = true
+		}
+		if len(a) == 5 && a[1] == "verify-package" {
+			valid = true
+			for _, path := range a[2:] {
+				valid = valid && path != "" && !strings.ContainsAny(path, "\x00\r\n")
+			}
 		}
 	case "path":
 		valid = len(a) == 2 && (a[1] == "apply" || a[1] == "show")

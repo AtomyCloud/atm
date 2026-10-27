@@ -143,7 +143,8 @@ func (m Model) rows() []row {
 			{"update-one", m.words.T("ATM_TUI_UPDATE_PLUGIN"), ""},
 			{"changes", m.words.T("ATM_TUI_CORE_CHANGES"), ""}, {"backups", m.words.T("ATM_TUI_CORE_BACKUPS"), ""},
 			{"restore", m.words.T("ATM_TUI_CORE_RESTORE"), ""}, {"recover", m.words.T("ATM_TUI_CORE_RECOVER"), ""},
-			{"setup", m.words.T("ATM_TUI_CORE_SETUP"), ""}, {"core-update", m.words.T("ATM_TUI_CORE_UPDATE"), ""}}
+			{"setup", m.words.T("ATM_TUI_CORE_SETUP"), ""}, {"core-update", m.words.T("ATM_TUI_CORE_UPDATE"), ""},
+			{"trust", m.words.T("ATM_TUI_CORE_SIGNING_KEY"), ""}}
 	case "languages":
 		for _, locale := range m.locales {
 			rows = append(rows, row{locale, locale, ""})
@@ -500,7 +501,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "core":
 		switch key {
 		case "doctor":
-			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nApplication integration/backends: pending\nCompiled CORE updater: blocked pending approved Ed25519 key", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
+			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nApplication integration/backends: pending\nCompiled CORE updater: full-package replacement pending; public key approved", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
 			m.navigate("message")
 		case "download":
 			m.navigate("download")
@@ -517,7 +518,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			return m.prepareCore([]string{"install"})
 		case "path":
 			return m.prepareCore([]string{"path", "apply"})
-		case "changes", "backups":
+		case "changes", "backups", "trust":
 			return m.prepareCore([]string{"updates", key})
 		case "recover":
 			return m.prepareCore([]string{"updates", "recover", "plugins"})

@@ -109,21 +109,43 @@ plugins are not run and their absence is not reported as a successful Full Setup
 
 ## Compiled CORE Trust Gate
 
-Ed25519 verification was approved as the design. No production public key has
-been approved or embedded. `updates core` fails closed, including with `--yes`.
-No CLI option or downloaded metadata can silently supply a replacement trust key.
+The maintainer approved the Ed25519 public key and full-package update scope on
+2026-10-27. The embedded SSH key fingerprint is:
 
-`internal/coreupdate` is a tested library for signed binary-only manifests,
-bounded staging, retained backup/journal and recoverable replacement. It is not
-the unsigned `release.json` package format. It requires an independently verified
-installed baseline, matching OS/architecture and increasing stable version.
-Linux/macOS replacement and rollback are implemented in the library; Windows
-verification/staging is implemented but replacement is explicitly unsupported.
+```text
+SHA256:jNhv8Ehni4ENGvQaar4/l8vQQPHcVZDnCmcmTvkFXVM
+```
 
-Production signing authority, payload/receipt policy, discovery, standalone
-recovery integration, repeated transaction lifecycle and Windows in-use handling
-remain pending. Test fixture keys are not production keys. Package checksums and
-Git source provenance do not substitute for a release signature.
+Inspect it without network, shell commands or writes:
+
+```bash
+atm updates trust
+atm --json doctor
+atm updates verify-package manifest.json manifest.sig atm-0.0.3-linux-amd64.tar.gz
+```
+
+The last command is an example with explicit local files, not an available release.
+It verifies the signature, matching host platform, archive hash, bounded safe
+archive structure, signed `release.json` hash and complete indexed payload.
+It does not extract, install, execute or establish that the release is the latest.
+There is no CLI/config/environment key override. `--dry-run` does not read inputs.
+
+The target is now the complete runtime package, including bundled plugin code,
+not only the ATM executable. Package signatures have their own domain and schema;
+old binary-only manifests cannot authorize a full-package update. Private data,
+unmanaged files, edited configuration and independently updated plugins require
+explicit conflict handling before production replacement can be enabled.
+
+`updates core` still fails closed, including with `--yes`: approved identity is
+not the same as completed installation/receipt/recovery integration. No private
+key was accessed, created or published. See [release signing](RELEASE-SIGNING.md)
+for the exact format and offline preparation tool.
+
+The earlier binary-only library remains experimental. Its Linux/macOS transactions
+can now be explicitly finalized into retained history after verification, allowing
+another transaction with a separately trusted baseline. It is not wired into the
+full-package updater. Windows replacement, production discovery, installed baseline,
+conflict policy, standalone recovery and release signing remain pending.
 
 ## Validation Boundaries
 

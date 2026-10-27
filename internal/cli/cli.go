@@ -68,7 +68,10 @@ Global options (before the command):
 
 Native JSONL executors support Linux, macOS and Windows; application ports are pending.
 Linux application operations still require the existing Bash dependencies.
-Compiled CORE replacement awaits an approved Ed25519 key; bin/atm remains legacy.
+updates trust                 Show the approved release signing identity
+updates verify-package MANIFEST SIGNATURE ARCHIVE
+                              Verify a signed full package offline (no install)
+Compiled CORE full-package replacement is pending; bin/atm remains legacy.
 `
 
 func Run(args []string, in *os.File, out, stderr io.Writer) int {
@@ -199,11 +202,16 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			"home": c.Home, "apps_dir": c.AppsDir, "plugins_dir": c.PluginsDir, "preferences": c.PreferenceFile(),
 			"plugin_count": len(plugins), "legacy_backend": runtime.GOOS == "linux" && bashErr == nil,
 			"legacy_recovery_pending": !os.IsNotExist(pendingErr), "native_application_backends": "pending",
-			"compiled_core_updater": "blocked: approved Ed25519 public key required", "discovery_executes_plugins": false,
+			"compiled_core_updater": coreupdate.ProductionStatus, "discovery_executes_plugins": false,
 			"native_catalog_search": true, "native_catalog_download": true,
 			"native_component_updates": true, "native_setup": true, "native_full_setup": true,
 			"plugin_desktop_integration": "pending native contract"}
 		report["compiled_recovery_pending"] = coreupdate.StartupGuard(c.Home) != nil
+		trust, err := coreupdate.OfficialTrust()
+		if err != nil {
+			return err
+		}
+		report["release_trust"] = trust
 		report["native_executor"] = "jsonl-v1"
 		report["state_dir"] = c.StateDir
 		return outputJSON(out, report)

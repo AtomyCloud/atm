@@ -187,7 +187,7 @@ func (s *Service) baseline(ctx context.Context, id string, main *catalog.Snapsho
 func (s *Service) Check(ctx context.Context) (Report, error) {
 	ctx, cancel := context.WithTimeout(ctx, catalog.Timeout)
 	defer cancel()
-	report := Report{Schema: 1, Source: catalog.Source, Rows: []Row{{Component: "core", Status: "unknown", Detail: "Compiled CORE identity requires an approved trusted release model; source commits are not binary releases"}}}
+	report := Report{Schema: 1, Source: catalog.Source, Rows: []Row{{Component: "core", Status: "unknown", Detail: "Release signing key approved; authenticated full-package discovery and installed baseline pending; source commits are not compiled releases"}}}
 	if err := ctx.Err(); err != nil {
 		return report, err
 	}
