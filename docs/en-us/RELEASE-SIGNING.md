@@ -3,8 +3,9 @@
 Status: approved public identity, authenticated discovery and native full-package
 transaction services (Patch v27.7). Production mutation is explicitly disabled
 until a real signed release is validated, per maintainer decision; production
-cutover remains a separate approval. No signing secrets or CI signing jobs are
-provisioned by this change. Migration version remains 0.0.2.
+cutover remains a separate approval. Patch v27.8 created local signed Linux 0.0.2
+candidates from clean commit 6c8b9be. Both passed the Go verifier; human acceptance
+is pending. No signing secrets or CI signing jobs were provisioned.
 
 ## Approved Identity
 
@@ -63,8 +64,11 @@ atm updates verify-package /path/to/manifest.json /path/to/manifest.sig /path/to
 ```
 
 Verification is read-only and host-specific. Fixture signatures from tests are
-not accepted by the production CLI. No authentic release has been signed or
-verified with the maintainer's private key during this implementation.
+not accepted by the production CLI. The local Linux amd64/arm64 candidates were
+signed through the approved key already loaded in the maintainer's ssh-agent,
+without opening/exporting private-key files. The Go verifier authenticated both
+signatures and complete payloads. These candidates have not been published to
+GitHub or installed over a real ATM. See the [Linux human test](LINUX-SIGNED-RELEASE-TEST.md).
 
 ## Discovery And Installed Identity
 
@@ -117,7 +121,7 @@ no automatic merge, force overwrite or rollback of those edits is provided.
 
 ## Remaining Production Gates
 
-- An approved signing process and an actual signed release.
+- Human acceptance of the locally signed Linux candidates; CI signing is not configured.
 - Explicit authorization to enable production enrollment/replacement/recovery.
 - Real signed-release acceptance and independent freshness/key-lifecycle policy.
 - Actual target-platform and Windows file-in-use/external-updater acceptance.
