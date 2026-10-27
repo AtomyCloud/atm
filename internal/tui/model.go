@@ -582,6 +582,9 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		}
 		if key == "no" {
 			m.navigate("plugins")
+			if m.plan.Executor == "native-core" {
+				m.status = m.words.T("ATM_TUI_CANCELLED")
+			}
 			return m, nil
 		}
 		if m.demo {
@@ -657,6 +660,10 @@ func (m Model) prepareCore(args []string) (tea.Model, tea.Cmd) {
 	m.corePlan, err = core.Prepare(m.c, args, m.plugins)
 	if err != nil {
 		m.status = err.Error()
+		if m.screen == "core-input" {
+			m.editing = true
+			return m, m.input.Focus()
+		}
 		return m, nil
 	}
 	m.plan = runner.Plan{Executor: "native-core", Arguments: m.corePlan.Arguments, DryRun: m.c.DryRun}

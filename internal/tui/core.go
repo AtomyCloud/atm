@@ -136,6 +136,7 @@ func (m Model) receiveCore(msg catalogMessage) (tea.Model, tea.Cmd) {
 	} else if msg.corePrepared != nil && msg.err == nil {
 		m.corePrepared = msg.corePrepared
 		m.navigate("confirm")
+		m.status = m.words.T("ATM_TUI_CORE_TRUST")
 	} else {
 		m.navigate("core")
 		if msg.err != nil {

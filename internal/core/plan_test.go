@@ -15,13 +15,13 @@ import (
 func TestNativeCoreRoutesWithoutShell(t *testing.T) {
 	t.Setenv("PATH", "")
 	c := config.Config{DryRun: true}
-	for _, args := range [][]string{{"updates", "check"}, {"updates", "all"}, {"updates", "plugin", "node"}, {"updates", "changes"}, {"updates", "backups"}, {"updates", "restore", "backup-1"}, {"updates", "recover", "node"}, {"setup", "portable"}, {"path", "apply"}, {"install"}, {"self-update", "--check"}, {"plugins", "update", "--all"}} {
+	for _, args := range [][]string{{"updates", "check"}, {"updates", "all"}, {"updates", "plugin", "node"}, {"updates", "changes"}, {"updates", "backups"}, {"updates", "restore", "backup-1"}, {"updates", "recover", "plugins"}, {"setup", "portable"}, {"path", "apply"}, {"install"}, {"self-update", "--check"}, {"plugins", "update", "--all"}} {
 		p, err := Prepare(c, args, nil)
 		if err != nil || p.Executor != "native-core" || !p.DryRun {
 			t.Fatal(args, p, err)
 		}
 	}
-	for _, args := range [][]string{{"self-update", "--git"}, {"updates", "plugin", "../bad"}, {"updates", "restore", "../bad"}, {"updates", "check", "extra"}, {"setup", "system"}, {"plugins", "update"}} {
+	for _, args := range [][]string{{"self-update", "--git"}, {"updates", "plugin", "../bad"}, {"updates", "restore", "../bad"}, {"updates", "recover", "node"}, {"updates", "recover", "core"}, {"updates", "check", "extra"}, {"setup", "system"}, {"plugins", "update"}} {
 		if _, err := Prepare(c, args, nil); err == nil {
 			t.Fatal("accepted", args)
 		}

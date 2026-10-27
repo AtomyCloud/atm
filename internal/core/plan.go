@@ -63,7 +63,7 @@ func Prepare(c config.Config, args []string, plugins []plugin.Plugin) (Plan, err
 		}
 		if len(a) == 3 {
 			valid = (a[1] == "plugin" && plugin.IDPattern.MatchString(a[2])) ||
-				((a[1] == "restore" || a[1] == "recover") && safeToken(a[2]))
+				(a[1] == "restore" && safeToken(a[2])) || (a[1] == "recover" && a[2] == "plugins")
 			p.Mutating = true
 		}
 		if len(a) == 4 && a[1] == "verify" {

@@ -1,7 +1,9 @@
 # ATM 0.0.2: Go Migration
 
-Status: **In progress, opt-in migration build.** This is the first working
-delivery of the Go migration, not a completed replacement of the Bash CORE.
+Status: **Native CORE implemented; final Linux human acceptance Pending.**
+The Go entrypoint uses native administrative services, not a Bash CORE fallback.
+The legacy entrypoint and Linux application compatibility remain intentionally
+available; this is not a completed migration of application plugin backends.
 The native executable reports `0.0.2`. Existing Bash CORE and application
 plugins retain `0.0.1`; no installed applications are migrated automatically.
 
@@ -13,7 +15,7 @@ that every Linux architecture or every platform has been accepted.
 
 | Runtime target | Acceptance status |
 | --- | --- |
-| Linux amd64 | In Progress: automated signed 0.0.2 -> 0.0.3 -> 0.0.2 upgrade/recovery and interruption tests passed in isolated roots; final route/human acceptance remains Pending. |
+| Linux amd64 | Native implementation with automated route and signed upgrade/recovery coverage; final human acceptance Pending. |
 | Linux arm64 | Pending: package build and signature verification do not establish runtime acceptance. |
 | Windows amd64 | Pending: runtime, file-in-use replacement and standard-user acceptance deferred. |
 | macOS Intel (amd64) | Pending: target-host acceptance deferred. |
@@ -27,7 +29,8 @@ for the automated upgrade evidence and private-artifact reproduction requirement
 Linux completion requires CLI/TUI CORE parity without Bash/Python delegation,
 isolated signed upgrade/recovery evidence, regression tests and human acceptance
 of the changed flow. Application plugin ports and release/publication approval
-remain separate. No installed copy is updated automatically.
+remain separate. No installed copy is updated automatically. Use the
+[isolated Linux checklist](LINUX-CORE-ACCEPTANCE.md) for final human acceptance.
 
 ## Available Now
 

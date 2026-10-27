@@ -1,9 +1,11 @@
 # Native CORE Administration
 
-ATM 0.0.2 migration build, Patch v27.9. CORE administrative commands now dispatch
-to Go services rather than `bash bin/atm`. This does not claim that all application
-plugins or production self-update have migrated. No installed copy is replaced
-merely by starting the new executable.
+ATM 0.0.2 migration build, Patch v27.11. CORE administrative commands dispatch
+to Go services rather than `bash bin/atm`. Linux native implementation and automated
+acceptance are tracked separately from final human acceptance and release approval.
+Application backend ports are a separate scope. No installed copy is replaced
+merely by starting the new executable. See the
+[Linux acceptance checklist](LINUX-CORE-ACCEPTANCE.md) for the isolated human test.
 
 ## Commands
 
@@ -190,7 +192,40 @@ can now be explicitly finalized into retained history after verification, allowi
 another transaction with a separately trusted baseline. It is not wired into the
 full-package updater. Fixture tests exercise the full-package path independently.
 Real Linux package signatures and the human dry-run test were validated. Actual
-newer-version production upgrade and target-host acceptance remain pending.
+signed 0.0.2 -> private QA 0.0.3 -> 0.0.2 upgrade/recovery and six process-interruption
+scenarios passed on Linux amd64. Publication, actual installed-copy deployment and
+other target-host acceptance remain separate and pending.
+
+## Native Route Evidence
+
+The shared dispatcher owns CORE plans for both CLI and TUI; the legacy runner
+rejects administrative commands. The explicit application bridge remains separate.
+
+| Area | Native routes / behavior | Regression evidence |
+| --- | --- | --- |
+| Inspection and preferences | doctor, plugin list/sort, language | CLI Linux administrative matrix; config/i18n tests |
+| Official catalog | search/download with pinned metadata and consent | catalog service/CLI/TUI tests; PTY dry-run |
+| Component checks | updates check/check-core, self-update --check, plugins check-updates | CLI matrix, release and update service tests |
+| Plugin maintenance | single/all, changes/backups, restore/recover plugins, verify baseline | CLI matrix; actual update/restore/recovery tests |
+| Signed full packages | trust/verify/enroll, update, early independent recovery | real-signature CLI lifecycle/upgrade and crash acceptance |
+| Portable setup and ATM PATH | verified local package and per-user integration | setup receipt/profile/conflict tests; CLI/TUI route matrices |
+| Plugin integration | native integrate contract, no Bash fallback | native subprocess integration tests |
+| Full Setup | metadata-ordered native orchestration, stop on failure | native request subprocess tests and PTY fixture flow |
+| Terminal UX | native plans, Cancel default, input correction, pending cancellation, timeout, cleanup | Go TUI matrix and Linux PTY tests |
+
+`TestLinuxAdministrativeRouteMatrix` runs without a shell and with self-tested
+executable traps, checks offline/read-only snapshots and alias normalization.
+`TestCoreAdministrationCannotEnterLegacyRunner` guards both legacy entrypoints.
+The TUI matrix checks every exposed native CORE action; strace-assisted PTY cases
+also assert no child execution or socket connection for offline plans/refusals.
+These instrumentation cases explicitly skip if strace is missing; a skip is not
+equivalent to successful terminal acceptance.
+
+Final parity fixes: planning now refuses unsupported `updates recover` targets
+instead of accepting a command that execution cannot handle, and invalid TUI CORE
+input retains focus so the user can correct it. Prepared/cancelled operations no
+longer leave a stale running status. The en-us update-check label now names CORE
+and plugins. These changes do not relax trust or confirmation requirements.
 
 ## Validation Boundaries
 
@@ -207,6 +242,8 @@ recovers the exact pre-enrollment tree while retaining the displaced candidate.
 It uses the real embedded public key without a fixture-key or gate override.
 The actual artifacts, personal configuration and installed ATM are not modified.
 This verifies undoing enrollment, not an upgrade between two real release versions.
+The separate [two-version tests](LINUX-SIGNED-RELEASE-TEST.md#two-version-acceptance)
+cover the latter using the approved private QA artifacts.
 
 Go tests exercise temporary runtime, state, profile and backup roots, including
 corruption, cancellation, local edits and interrupted publication. CLI/TUI tests

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -33,7 +34,7 @@ func TestMain(m *testing.M) {
 
 func integrationHelper() int {
 	r, err := protocol.ReadRequest(os.Stdin)
-	if err != nil || r.Operation != "integrate" || len(r.Arguments) != 0 {
+	if err != nil || (r.Operation != "integrate" && r.Operation != "install") || len(r.Arguments) != 0 {
 		return 2
 	}
 	f, err := os.OpenFile(filepath.Join(r.AppsDir, "requests.jsonl"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0600)
@@ -175,6 +176,42 @@ func TestIntegrationMetadataOrderAndNativeRequest(t *testing.T) {
 		if req.Operation != "integrate" || len(req.Arguments) != 0 || req.Home != c.Home || req.AppsDir != c.AppsDir || req.Language != c.Language {
 			t.Fatal(req)
 		}
+	}
+}
+
+func TestFullSetupNativeRequestsWithoutShell(t *testing.T) {
+	for _, first := range []string{"alpha", "fail"} {
+		t.Run(first, func(t *testing.T) {
+			c, items := integrationFixture(t, first, "zulu")
+			for i := range items {
+				items[i].Operations = []string{"install"}
+				items[i].FullSetup = true
+				if err := data.WriteJSON(filepath.Join(items[i].Directory, "plugin.json"), items[i].Manifest); err != nil {
+					t.Fatal(err)
+				}
+			}
+			p, err := Prepare(c, []string{"install"}, items)
+			if err != nil {
+				t.Fatal(err)
+			}
+			result, err := FullSetup(context.Background(), c, p, nil, io.Discard, io.Discard)
+			requests := integrationRequests(t, c)
+			if len(result.Items) != 2 || result.Items[0].ID != first || result.Items[1].ID != "zulu" {
+				t.Fatal("Full Setup lost metadata order", result)
+			}
+			if first == "fail" {
+				if runner.ExitCode(err) != 7 || len(requests) != 1 || result.Items[0].Status != "error" || result.Items[1].Status != "not_run" {
+					t.Fatal("Full Setup continued after failure", result, requests, err)
+				}
+			} else if err != nil || len(requests) != 2 || result.Items[0].Status != "success" || result.Items[1].Status != "success" {
+				t.Fatal(result, requests, err)
+			}
+			for i, request := range requests {
+				if request.Operation != "install" || request.PluginID != result.Items[i].ID || request.Home != c.Home || request.AppsDir != c.AppsDir {
+					t.Fatal("incorrect native Full Setup request", request)
+				}
+			}
+		})
 	}
 }
 

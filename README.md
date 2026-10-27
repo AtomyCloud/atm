@@ -1,13 +1,13 @@
 # ATM - Atomy Tools Modules
 
-> **Go migration v0.0.2 (in progress):** an opt-in Bubble Tea interface and
+> **Native Go CORE v0.0.2 (final Linux acceptance):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Existing Linux plugins run
 > through a compatibility backend; native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).
 > macOS Terminal packages are also built for Intel and Apple Silicon. Native
-> installation services are under development; application plugin ports remain pending.
+> CORE installation services are implemented; application plugin ports remain pending.
 > Official catalog search and plugin code downloads now run natively in Go on
 > Linux, macOS and Windows (`atm plugins search|download` and the TUI catalog).
 > Downloads require confirmation and never replace existing plugins. Component
@@ -19,6 +19,9 @@
 > source checkouts and modified owned files are never automatically replaced.
 > The plugin integration contract is native; application backends and real-platform
 > acceptance remain pending. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
+> Linux amd64 signed upgrade/recovery has passed automated tests. The remaining
+> human checks have an [isolated dry-run harness](docs/en-us/LINUX-CORE-ACCEPTANCE.md).
+> Windows, macOS and Linux ARM64 runtime acceptance remains **Pending**.
 
 ## Legacy v0.0.1 (Linux / Bash)
 
@@ -70,7 +73,12 @@ to keep this exact snapshot. Preserve any existing installation before switching
   
 </div>
 
-ATM is a modular Linux tool manager written in Bash. It installs and manages developer tools in user space, keeps multiple versions side by side, switches the active version with `current` symlinks, configures shell PATH entries, and creates desktop launchers for GUI tools.
+ATM is a modular, portable-first tool manager. The v0.0.2 CORE is written in Go;
+the v0.0.1 legacy entrypoint and existing Linux application plugins use Bash.
+Application plugins install and manage developer tools in user space, keep multiple
+versions side by side, switch active versions, configure PATH and create desktop
+launchers. The detailed application menus and `bin/atm` examples below describe
+the retained Linux legacy workflow; native CORE commands are documented above.
 
 ATM is designed for a portable-first workflow:
 
