@@ -5,6 +5,28 @@ delivery of the Go migration, not a completed replacement of the Bash CORE.
 The native executable reports `0.0.2`. Existing Bash CORE and application
 plugins retain `0.0.1`; no installed applications are migrated automatically.
 
+## Current Completion Priority
+
+Complete and validate the native CORE on Linux first. Linux amd64 is the current
+runtime acceptance reference; this milestone is still **In Progress**, not a claim
+that every Linux architecture or every platform has been accepted.
+
+| Runtime target | Acceptance status |
+| --- | --- |
+| Linux amd64 | In Progress: automated suites and signed enrollment/recovery passed; real signed upgrade between distinct versions and its recovery remain Pending. |
+| Linux arm64 | Pending: package build and signature verification do not establish runtime acceptance. |
+| Windows amd64 | Pending: runtime, file-in-use replacement and standard-user acceptance deferred. |
+| macOS Intel (amd64) | Pending: target-host acceptance deferred. |
+| macOS Apple Silicon (arm64) | Pending: target-host acceptance deferred. |
+
+Existing cross-platform code, builds and CI remain in place. Deferred host tests
+do not block the Linux amd64 milestone, but prevent claiming all-platform completion.
+Automatic Windows external-helper handoff is separately **Pending implementation**.
+Linux completion requires CLI/TUI CORE parity without Bash/Python delegation,
+isolated signed upgrade/recovery evidence, regression tests and human acceptance
+of the changed flow. Application plugin ports and release/publication approval
+remain separate. No installed copy is updated automatically.
+
 ## Available Now
 
 - Native Go executable with Bubble Tea v2, Bubbles and Lip Gloss.
