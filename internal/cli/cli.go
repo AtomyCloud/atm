@@ -79,7 +79,8 @@ Linux application operations still require the existing Bash dependencies.
 updates trust                 Show the approved release signing identity
 updates verify-package MANIFEST SIGNATURE ARCHIVE
                               Verify a signed full package offline (no install)
-Full-package production mutation is disabled pending explicit owner authorization.
+Signed full-package enrollment/update/recovery are enabled with explicit consent.
+Verification and discovery never install automatically; unsigned packages are refused.
 Updates require a signed baseline; close other ATM sessions first.
 Windows replacement requires an external ATM executable, with installed ATM closed.
 `
@@ -188,7 +189,8 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		}
 	}
 	plugins, err := plugin.Discover(c, runtime.GOOS)
-	if err != nil {
+	pluginDiscoveryErr := err
+	if err != nil && args[0] != "doctor" {
 		return err
 	}
 	switch args[0] {
@@ -233,7 +235,15 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		report["release_trust"] = trust
 		report["native_executor"] = "jsonl-v1"
 		report["state_dir"] = c.StateDir
-		return outputJSON(out, report)
+		if pluginDiscoveryErr != nil {
+			// A damaged plugin must not hide CORE recovery/trust diagnostics.
+			report["plugin_count"] = nil
+			report["plugin_discovery_error"] = pluginDiscoveryErr.Error()
+		}
+		if err := outputJSON(out, report); err != nil {
+			return err
+		}
+		return pluginDiscoveryErr
 	case "plugins":
 		if len(args) >= 2 && args[1] == "download" {
 			if len(args) != 3 {

@@ -22,7 +22,7 @@ func TestApprovedTrustIdentity(t *testing.T) {
 		t.Fatal("caller changed trusted key")
 	}
 	identity, err := OfficialTrust()
-	if err != nil || identity.Fingerprint != fingerprint || identity.ReplacementEnabled || identity.Scope != PackageScope {
+	if err != nil || identity.Fingerprint != fingerprint || identity.ReplacementEnabled != ProductionEnabled || identity.Scope != PackageScope {
 		t.Fatal(identity, err)
 	}
 	_, fp, err := parseSSHPublicKey(strings.ReplaceAll(OfficialSSHPublicKey, "atomy@atomy.cloud", "different comment"))

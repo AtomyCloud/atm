@@ -64,7 +64,7 @@ atm_release_test_main() {
     "$runtime/atm" --dry-run --json path apply --plugins > "$lab/integration-plan.json"
     printf 'Plugin integration dry-run plan: %s\n' "$lab/integration-plan.json"
     "$runtime/atm" --dry-run --json recover-core --root "$lab/missing-runtime"
-    printf '\nPASS: offline checks. Production replacement remains disabled.\n'
+    printf '\nPASS: offline checks. No production mutation was requested.\n'
     if (( ! no_tui )); then
         if [[ -t 0 && -t 1 ]]; then
             printf 'Opening the TUI in dry-run mode; no application installers will run.\n'

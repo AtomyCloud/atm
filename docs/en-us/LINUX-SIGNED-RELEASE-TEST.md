@@ -6,6 +6,11 @@ Linux amd64 and arm64 packages were signed through the maintainer's existing
 ssh-agent. No private key was opened/exported, and nothing was published to GitHub.
 The packages still have production enrollment/update/recovery disabled.
 
+Checkpoint: the maintainer accepted this test and subsequently authorized enabling
+the routes in source (Patch v27.9). These existing signed artifacts were NOT rebuilt
+or overwritten. This guide intentionally continues to expect their original false
+capability. New source builds report true; checking trust is still read-only.
+
 Signature fingerprint:
 
 ```text

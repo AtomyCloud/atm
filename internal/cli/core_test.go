@@ -169,7 +169,7 @@ func TestReleaseTrustAndPackageDryRunAreOffline(t *testing.T) {
 	var trust struct {
 		Value coreupdate.TrustIdentity `json:"result"`
 	}
-	if err := json.Unmarshal(out.Bytes(), &trust); err != nil || trust.Value.Fingerprint != coreupdate.OfficialKeyFingerprint || trust.Value.ReplacementEnabled {
+	if err := json.Unmarshal(out.Bytes(), &trust); err != nil || trust.Value.Fingerprint != coreupdate.OfficialKeyFingerprint || trust.Value.ReplacementEnabled != coreupdate.ProductionEnabled {
 		t.Fatal(out.String(), err)
 	}
 	out.Reset()

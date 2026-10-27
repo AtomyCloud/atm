@@ -8,12 +8,12 @@ import (
 	"os"
 )
 
-// ProductionStatus separates an approved signing identity from a working updater.
-const ProductionStatus = "blocked: native full-package services implemented; production authorization and signed release acceptance pending"
+// Capability does not imply enrollment, a newer release or target-host acceptance.
+const ProductionStatus = "enabled: signed full-package enrollment/update/recovery require explicit consent; Windows requires an external trusted executable"
 
-// Enabling installed-copy mutation needs a separate, explicit owner decision.
-// Fixture tests call library services directly; no runtime key or gate override.
-const ProductionEnabled = false
+// The maintainer approved code activation after validating the signed Linux
+// release on 2026-10-27. No runtime key/gate override or automatic installation.
+const ProductionEnabled = true
 
 var ErrProductionDisabled = errors.New("full-package production mutation is disabled pending explicit release/cutover authorization")
 
@@ -51,7 +51,7 @@ func VerifyOfficialPackageFiles(ctx context.Context, manifest, signature, archiv
 	if err != nil {
 		return result, err
 	}
-	return VerifiedPackage{Manifest: m, Fingerprint: OfficialKeyFingerprint, Files: len(files)}, nil
+	return VerifiedPackage{Manifest: m, Fingerprint: OfficialKeyFingerprint, Files: len(files), ReplacementEnabled: ProductionEnabled}, nil
 }
 
 func readVerificationFile(path string, limit int64) ([]byte, error) {

@@ -1,11 +1,12 @@
 # ATM Release Signing
 
-Status: approved public identity, authenticated discovery and native full-package
-transaction services (Patch v27.7). Production mutation is explicitly disabled
-until a real signed release is validated, per maintainer decision; production
-cutover remains a separate approval. Patch v27.8 created local signed Linux 0.0.2
-candidates from clean commit 6c8b9be. Both passed the Go verifier; human acceptance
-is pending. No signing secrets or CI signing jobs were provisioned.
+Status: signed CORE enrollment/update/recovery are enabled in source (Patch v27.9)
+after the maintainer validated the signed Linux test and explicitly authorized code
+activation on 2026-10-27. Every mutation still requires confirmation and a valid
+signature/baseline. No update runs merely by checking, verifying or starting ATM.
+The original signed 0.0.2 artifacts from commit 6c8b9be remain unchanged and retain
+their disabled gate. No new release was published or real installation updated.
+No signing secrets or CI signing jobs were provisioned.
 
 ## Approved Identity
 
@@ -119,11 +120,12 @@ against the corresponding official commit to establish a new plugin baseline.
 Existing independently updated/edited owned plugins block full-package updates;
 no automatic merge, force overwrite or rollback of those edits is provided.
 
-## Remaining Production Gates
+## Remaining Acceptance
 
-- Human acceptance of the locally signed Linux candidates; CI signing is not configured.
-- Explicit authorization to enable production enrollment/replacement/recovery.
-- Real signed-release acceptance and independent freshness/key-lifecycle policy.
+- The local signed Linux dry-run test was accepted; CI signing is not configured.
+- New enabled release build/publication and real installed-copy operation are separate actions.
+- Actual signed upgrade between distinct stable versions and recovery acceptance.
+- Independent freshness/key rotation/revocation policy.
 - Actual target-platform and Windows file-in-use/external-updater acceptance.
 - User validation of conflict handling and independent plugin receipt rebaselining.
 

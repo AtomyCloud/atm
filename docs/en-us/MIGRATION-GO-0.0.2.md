@@ -48,7 +48,7 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 | Plugin code inspection/update/recovery | Native Go | Native Go; real validation pending |
 | Portable setup and ATM user PATH | Native Go | Native Go; real validation pending |
 | Full Setup orchestration | Native Go; legacy apps explicitly bridged | Native plugins only; app ports pending |
-| Compiled CORE self-update | Approved key; offline full-package verification; replacement pending | Same verification; replacement and runtime acceptance pending |
+| Compiled CORE self-update | Signed enrollment/update/recovery enabled with consent; actual newer-release acceptance pending | Enabled with external trusted executable; automated handoff and host acceptance pending |
 | Native Node, Go and VS Code application backends | Pending | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
@@ -185,8 +185,12 @@ and builds from a dirty checkout are marked `-dirty`.
 
 Checksums detect corruption; they are **not signatures or proof of origin**.
 The maintainer-approved Ed25519 public key is embedded, and signed full-package
-verification is available offline. Release signing, source-to-artifact verification
-and production replacement remain pending. CI runs Linux/Windows/macOS tests. With the repository owner's explicit
+verification is available offline. Local Linux0.0.2 packages were signed and the
+human dry-run test was approved. Patch v27.9 enables signed enrollment/update/recovery
+in source with explicit consent. Existing signed artifacts keep their original
+disabled gate; no real installation or published release was replaced. Actual
+newer-version upgrade and target-host acceptance remain pending. CI runs
+Linux/Windows/macOS tests. With the repository owner's explicit
 approval, pushes and manual runs in `AtomyCloud/atm` also upload the five
 platform packages to GitHub Actions Artifacts for 14 days. Pull requests and
 fork repositories do not upload packages. There is no automatic public release

@@ -178,6 +178,36 @@ func TestRecoverCoreProductionDisabledBeforeFilesystemAccess(t *testing.T) {
 	}
 }
 
+func TestEnabledRecoveryStillRequiresTrustPolicy(t *testing.T) {
+	if !coreupdate.ProductionEnabled {
+		t.Skip("production routes disabled")
+	}
+	root, _ := recoveryCLIFixture(t)
+	before := recoveryCLISnapshot(t, root)
+	var out bytes.Buffer
+	err := executeRecovery(context.Background(), coreupdate.BundlePolicy{Root: filepath.Join(root, "missing")}, &out)
+	if !errors.Is(err, coreupdate.ErrNoTrustAnchor) {
+		t.Fatal("invalid trust policy accepted", err)
+	}
+	if !reflect.DeepEqual(before, recoveryCLISnapshot(t, root)) {
+		t.Fatal("untrusted recovery wrote files")
+	}
+}
+
+func TestCoreReleaseNilInputNeedsExplicitConsent(t *testing.T) {
+	root, home := recoveryCLIFixture(t)
+	before := recoveryCLISnapshot(t, root)
+	for _, args := range [][]string{{"updates", "core"}, {"updates", "enroll-core", "missing.json", "missing.sig", "missing.tar.gz"}} {
+		var out, stderr bytes.Buffer
+		if code := Run(append([]string{"--home", home}, args...), nil, &out, &stderr); code == 0 || !strings.Contains(stderr.String(), "require --yes") {
+			t.Fatal(code, stderr.String())
+		}
+	}
+	if !reflect.DeepEqual(before, recoveryCLISnapshot(t, root)) {
+		t.Fatal("missing input changed state")
+	}
+}
+
 func TestRecoverCoreRejectsInvalidArgumentsWithoutWriting(t *testing.T) {
 	root, _ := recoveryCLIFixture(t)
 	missing := filepath.Join(root, "missing")

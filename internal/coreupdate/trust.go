@@ -36,7 +36,7 @@ func OfficialTrust() (TrustIdentity, error) {
 	if _, err := OfficialPublicKey(); err != nil {
 		return TrustIdentity{}, err
 	}
-	return TrustIdentity{"Ed25519", OfficialKeyFingerprint, OfficialSSHPublicKey, PackageScope, false}, nil
+	return TrustIdentity{"Ed25519", OfficialKeyFingerprint, OfficialSSHPublicKey, PackageScope, ProductionEnabled}, nil
 }
 
 func parseSSHPublicKey(text string) (ed25519.PublicKey, string, error) {

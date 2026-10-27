@@ -3,8 +3,8 @@
 > **Go migration v0.0.2 (in progress):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Existing Linux plugins run
-> through a compatibility backend; native Windows application installation and
-> compiled CORE self-update are not available yet. The original `bin/atm` is
+> through a compatibility backend; native Windows application installation remains
+> pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).
 > macOS Terminal packages are also built for Intel and Apple Silicon. Native
 > installation services are under development; application plugin ports remain pending.
@@ -15,7 +15,8 @@
 > integration and Full Setup orchestration now have native Go routes. The release
 > signing key is approved; authenticated discovery, signed package verification,
 > staged full-package replacement and independent recovery services are implemented.
-> Production replacement remains explicitly disabled pending release/cutover approval.
+> Signed CORE enrollment/update/recovery routes are enabled after maintainer approval;
+> source checkouts and modified owned files are never automatically replaced.
 > The plugin integration contract is native; application backends and real-platform
 > acceptance remain pending. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
 

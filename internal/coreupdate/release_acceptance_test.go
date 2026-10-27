@@ -22,10 +22,10 @@ func TestSignedLinuxReleaseArtifacts(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			if r.Fingerprint != OfficialKeyFingerprint || r.Manifest.Version != "0.0.2" || r.Files == 0 || r.ReplacementEnabled || ProductionEnabled {
+			if r.Fingerprint != OfficialKeyFingerprint || r.Manifest.Version != "0.0.2" || r.Files == 0 || r.ReplacementEnabled != ProductionEnabled {
 				t.Fatal("invalid acceptance result", r)
 			}
-			t.Logf("verified %s, commit=%s, files=%d, fingerprint=%s; production remains disabled", arch, r.Manifest.Commit, r.Files, r.Fingerprint)
+			t.Logf("verified %s, commit=%s, files=%d, fingerprint=%s; verifier capability enabled=%t; inspection is read-only", arch, r.Manifest.Commit, r.Files, r.Fingerprint, ProductionEnabled)
 		})
 	}
 }

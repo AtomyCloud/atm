@@ -35,7 +35,7 @@ func executeCore(c config.Config, args []string, plugins []plugin.Plugin, in *os
 	if c.DryRun {
 		return outputJSON(out, p)
 	}
-	if p.Mutating && !c.AssumeYes && (asJSON || !term.IsTerminal(in.Fd())) {
+	if p.Mutating && !c.AssumeYes && (asJSON || in == nil || !term.IsTerminal(in.Fd())) {
 		return fmt.Errorf("CORE changes require --yes or interactive confirmation")
 	}
 	ctx, stop := coreContext(c)

@@ -160,6 +160,11 @@ func TestReleaseConsentAndProductionGateDoNotWrite(t *testing.T) {
 			if !errors.Is(err, coreupdate.ErrProductionDisabled) || result.RestartRequired || len(result.ChangedPlugins) != 0 {
 				t.Fatal("production gate bypassed", result, err)
 			}
+		} else {
+			result, err := Execute(context.Background(), c, e, true)
+			if err == nil || !strings.Contains(err.Error(), "missing signed release plan") || result.RestartRequired {
+				t.Fatal("enabled route accepted an unprepared request", result, err)
+			}
 		}
 	}
 	if !reflect.DeepEqual(before, releaseTestSnapshot(t, root)) {

@@ -18,6 +18,7 @@ import (
 	"github.com/AtomyCloud/atm/internal/catalog"
 	"github.com/AtomyCloud/atm/internal/config"
 	"github.com/AtomyCloud/atm/internal/core"
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 	"github.com/AtomyCloud/atm/internal/i18n"
 	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/protocol"
@@ -515,7 +516,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "core":
 		switch key {
 		case "doctor":
-			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nNative integration contract: available; app backends pending\nCompiled CORE updater: production blocked pending explicit authorization", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
+			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nNative integration contract: available; app backends pending\nCompiled CORE updater: %s", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins), coreupdate.ProductionStatus)
 			m.navigate("message")
 		case "download":
 			m.navigate("download")

@@ -1,6 +1,6 @@
 # Native CORE Administration
 
-ATM 0.0.2 migration build, Patch v27.7. CORE administrative commands now dispatch
+ATM 0.0.2 migration build, Patch v27.9. CORE administrative commands now dispatch
 to Go services rather than `bash bin/atm`. This does not claim that all application
 plugins or production self-update have migrated. No installed copy is replaced
 merely by starting the new executable.
@@ -146,8 +146,9 @@ old binary-only manifests cannot authorize a full-package update. Unknown regula
 files/directories are preserved; edited owned files, independently updated
 bundled plugins and collisions block replacement.
 
-These native routes are implemented, but their mutation gate remains disabled
-even with `--yes`, pending explicit release/cutover authorization:
+After the maintainer accepted the signed Linux test and explicitly authorized
+activation, these native routes are enabled in source. Every mutation requires
+interactive confirmation or `--yes`, with the same signature and ownership checks:
 
 ```bash
 atm updates enroll-core manifest.json manifest.sig archive.tar.gz
@@ -164,7 +165,20 @@ requires that external executable for replacement too; automatic handoff is not
 implemented. After replacement or any result requiring recovery, the TUI locks
 the session until exit. Other ATM sessions must be stopped before updating.
 
-No private key was accessed, created or published. See
+The signed package must match the enrolled installation. Source checkouts,
+unsigned baselines and owned local edits are refused; updates must have a strictly
+newer stable version. Approval did not authorize automatic installation, arbitrary
+keys, forced replacement or automatic downgrade. `replacement_enabled` reports
+the running verifier's capability, not a guarantee that any chosen package/root
+is eligible. Package verification itself remains read-only.
+
+The original signed 0.0.2 Linux candidate from commit 6c8b9be is unchanged and
+still reports false; a newly built executable reports true. No real installed
+ATM or signed artifact was overwritten as part of activation. `doctor` now emits
+CORE trust/recovery diagnostics even if plugin discovery fails, with null plugin
+count, explicit discovery error and nonzero exit status.
+
+No private-key file was opened, created or published. See
 [release signing](RELEASE-SIGNING.md) for formats, preservation limits,
 independent plugin receipts and remaining acceptance gates. Signed local
 enrollment/inspection and explicit plugin baseline verification remain CLI-only;
@@ -175,9 +189,24 @@ The earlier binary-only library remains experimental. Its Linux/macOS transactio
 can now be explicitly finalized into retained history after verification, allowing
 another transaction with a separately trusted baseline. It is not wired into the
 full-package updater. Fixture tests exercise the full-package path independently.
-Actual signing, target-host acceptance and production enablement remain pending.
+Real Linux package signatures and the human dry-run test were validated. Actual
+newer-version production upgrade and target-host acceptance remain pending.
 
 ## Validation Boundaries
+
+Optional real-signature CLI acceptance on a native Linux host:
+
+```bash
+ATM_TEST_SIGNED_RELEASE_DIR="$PWD/binary/v0.0.2-6c8b9be" \
+  go test ./internal/cli -run '^TestSignedReleaseCLILifecycle$' -count=1 -v
+```
+
+This test copies the existing signed artifacts into temporary fixtures, enrolls
+the verified package, exercises consent/dry-run/tamper/same-version refusals, then
+recovers the exact pre-enrollment tree while retaining the displaced candidate.
+It uses the real embedded public key without a fixture-key or gate override.
+The actual artifacts, personal configuration and installed ATM are not modified.
+This verifies undoing enrollment, not an upgrade between two real release versions.
 
 Go tests exercise temporary runtime, state, profile and backup roots, including
 corruption, cancellation, local edits and interrupted publication. CLI/TUI tests
