@@ -6,6 +6,8 @@
 > through a compatibility backend; native Windows application installation and
 > compiled CORE self-update are not available yet. The original `bin/atm` is
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).
+> macOS Terminal packages are also built for Intel and Apple Silicon. Native
+> installation services are under development; application plugin ports remain pending.
 
 <div align="center">
 

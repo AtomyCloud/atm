@@ -58,7 +58,7 @@ Global options (before the command):
   --demo        Simulate TUI operations without executing them
   --version     Show migration version and source commit
 
-Native JSONL executors support Linux and Windows; application ports are pending.
+Native JSONL executors support Linux, macOS and Windows; application ports are pending.
 Linux application operations still require the existing Bash dependencies.
 Compiled CORE self-update is not enabled; bin/atm remains the legacy entrypoint.
 `

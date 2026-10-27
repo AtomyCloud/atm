@@ -13,7 +13,7 @@
     "description": {"type": "string"},
     "order": {"type": "integer"},
     "min_core_api": {"const": 2},
-    "platforms": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["linux", "windows"]}},
+    "platforms": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"enum": ["linux", "windows", "darwin"]}},
     "executor": {"const": "native"},
     "protocol": {"const": "jsonl-v1"},
     "operations": {
@@ -25,6 +25,8 @@
       "properties": {
         "linux/amd64": {"$ref": "#/$defs/path"},
         "linux/arm64": {"$ref": "#/$defs/path"},
+        "darwin/amd64": {"$ref": "#/$defs/path"},
+        "darwin/arm64": {"$ref": "#/$defs/path"},
         "windows/amd64": {"allOf": [{"$ref": "#/$defs/path"}, {"pattern": "\\.[eE][xX][eE]$"}]}
       }
     }

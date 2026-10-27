@@ -30,7 +30,7 @@ type payload struct {
 var stamp = time.Date(1980, 1, 1, 0, 0, 0, 0, time.UTC)
 
 func main() {
-	targetOS := flag.String("os", "linux", "linux or windows")
+	targetOS := flag.String("os", "linux", "linux, darwin or windows")
 	arch := flag.String("arch", "amd64", "amd64 or arm64")
 	out := flag.String("out", "", "local output directory (required)")
 	flag.Parse()
@@ -44,7 +44,7 @@ func build(targetOS, arch, out string) error {
 	if out == "" {
 		return fmt.Errorf("--out is required")
 	}
-	if !(targetOS == "linux" && (arch == "amd64" || arch == "arm64") || targetOS == "windows" && arch == "amd64") {
+	if !((targetOS == "linux" || targetOS == "darwin") && (arch == "amd64" || arch == "arm64") || targetOS == "windows" && arch == "amd64") {
 		return fmt.Errorf("unsupported migration build target %s/%s", targetOS, arch)
 	}
 	if _, err := os.Stat("go.mod"); err != nil {

@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"encoding/binary"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -11,7 +12,40 @@ import (
 )
 
 func nativeSample() Manifest {
-	return Manifest{Schema: 2, ID: "fixture", Name: "Fixture", Version: "0.0.1", MinAPI: 2, Platforms: []string{"linux", "windows"}, Executor: "native", Protocol: "jsonl-v1", Operations: []string{"status", "install"}, Executables: map[string]string{"linux/amd64": "bin/fixture", "linux/arm64": "bin/fixture", "windows/amd64": "bin/fixture.exe"}}
+	return Manifest{Schema: 2, ID: "fixture", Name: "Fixture", Version: "0.0.1", MinAPI: 2, Platforms: []string{"linux", "windows", "darwin"}, Executor: "native", Protocol: "jsonl-v1", Operations: []string{"status", "install"}, Executables: map[string]string{"linux/amd64": "bin/fixture", "linux/arm64": "bin/fixture", "windows/amd64": "bin/fixture.exe", "darwin/amd64": "bin/fixture", "darwin/arm64": "bin/fixture"}}
+}
+
+func TestMachOArchitectureValidation(t *testing.T) {
+	for _, target := range []struct {
+		name string
+		cpu  uint32
+	}{{"darwin/amd64", 0x01000007}, {"darwin/arm64", 0x0100000c}} {
+		h := make([]byte, 64)
+		binary.LittleEndian.PutUint32(h, 0xfeedfacf)
+		binary.LittleEndian.PutUint32(h[4:], target.cpu)
+		binary.LittleEndian.PutUint32(h[12:], 2)
+		path := filepath.Join(t.TempDir(), "native")
+		if err := os.WriteFile(path, h, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if err := CheckBinary(path, target.name); err != nil {
+			t.Fatal(err)
+		}
+		other := "darwin/arm64"
+		if target.name == other {
+			other = "darwin/amd64"
+		}
+		if CheckBinary(path, other) == nil {
+			t.Fatal("wrong Mach-O architecture accepted")
+		}
+		binary.LittleEndian.PutUint32(h[12:], 6)
+		if err := os.WriteFile(path, h, 0700); err != nil {
+			t.Fatal(err)
+		}
+		if CheckBinary(path, target.name) == nil {
+			t.Fatal("Mach-O library accepted as executable")
+		}
+	}
 }
 
 func TestNativeManifestPathsAndTargets(t *testing.T) {
@@ -69,7 +103,7 @@ func TestNativeDiscoveryAndExecutableChecks(t *testing.T) {
 	if err := CheckBinary(path, runtime.GOOS+"/"+runtime.GOARCH); err == nil {
 		t.Fatal("nonbinary accepted")
 	}
-	if _, err := p[0].NativeExecutable("darwin/arm64"); err == nil {
+	if _, err := p[0].NativeExecutable("freebsd/arm64"); err == nil {
 		t.Fatal("unsupported target accepted")
 	}
 	if runtime.GOOS == "linux" {

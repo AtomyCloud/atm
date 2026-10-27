@@ -1,4 +1,4 @@
-//go:build !linux && !windows
+//go:build !linux && !darwin && !windows
 
 package runner
 
@@ -10,7 +10,7 @@ import (
 type processTree struct{}
 
 func prepareProcess(*exec.Cmd) (*processTree, error) {
-	return nil, fmt.Errorf("native execution is supported on Linux and Windows only")
+	return nil, fmt.Errorf("native execution is supported on Linux, macOS and Windows only")
 }
 func (*processTree) attach(*exec.Cmd) error { return nil }
 func (*processTree) kill()                  {}

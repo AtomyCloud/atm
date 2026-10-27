@@ -10,12 +10,19 @@ import tempfile
 import zipfile
 
 
-def verify(directory):
-    for platform, extension, machine in (
+def verify(directory, selected=()):
+    targets = (
         ("linux-amd64", ".tar.gz", 62),
         ("linux-arm64", ".tar.gz", 183),
         ("windows-amd64", ".zip", 0x8664),
-    ):
+        ("darwin-amd64", ".tar.gz", 0x01000007),
+        ("darwin-arm64", ".tar.gz", 0x0100000C),
+    )
+    if set(selected) - {target[0] for target in targets}:
+        raise ValueError("unsupported package target")
+    for platform, extension, machine in targets:
+        if selected and platform not in selected:
+            continue
         root = "atm-0.0.2-" + platform
         path = directory / (root + extension)
         expected = (directory / (path.name + ".sha256")).read_text().split()[0]
@@ -43,6 +50,10 @@ def verify(directory):
             pe = struct.unpack_from("<I", exe, 0x3C)[0]
             assert exe[pe:pe + 4] == b"PE\x00\x00"
             assert struct.unpack_from("<H", exe, pe + 4)[0] == machine
+        elif platform.startswith("darwin"):
+            assert exe[:4] == b"\xcf\xfa\xed\xfe"
+            assert struct.unpack_from("<I", exe, 4)[0] == machine
+            assert struct.unpack_from("<I", exe, 12)[0] == 2
         else:
             assert exe[:4] == b"\x7fELF"
             assert struct.unpack_from("<H", exe, 18)[0] == machine
@@ -59,4 +70,4 @@ def verify(directory):
 
 
 if __name__ == "__main__":
-    verify(Path(sys.argv[1]))
+    verify(Path(sys.argv[1]), sys.argv[2:])

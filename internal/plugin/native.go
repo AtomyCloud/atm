@@ -1,6 +1,7 @@
 package plugin
 
 import (
+	"debug/macho"
 	"encoding/binary"
 	"fmt"
 	"io/fs"
@@ -11,7 +12,7 @@ import (
 )
 
 var NativeActions = []string{"status", "install", "update", "remove", "uninstall", "use"}
-var NativeTargets = []string{"linux/amd64", "linux/arm64", "windows/amd64"}
+var NativeTargets = []string{"linux/amd64", "linux/arm64", "windows/amd64", "darwin/amd64", "darwin/arm64"}
 
 func (m Manifest) validateNative() error {
 	if m.Executor != "native" || m.Protocol != "jsonl-v1" {
@@ -22,7 +23,7 @@ func (m Manifest) validateNative() error {
 	}
 	seen := map[string]bool{}
 	for _, platform := range m.Platforms {
-		if (platform != "linux" && platform != "windows") || seen[platform] {
+		if (platform != "linux" && platform != "windows" && platform != "darwin") || seen[platform] {
 			return fmt.Errorf("invalid/duplicate native platform: %s", platform)
 		}
 		seen[platform] = true
@@ -110,13 +111,28 @@ func (p Plugin) NativeExecutable(target string) (string, error) {
 	if !info.Mode().IsRegular() {
 		return "", fmt.Errorf("native entrypoint is not a regular file")
 	}
-	if strings.HasPrefix(target, "linux/") && info.Mode().Perm()&0111 == 0 {
+	if !strings.HasPrefix(target, "windows/") && info.Mode().Perm()&0111 == 0 {
 		return "", fmt.Errorf("native entrypoint is not executable")
 	}
 	return path, nil
 }
 
 func CheckBinary(path, target string) error {
+	if target == "darwin/amd64" || target == "darwin/arm64" {
+		f, err := macho.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+		cpu := macho.CpuAmd64
+		if target == "darwin/arm64" {
+			cpu = macho.CpuArm64
+		}
+		if f.Cpu != cpu || f.Type != macho.TypeExec {
+			return fmt.Errorf("native binary does not match %s", target)
+		}
+		return nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return err

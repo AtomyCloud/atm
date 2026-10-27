@@ -13,7 +13,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest]
+        os: [ubuntu-latest, windows-latest, macos-15-intel, macos-15]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v7
@@ -24,8 +24,8 @@ jobs:
           go-version-file: go.mod
       - run: go test ./...
       - run: go vet ./...
-      - name: Linux race checks
-        if: runner.os == 'Linux'
+      - name: Unix race checks
+        if: runner.os != 'Windows'
         run: go test -race ./...
       - name: Legacy CORE regression checks
         if: runner.os == 'Linux'
@@ -58,6 +58,10 @@ jobs:
             arch: arm64
           - os: windows
             arch: amd64
+          - os: darwin
+            arch: amd64
+          - os: darwin
+            arch: arm64
     steps:
       - uses: actions/checkout@v7
         with:
@@ -66,6 +70,8 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go run ./tools/package -os ${{ matrix.os }} -arch ${{ matrix.arch }} -out "$RUNNER_TEMP/packages"
+      - name: Verify package integrity and architecture
+        run: python3 tests/check_go_packages.py "$RUNNER_TEMP/packages" "${{ matrix.os }}-${{ matrix.arch }}"
       - uses: actions/upload-artifact@v7
         with:
           name: atm-0.0.2-${{ matrix.os }}-${{ matrix.arch }}

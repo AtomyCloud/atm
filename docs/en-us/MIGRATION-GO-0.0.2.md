@@ -20,7 +20,11 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 - External native executable contract (schema 2 / JSONL v1), real asynchronous
   progress/logs, confirmation, timeout and cancellation with process cleanup.
   Validated with an isolated fixture; production application ports remain pending.
-- Linux amd64/arm64 and Windows amd64 local packages with SHA-256 checksums and
+- Internal native installation services: bounded HTTPS downloads, SHA-256,
+  confined archive extraction, owned receipts, locks and recoverable activation.
+  These are not wired to production plugin menus yet; see
+  [Native Installation Services](https://github.com/AtomyCloud/atm/blob/main/docs/en-us/NATIVE-INSTALLATION-SERVICES.md).
+- Linux amd64/arm64, macOS Intel/Apple Silicon and Windows amd64 packages with SHA-256 checksums and
   a `release.json` file mapping the build's source commit and payload hashes.
 
 ## Platform Support
@@ -33,6 +37,12 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 | Official catalog and plugin code updates | Existing Bash/Python backend | Pending native implementation |
 | Compiled CORE self-update | Pending | Pending |
 | Native Node, Go and VS Code application backends | Pending | Pending |
+
+macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
+executables, native process-group execution and CI test jobs for both architectures.
+Local cross-builds are not macOS runtime approval. Existing Bash plugins remain
+Linux-only on macOS too. This delivery does not create a Finder `.app`, DMG,
+Developer ID signature or notarized release, and does not bypass Gatekeeper.
 
 The frontend does not need Go installed. Linux application operations still
 require Bash and each plugin's existing dependencies. The Windows frontend does
@@ -56,7 +66,7 @@ only explicitly selected and confirmed operations. It does not install anything
 merely by listing plugins.
 
 For a packaged distribution, extract into a new directory and run `./atm` on
-Linux or `.\atm.exe` in PowerShell. Keep the bundled runtime directories beside
+Linux/macOS or `.\atm.exe` in PowerShell. Keep the bundled runtime directories beside
 the executable. Do not overwrite an existing `~/Apps/atm` installation with this
 migration build. The existing `bin/atm` remains the original Bash entrypoint.
 
@@ -140,6 +150,8 @@ Repository tests still enforce parity for all 16 legacy declarations.
 go run ./tools/package -os linux -arch amd64 -out /tmp/atm-packages
 go run ./tools/package -os linux -arch arm64 -out /tmp/atm-packages
 go run ./tools/package -os windows -arch amd64 -out /tmp/atm-packages
+go run ./tools/package -os darwin -arch amd64 -out /tmp/atm-packages
+go run ./tools/package -os darwin -arch arm64 -out /tmp/atm-packages
 ```
 
 Existing output archives are never overwritten. Packages contain the executable,
@@ -150,8 +162,8 @@ and builds from a dirty checkout are marked `-dirty`.
 
 Checksums detect corruption; they are **not signatures or proof of origin**.
 Release signing, source-to-artifact verification and an updater trust root are
-pending. CI runs Linux/Windows tests. With the repository owner's explicit
-approval, pushes and manual runs in `AtomyCloud/atm` also upload the three
+pending. CI runs Linux/Windows/macOS tests. With the repository owner's explicit
+approval, pushes and manual runs in `AtomyCloud/atm` also upload the five
 platform packages to GitHub Actions Artifacts for 14 days. Pull requests and
 fork repositories do not upload packages. There is no automatic public release
 creation or installation. No workflow has been triggered by this local work.
@@ -175,10 +187,10 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 
 ## Remaining Migration Work
 
-1. Port catalog/download/extraction/receipt operations to Go, preserving source
-   pinning, ownership boundaries, no-write dry-run and existing recovery guarantees.
-2. Add recoverable installation transactions to the implemented native executor;
-   migrate application-specific interactive menus into native screens.
+1. Integrate the native download/extraction/receipt/activation services with the
+   first real plugin; add its required archive-link handling and managed removal.
+2. Port the official catalog to Go and migrate application-specific interactive
+   menus into native screens, preserving pinning and existing ownership guards.
 3. Deliver native Node, then Go and VS Code backends with verified official
    artifacts, stable launchers, ownership checks and version switching.
 4. Implement compiled CORE updates, signing/trust verification, file-in-use

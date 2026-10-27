@@ -21,14 +21,16 @@ See [the schema](../schema/plugin-v2.schema.json) and the repository fixture at
   "description": "Native application management",
   "order": 1,
   "min_core_api": 2,
-  "platforms": ["linux", "windows"],
+  "platforms": ["linux", "windows", "darwin"],
   "executor": "native",
   "protocol": "jsonl-v1",
   "operations": ["status", "install", "update", "uninstall"],
   "executables": {
     "linux/amd64": "bin/linux-amd64/example",
     "linux/arm64": "bin/linux-arm64/example",
-    "windows/amd64": "bin/windows-amd64/example.exe"
+    "windows/amd64": "bin/windows-amd64/example.exe",
+    "darwin/amd64": "bin/darwin-amd64/example",
+    "darwin/arm64": "bin/darwin-arm64/example"
   }
 }
 ```
@@ -38,7 +40,7 @@ missing binaries and nonexecutable Linux files are unavailable before launch.
 Entrypoints must be regular files inside the plugin directory: absolute paths,
 traversal, symlink entrypoints/parents and Windows reserved names are refused.
 Portable relative paths use `/` even on Windows. Spaces and Unicode are allowed.
-ATM rechecks the manifest, executable path and ELF/PE architecture at execution.
+ATM rechecks the manifest, executable path and ELF/PE/Mach-O architecture at execution.
 Discovery reads metadata and file attributes; it never probes plugin commands.
 
 The executable starts directly, without Bash, PowerShell, `cmd.exe`, command
@@ -117,7 +119,7 @@ Real native `--json` emits JSONL events and one validated terminal outcome.
 Default deadline is 15 minutes; `--timeout` changes it for CLI and TUI operations.
 CLI Ctrl+C cancels; no interactive stdin is forwarded after confirmation.
 
-Linux uses a dedicated process group. Windows creates a suspended process,
+Linux and macOS use a dedicated process group. Windows creates a suspended process,
 assigns it to a kill-on-close Job Object, then resumes its initial thread. Job
 assignment failure aborts before plugin code runs. See Microsoft's
 [process creation flags](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags)
@@ -131,8 +133,9 @@ not leave background services or detach children from the process group/job.
 The plugin has the current user's privileges. Escaped Linux process groups,
 concurrent replacement of trusted files and hostile native code are not isolated.
 Cancellation can leave partial application changes. Recoverable staging,
-installation locks, receipts and activation rollback are the next migration
-slice; do not port real installers without those safeguards. Native plugin
+installation locks, receipts and recoverable activation are now available as
+[internal services](NATIVE-INSTALLATION-SERVICES.md), but existing plugins do not
+use them automatically; do not port real installers without those safeguards. Native plugin
 distribution/code updates are not implemented by the legacy catalog/updater.
 
 ## Isolated Validation
