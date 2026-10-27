@@ -1,0 +1,18 @@
+{
+  "schema": 2,
+  "id": "native_fixture",
+  "name": "Native fixture",
+  "version": "0.0.1",
+  "description": "Isolated native protocol fixture; no application installation",
+  "order": 1,
+  "min_core_api": 2,
+  "platforms": ["linux", "windows"],
+  "executor": "native",
+  "protocol": "jsonl-v1",
+  "operations": ["status", "install", "update"],
+  "executables": {
+    "linux/amd64": "bin/fixture",
+    "linux/arm64": "bin/fixture",
+    "windows/amd64": "bin/fixture.exe"
+  }
+}

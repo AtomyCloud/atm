@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"runtime"
+	"time"
 
 	"github.com/AtomyCloud/atm/internal/data"
 )
@@ -22,17 +23,19 @@ type Preferences struct {
 }
 
 type Config struct {
-	Home        string
-	PluginsDir  string
-	ConfigDir   string
-	AppsDir     string
-	Language    string
-	Sort        string
-	DryRun      bool
-	NoMouse     bool
-	NoAnimation bool
-	Preferences Preferences
-	Disabled    map[string]bool
+	Home          string
+	PluginsDir    string
+	ConfigDir     string
+	AppsDir       string
+	Language      string
+	Sort          string
+	DryRun        bool
+	NoMouse       bool
+	NoAnimation   bool
+	NativeTimeout time.Duration
+	AssumeYes     bool
+	Preferences   Preferences
+	Disabled      map[string]bool
 }
 
 func ResolveHome(explicit string) (string, error) {

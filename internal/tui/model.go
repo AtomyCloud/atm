@@ -18,6 +18,7 @@ import (
 	"github.com/AtomyCloud/atm/internal/config"
 	"github.com/AtomyCloud/atm/internal/i18n"
 	"github.com/AtomyCloud/atm/internal/plugin"
+	"github.com/AtomyCloud/atm/internal/protocol"
 	"github.com/AtomyCloud/atm/internal/runner"
 	"github.com/AtomyCloud/atm/internal/version"
 )
@@ -31,26 +32,31 @@ type hit struct {
 }
 
 type Model struct {
-	c              config.Config
-	words          i18n.Catalog
-	plugins        []plugin.Plugin
-	locales        []string
-	screen         string
-	selected       string
-	cursor, offset int
-	width, height  int
-	input          textinput.Model
-	editing        bool
-	pendingAction  string
-	plan           runner.Plan
-	message        string
-	status         string
-	results        []string
-	started, now   time.Time
-	demo           bool
-	demoStart      time.Time
-	bar            progress.Model
-	color          bool
+	c               config.Config
+	words           i18n.Catalog
+	plugins         []plugin.Plugin
+	locales         []string
+	screen          string
+	selected        string
+	cursor, offset  int
+	width, height   int
+	input           textinput.Model
+	editing         bool
+	pendingAction   string
+	plan            runner.Plan
+	message         string
+	status          string
+	results         []string
+	started, now    time.Time
+	demo            bool
+	demoStart       time.Time
+	bar             progress.Model
+	color           bool
+	controller      *nativeController
+	active          *nativeSession
+	nativeLogs      []string
+	nativeProgress  float64
+	quitAfterNative bool
 }
 
 func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool) Model {
@@ -62,7 +68,8 @@ func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool
 	now := time.Now()
 	return Model{c: c, plugins: plugins, words: words, locales: locales, screen: "plugins", input: input,
 		width: 80, height: 24, started: now, now: now, demo: demo,
-		bar: progress.New(progress.WithDefaultBlend()), color: os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb",
+		controller: &nativeController{},
+		bar:        progress.New(progress.WithDefaultBlend()), color: os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb",
 		status: words.T("ATM_TUI_READY")}
 }
 
@@ -86,6 +93,9 @@ func (m Model) rows() []row {
 				continue
 			}
 			state := m.words.T("ATM_TUI_LEGACY")
+			if p.Executor == "native" {
+				state = m.words.T("ATM_TUI_NATIVE")
+			}
 			if !p.Available {
 				state = p.Reason
 			}
@@ -99,7 +109,9 @@ func (m Model) rows() []row {
 		for _, action := range p.Operations {
 			rows = append(rows, row{action, m.words.T("ATM_TUI_" + strings.ToUpper(action)), ""})
 		}
-		rows = append(rows, row{"update-plugin", m.words.T("ATM_TUI_UPDATE_PLUGIN"), ""})
+		if p.Executor == "legacy-bash" {
+			rows = append(rows, row{"update-plugin", m.words.T("ATM_TUI_UPDATE_PLUGIN"), ""})
+		}
 	case "core":
 		rows = []row{{"doctor", m.words.T("ATM_MENU_DOCTOR"), ""},
 			{"check", m.words.T("ATM_TUI_UPDATE_CHECK"), ""}, {"update-all", m.words.T("ATM_TUI_UPDATE_ALL"), ""},
@@ -116,6 +128,15 @@ func (m Model) rows() []row {
 	case "logs":
 		for i := len(m.results) - 1; i >= 0; i-- {
 			rows = append(rows, row{"result", m.results[i], ""})
+		}
+	case "native":
+		label := m.words.T("ATM_TUI_CLOSE")
+		if m.active != nil {
+			label = m.words.T("ATM_TUI_NO")
+		}
+		rows = append(rows, row{"native-close", label, ""})
+		for i := len(m.nativeLogs) - 1; i >= 0; i-- {
+			rows = append(rows, row{"result", m.nativeLogs[i], ""})
 		}
 	case "message":
 		for _, line := range strings.Split(m.message, "\n") {
@@ -148,6 +169,8 @@ func (m *Model) clamp() {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case nativeMessage:
+		return m.receiveNative(msg)
 	case tea.WindowSizeMsg:
 		m.width, m.height = msg.Width, msg.Height
 		m.input.SetWidth(max(1, m.width-16))
@@ -180,6 +203,25 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		}
 	case tea.KeyPressMsg:
 		key := msg.String()
+		if m.active != nil {
+			switch key {
+			case "q", "ctrl+c":
+				return m.cancelNative(true)
+			case "esc":
+				return m.cancelNative(false)
+			case "enter":
+				if m.cursor == 0 {
+					return m.cancelNative(false)
+				}
+			case "up", "k":
+				m.cursor--
+				m.clamp()
+			case "down", "j":
+				m.cursor++
+				m.clamp()
+			}
+			return m, nil
+		}
 		if key == "ctrl+c" {
 			return m, tea.Quit
 		}
@@ -276,6 +318,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, hits := m.render()
 		for _, h := range hits {
 			if msg.Y == h.y && msg.X >= h.x && msg.X < h.x+h.width {
+				if m.active != nil {
+					if h.nav == "quit" {
+						return m.cancelNative(true)
+					}
+					if h.nav == "cancel-native" || (h.nav == "" && h.index == 0) {
+						return m.cancelNative(false)
+					}
+					return m, nil
+				}
 				if h.nav == "search" {
 					m.editing = true
 					return m, m.input.Focus()
@@ -305,6 +356,10 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	}
 	key := rows[m.cursor].key
 	switch m.screen {
+	case "native":
+		if key == "native-close" {
+			m.navigate("plugins")
+		}
 	case "plugins":
 		m.selected = key
 		p, _ := plugin.Find(m.plugins, key)
@@ -394,6 +449,9 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			m.status = m.words.T("ATM_TUI_DRY_RUN")
 			return m, nil
 		}
+		if m.plan.Executor == "native" {
+			return m.startNative()
+		}
 		cmd, err := runner.Command(m.c, m.plan)
 		if err != nil {
 			m.status = err.Error()
@@ -431,12 +489,7 @@ func (m Model) prepareCore(args []string) (tea.Model, tea.Cmd) {
 }
 
 func clean(s string) string {
-	return strings.Map(func(r rune) rune {
-		if r < 32 || r == 127 {
-			return ' '
-		}
-		return r
-	}, s)
+	return protocol.SafeText(s)
 }
 
 func (m Model) paint(s, color string, bold bool) string {
@@ -492,12 +545,18 @@ func (m Model) render() (string, []hit) {
 		title = "Plugin ID: " + m.input.View()
 	case "demo":
 		title = m.bar.ViewAs(min(1, m.now.Sub(m.demoStart).Seconds()/2))
+	case "native":
+		title = m.bar.ViewAs(m.nativeProgress)
 	case "message":
 		title = m.words.T("ATM_TUI_LOGS")
 	}
 	lines = append(lines, title)
 	if m.screen == "confirm" {
-		lines = append(lines, m.words.T("ATM_TUI_TRUST"))
+		key := "ATM_TUI_TRUST"
+		if m.plan.Executor == "native" {
+			key = "ATM_TUI_NATIVE_TRUST"
+		}
+		lines = append(lines, m.words.T(key))
 	} else {
 		lines = append(lines, "")
 	}
@@ -537,6 +596,9 @@ func (m Model) render() (string, []hit) {
 	}
 	footer := ""
 	nav := []row{{"plugins", m.words.T("ATM_TUI_PLUGINS"), ""}, {"core", "ATM", ""}, {"languages", m.words.T("ATM_TUI_LANGUAGE"), ""}, {"sort", m.words.T("ATM_TUI_SORT"), ""}, {"logs", m.words.T("ATM_TUI_LOGS"), ""}, {"quit", m.words.T("ATM_MENU_EXIT"), ""}}
+	if m.active != nil {
+		nav = []row{{"cancel-native", m.words.T("ATM_TUI_NO"), ""}, {"quit", m.words.T("ATM_MENU_EXIT"), ""}}
+	}
 	for _, n := range nav {
 		label := "[" + n.label + "] "
 		x, width := ansi.StringWidth(footer), ansi.StringWidth(label)
@@ -564,6 +626,9 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) planLabel() string {
+	if m.plan.Executor == "native" {
+		return strings.Join(append([]string{m.plan.PluginID, m.plan.Operation}, m.plan.Arguments...), " ")
+	}
 	return strings.Join(m.plan.Command[min(2, len(m.plan.Command)):], " ")
 }
 

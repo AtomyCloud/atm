@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"slices"
 	"sort"
 	"strconv"
@@ -14,23 +15,25 @@ import (
 	"github.com/AtomyCloud/atm/internal/data"
 )
 
-const API = 1
+// Native API; the legacy Bash core-api.json remains at API 1.
+const API = 2
 
 var IDPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var Actions = []string{"menu", "status", "install", "remove", "uninstall", "use"}
 
 type Manifest struct {
-	Schema      int      `json:"schema"`
-	ID          string   `json:"id"`
-	Name        string   `json:"name"`
-	Version     string   `json:"version"`
-	Description string   `json:"description"`
-	Order       int      `json:"order"`
-	MinAPI      int      `json:"min_core_api"`
-	Platforms   []string `json:"platforms"`
-	Executor    string   `json:"executor"`
-	Protocol    string   `json:"protocol"`
-	Operations  []string `json:"operations"`
+	Schema      int               `json:"schema"`
+	ID          string            `json:"id"`
+	Name        string            `json:"name"`
+	Version     string            `json:"version"`
+	Description string            `json:"description"`
+	Order       int               `json:"order"`
+	MinAPI      int               `json:"min_core_api"`
+	Platforms   []string          `json:"platforms"`
+	Executor    string            `json:"executor"`
+	Protocol    string            `json:"protocol"`
+	Operations  []string          `json:"operations"`
+	Executables map[string]string `json:"executables,omitempty"`
 }
 
 type Plugin struct {
@@ -43,7 +46,7 @@ type Plugin struct {
 }
 
 func (m Manifest) Validate(directory string) error {
-	if m.Schema != 1 || m.MinAPI < 1 || m.MinAPI > API {
+	if (m.Schema != 1 && m.Schema != 2) || m.MinAPI != m.Schema {
 		return fmt.Errorf("unsupported schema or CORE API for %s", m.ID)
 	}
 	if !IDPattern.MatchString(m.ID) || m.ID != directory {
@@ -59,7 +62,10 @@ func (m Manifest) Validate(directory string) error {
 			}
 		}
 	}
-	if m.Executor != "legacy-bash" || m.Protocol != "tty-v1" {
+	if m.Schema == 2 {
+		return m.validateNative()
+	}
+	if m.Executor != "legacy-bash" || m.Protocol != "tty-v1" || len(m.Executables) != 0 {
 		return fmt.Errorf("unsupported executor/protocol: %s", m.ID)
 	}
 	if len(m.Platforms) != 1 || m.Platforms[0] != "linux" {
@@ -127,6 +133,15 @@ func Discover(c config.Config, platform string) ([]Plugin, error) {
 			p.Reason = "Plugin disabled"
 		case !p.Available:
 			p.Reason = "Linux Bash plugin; native implementation pending"
+		}
+		if p.Executor == "native" && p.Enabled {
+			_, err := p.NativeExecutable(platform + "/" + runtime.GOARCH)
+			p.Available = err == nil
+			if err != nil {
+				p.Reason = err.Error()
+			} else {
+				p.Reason = ""
+			}
 		}
 		plugins = append(plugins, p)
 	}

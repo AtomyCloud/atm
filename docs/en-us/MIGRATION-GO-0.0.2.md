@@ -17,6 +17,9 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
   commands. Interactive processes temporarily own the terminal, including sudo
   prompts, then return to the TUI. The selected operation's exit status is retained.
 - Native preferences in `atm-go.json`, separate from legacy configuration.
+- External native executable contract (schema 2 / JSONL v1), real asynchronous
+  progress/logs, confirmation, timeout and cancellation with process cleanup.
+  Validated with an isolated fixture; production application ports remain pending.
 - Linux amd64/arm64 and Windows amd64 local packages with SHA-256 checksums and
   a `release.json` file mapping the build's source commit and payload hashes.
 
@@ -26,6 +29,7 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
 | Existing application install/remove/version switching | Bash compatibility | Unavailable |
+| Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog and plugin code updates | Existing Bash/Python backend | Pending native implementation |
 | Compiled CORE self-update | Pending | Pending |
 | Native Node, Go and VS Code application backends | Pending | Pending |
@@ -68,8 +72,9 @@ migration build. The existing `bin/atm` remains the original Bash entrypoint.
 ```
 
 Global flags go before the command; application arguments go after the plugin
-ID. TUI operation output is shown in the temporarily restored terminal. Press
-Enter after completion to return. Session results retain outcomes, not full
+ID. Legacy TUI operation output is shown in the temporarily restored terminal.
+Press Enter after completion to return. Native operations stay inside the TUI,
+with progress, bounded logs and cancellation. Session results retain outcomes, not full
 subprocess output or passwords. Existing backend logging remains unchanged.
 
 Keyboard navigation: arrows or j/k select; Enter opens/confirms; Escape returns;
@@ -110,7 +115,7 @@ See `docs/schema/plugin-v1.schema.json` in the source repository. Each plugin
 directory owns its `plugin.json`; its ID must match the directory name. Existing
 `plugin.metadata`, `plugin.conf` and `plugin.sh` remain available to Bash.
 
-The currently implemented executor is `legacy-bash`, protocol `tty-v1`, Linux
+The existing application executor is `legacy-bash`, protocol `tty-v1`, Linux
 only. Declared operations map to the existing menu/status/install/remove/
 uninstall/use entrypoints. No arbitrary shell command is accepted in JSON.
 The declaration of an operation does not change the underlying plugin's existing
@@ -120,11 +125,14 @@ Unknown schemas, duplicate actions, mismatched IDs, symlink plugin directories
 and unsupported executors fail validation. Invalid JSON never silently falls
 back to shell metadata. Directory listing and catalog metadata are not executed.
 
-The planned structured process protocol is not implemented yet. `--dry-run
---json` outputs a single versioned **plan**, not a fabricated progress stream.
-Future native executors and protocol revisions must be added explicitly rather
-than silently changing the meaning of this contract. Repository tests enforce
-parity between JSON declarations and existing literal metadata.
+Native schema 2 adds `executor: native`, `protocol: jsonl-v1` and an executable
+map by OS/architecture. See [Native Plugin Protocol](https://github.com/AtomyCloud/atm/blob/main/docs/en-us/NATIVE-PLUGIN-PROTOCOL.md)
+for event formats, bounds, confirmation, cancellation and the isolated fixture.
+This leaves legacy schema/API 1 untouched. `--dry-run --json` emits one plan;
+native execution with `--json` emits real JSONL events and a validated result.
+CLI mutations require confirmation or `--yes`; the default timeout is 15 minutes
+(`--timeout 5m` overrides it). Cancellation is process termination, not rollback.
+Repository tests still enforce parity for all 16 legacy declarations.
 
 ## Local Packages
 
@@ -156,11 +164,12 @@ go test -race ./...
 go vet ./...
 bash -n libexec/atm-legacy.sh
 go build -o /tmp/atm-v002/atm ./cmd/atm
-python3 tests/test_go_tui.py /tmp/atm-v002/atm -v
+go build -o /tmp/atm-v002/native-fixture ./tools/native-fixture
+ATM_TEST_NATIVE_FIXTURE=/tmp/atm-v002/native-fixture python3 tests/test_go_tui.py /tmp/atm-v002/atm -v
 ```
 
 The PTY suite uses temporary fixtures to validate mouse hit testing, search,
-interactive handoff, nonzero subprocess results and terminal restoration. It
+interactive handoff, native progress/cancellation, JSONL output, nonzero subprocess results and terminal restoration. It
 does not run real installations. Cross-compilation alone does not validate
 Windows terminal behavior, ARM64 execution or standard-user application installs.
 
@@ -168,8 +177,8 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 
 1. Port catalog/download/extraction/receipt operations to Go, preserving source
    pinning, ownership boundaries, no-write dry-run and existing recovery guarantees.
-2. Implement the structured operation/event protocol and cancellation at safe
-   transaction boundaries; migrate interactive plugin menus into native screens.
+2. Add recoverable installation transactions to the implemented native executor;
+   migrate application-specific interactive menus into native screens.
 3. Deliver native Node, then Go and VS Code backends with verified official
    artifacts, stable launchers, ownership checks and version switching.
 4. Implement compiled CORE updates, signing/trust verification, file-in-use

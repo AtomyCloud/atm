@@ -1,7 +1,8 @@
 # ATM - Atomy Tools Modules
 
 > **Go migration v0.0.2 (in progress):** an opt-in Bubble Tea interface and
-> platform-specific build tooling are available. Existing Linux plugins run
+> platform-specific build tooling are available, along with a native plugin
+> executor supporting progress and cancellation. Existing Linux plugins run
 > through a compatibility backend; native Windows application installation and
 > compiled CORE self-update are not available yet. The original `bin/atm` is
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).

@@ -82,3 +82,45 @@ func TestNonTTYAndInvalidCommands(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeDryRunAndConfirmationWithoutExecution(t *testing.T) {
+	home, configDir := fixture(t)
+	dir := t.TempDir()
+	pluginDir := filepath.Join(dir, "native_fixture")
+	if err := os.MkdirAll(filepath.Join(pluginDir, "bin"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := os.ReadFile("../../tests/fixtures/native_fixture/plugin.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = os.WriteFile(filepath.Join(pluginDir, "plugin.json"), manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	name := "fixture"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	// Discovery may inspect this file, but dry-run and confirmation must not launch it.
+	if err = os.WriteFile(filepath.Join(pluginDir, "bin", name), []byte("not a binary"), 0700); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ATM_PLUGIN_DIR", dir)
+	t.Setenv("PATH", "")
+	var out, errors bytes.Buffer
+	if code := Run([]string{"--home", home, "--dry-run", "install", "native_fixture", "literal;argument"}, os.Stdin, &out, &errors); code != 0 {
+		t.Fatal(code, &errors)
+	}
+	if !strings.Contains(out.String(), "install") || !strings.Contains(out.String(), "literal;argument") {
+		t.Fatal("incomplete human plan", &out)
+	}
+	out.Reset()
+	errors.Reset()
+	if code := Run([]string{"--home", home, "--json", "install", "native_fixture"}, os.Stdin, &out, &errors); code == 0 || !strings.Contains(errors.String(), "--yes") {
+		t.Fatal("missing confirmation guard", code, &errors)
+	}
+	entries, err := os.ReadDir(configDir)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("dry-run wrote preferences", err)
+	}
+}

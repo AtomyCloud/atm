@@ -31,7 +31,7 @@ func model(t *testing.T) Model {
 
 func TestLayoutsFitAndHitRegions(t *testing.T) {
 	for _, size := range [][2]int{{20, 8}, {32, 12}, {60, 18}, {80, 24}, {140, 40}} {
-		for _, screen := range []string{"plugins", "actions", "core", "languages", "sort", "confirm", "logs", "message", "version", "download", "demo"} {
+		for _, screen := range []string{"plugins", "actions", "core", "languages", "sort", "confirm", "logs", "message", "version", "download", "demo", "native"} {
 			m := model(t)
 			m.width, m.height = size[0], size[1]
 			m.screen = screen

@@ -1,7 +1,8 @@
-// Package runner is the temporary Linux compatibility boundary, not a sandbox.
+// Package runner executes trusted native plugins and the Linux compatibility bridge.
 package runner
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -21,6 +22,9 @@ type Plan struct {
 	Command   []string `json:"command"`
 	Directory string   `json:"directory"`
 	DryRun    bool     `json:"dry_run"`
+	PluginID  string   `json:"plugin_id,omitempty"`
+	Operation string   `json:"operation,omitempty"`
+	Arguments []string `json:"arguments,omitempty"`
 }
 
 func Plugin(c config.Config, p plugin.Plugin, action string, args []string) (Plan, error) {
@@ -36,11 +40,24 @@ func Plugin(c config.Config, p plugin.Plugin, action string, args []string) (Pla
 	if (action == "menu" || action == "status" || action == "uninstall") && len(args) != 0 {
 		return Plan{}, fmt.Errorf("%s takes no extra arguments", action)
 	}
+	if p.Executor == "native" {
+		if len(args) > 128 {
+			return Plan{}, fmt.Errorf("too many native arguments")
+		}
+		if err := p.Manifest.Validate(p.ID); err != nil {
+			return Plan{}, err
+		}
+		exe, err := p.NativeExecutable(runtime.GOOS + "/" + runtime.GOARCH)
+		if err != nil {
+			return Plan{}, err
+		}
+		return Plan{Schema: 2, Executor: "native", Protocol: "jsonl-v1", Command: []string{exe}, Directory: p.Directory, DryRun: c.DryRun, PluginID: p.ID, Operation: action, Arguments: args}, nil
+	}
 	if runtime.GOOS != "linux" {
 		return Plan{}, fmt.Errorf("Bash compatibility requires Linux")
 	}
 	command := []string{"bash", filepath.Join(c.Home, "libexec", "atm-legacy.sh"), action, p.ID}
-	return Plan{1, "legacy-bash", "tty-v1", append(command, args...), c.Home, c.DryRun}, nil
+	return Plan{Schema: 1, Executor: "legacy-bash", Protocol: "tty-v1", Command: append(command, args...), Directory: c.Home, DryRun: c.DryRun}, nil
 }
 
 func Core(c config.Config, args []string) (Plan, error) {
@@ -83,7 +100,7 @@ func Core(c config.Config, args []string) (Plan, error) {
 		return Plan{}, fmt.Errorf("operation not enabled in the migration: %s; use the original bin/atm explicitly for legacy administration", strings.Join(args, " "))
 	}
 	command := []string{"bash", filepath.Join(c.Home, "bin", "atm")}
-	return Plan{1, "legacy-bash", "tty-v1", append(command, args...), c.Home, c.DryRun}, nil
+	return Plan{Schema: 1, Executor: "legacy-bash", Protocol: "tty-v1", Command: append(command, args...), Directory: c.Home, DryRun: c.DryRun}, nil
 }
 
 func Command(c config.Config, plan Plan) (*exec.Cmd, error) {
@@ -123,6 +140,10 @@ func Command(c config.Config, plan Plan) (*exec.Cmd, error) {
 func ExitCode(err error) int {
 	if err == nil {
 		return 0
+	}
+	var native *NativeError
+	if errors.As(err, &native) {
+		return native.Outcome.ExitCode
 	}
 	if e, ok := err.(*exec.ExitError); ok {
 		if code := e.ExitCode(); code > 0 {

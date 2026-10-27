@@ -16,6 +16,7 @@ import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
 BINARY = Path(sys.argv.pop(1)).resolve() if __name__ == "__main__" and len(sys.argv) > 1 else None
+NATIVE = Path(os.environ["ATM_TEST_NATIVE_FIXTURE"]).resolve() if os.environ.get("ATM_TEST_NATIVE_FIXTURE") else None
 
 
 class Terminal:
@@ -63,6 +64,82 @@ class Terminal:
 
 @unittest.skipUnless(sys.platform.startswith("linux") and BINARY, "Linux PTY and binary required")
 class TUITests(unittest.TestCase):
+    def native_home(self, root):
+        home = root / "Native ATM with spaces"
+        plugin = home / "plugins" / "native_fixture"
+        (plugin / "bin").mkdir(parents=True)
+        shutil.copy(ROOT / "tests/fixtures/native_fixture/plugin.json", plugin / "plugin.json")
+        shutil.copy(NATIVE, plugin / "bin/fixture")
+        shutil.copy(ROOT / "core-api.json", home / "core-api.json")
+        shutil.copytree(ROOT / "lang", home / "lang")
+        return home
+
+    @unittest.skipUnless(NATIVE, "ATM_TEST_NATIVE_FIXTURE required")
+    def test_native_cli_stream_confirmation_and_dryrun(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            home = self.native_home(root)
+            env = {k: v for k, v in os.environ.items() if not k.startswith("ATM_")}
+            env.update(ATM_CONFIG_DIR=str(root / "config"), ATM_APPS_DIR=str(root / "Apps"))
+            def run(*args):
+                return subprocess.run([str(BINARY), "--home", str(home), *args],
+                                      env=env, cwd=root, capture_output=True, text=True, timeout=10)
+            refused = run("--json", "install", "native_fixture")
+            self.assertNotEqual(refused.returncode, 0)
+            self.assertIn("--yes", refused.stderr)
+            dry = run("--dry-run", "--json", "install", "native_fixture")
+            self.assertEqual(dry.returncode, 0, dry.stderr)
+            self.assertTrue(json.loads(dry.stdout)["dry_run"])
+            result = run("--yes", "--json", "install", "native_fixture", "echo", "$(touch sentinel)")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            self.assertEqual(events[0]["type"], "started")
+            self.assertEqual(events[-1]["status"], "success")
+            self.assertEqual(len({event["request_id"] for event in events}), 1)
+            self.assertFalse((root / "sentinel").exists())
+            timeout = run("--yes", "--json", "--timeout", "200ms", "update", "native_fixture")
+            self.assertEqual(timeout.returncode, 124, timeout.stderr)
+            self.assertEqual(json.loads(timeout.stdout.splitlines()[-1])["code"], "timeout")
+            self.assertFalse((root / "config").exists())
+            self.assertFalse((root / "Apps").exists())
+
+    @unittest.skipUnless(NATIVE, "ATM_TEST_NATIVE_FIXTURE required")
+    def test_native_progress_cancel_and_terminal_restore(self):
+        for width, height in ((80, 24), (40, 14), (120, 35)):
+            with self.subTest(size=(width, height)), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                home = self.native_home(root)
+                terminal = Terminal(home, root / "config", width, height, ("--no-animation",))
+                try:
+                    terminal.wait_for(b"ATM 0.0.2")
+                    terminal.send(b"\r")
+                    terminal.wait_for(b"Inspect installation")
+                    terminal.send(b"\r")
+                    terminal.wait_for(b"Run this operation?")
+                    terminal.send(b"\x1b[B\r")
+                    terminal.wait_for(b"Step")
+                    terminal.wait_for(b"success: Fixture completed")
+                    terminal.send(b"\x1b")
+                    terminal.wait_for(b"Search")
+                    terminal.send(b"\r")
+                    terminal.wait_for(b"Update application")
+                    terminal.send(b"\x1b[B\x1b[B\r")
+                    terminal.wait_for(b"Run this operation?")
+                    terminal.send(b"\x1b[B\r")
+                    terminal.wait_for(b"Fixture started")
+                    if width == 80:
+                        terminal.send(b"\x1b[<0;2;7M\x1b[<0;2;7m")
+                        terminal.wait_for(b"cancelled:")
+                        terminal.send(b"q")
+                    elif width == 120:
+                        terminal.send(b"\x03")
+                    else:
+                        terminal.send(b"q")
+                    self.assertEqual(terminal.proc.wait(timeout=5), 0)
+                    self.assertEqual(termios.tcgetattr(terminal.slave), terminal.before)
+                finally:
+                    terminal.close()
+
     def test_real_bridge_uses_isolated_legacy_runtime(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

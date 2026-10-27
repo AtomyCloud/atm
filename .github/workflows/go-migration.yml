@@ -42,7 +42,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           go build -o "$RUNNER_TEMP/atm" ./cmd/atm
-          python3 tests/test_go_tui.py "$RUNNER_TEMP/atm"
+          go build -o "$RUNNER_TEMP/native-fixture" ./tools/native-fixture
+          ATM_TEST_NATIVE_FIXTURE="$RUNNER_TEMP/native-fixture" python3 tests/test_go_tui.py "$RUNNER_TEMP/atm"
 
   packages:
     needs: test

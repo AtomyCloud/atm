@@ -1,15 +1,19 @@
 package cli
 
 import (
+	"bufio"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"os/exec"
+	"os/signal"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"syscall"
 	"text/tabwriter"
 
 	tea "charm.land/bubbletea/v2"
@@ -18,6 +22,7 @@ import (
 	"github.com/AtomyCloud/atm/internal/config"
 	"github.com/AtomyCloud/atm/internal/i18n"
 	"github.com/AtomyCloud/atm/internal/plugin"
+	"github.com/AtomyCloud/atm/internal/protocol"
 	"github.com/AtomyCloud/atm/internal/runner"
 	"github.com/AtomyCloud/atm/internal/tui"
 	"github.com/AtomyCloud/atm/internal/version"
@@ -32,6 +37,7 @@ Usage: atm [global options] <command>
   plugins sort [az|za|default]   Read or save native display order
   plugin <id> [menu|status]      Open a plugin or inspect its installation
   install <id> [arguments...]   Install through the Linux backend
+  update <id> [arguments...]    Update through a native plugin
   use <id> <version>            Change an active version
   remove <id> <version>         Remove one version
   uninstall <id>                Uninstall through the Linux backend
@@ -45,12 +51,14 @@ Global options (before the command):
   --home PATH   ATM distribution directory; never persisted as Apps path
   --dry-run     Print planned operations; no processes, network or writes
   --json        Structured output for list, doctor and execution plans
+  --yes         Confirm native mutating operations (CLI only)
+  --timeout 15m Native operation deadline
   --no-mouse    Disable terminal mouse capture
   --no-animation  Disable the animated banner
   --demo        Simulate TUI operations without executing them
   --version     Show migration version and source commit
 
-Windows: native TUI, discovery and preferences only in this migration stage.
+Native JSONL executors support Linux and Windows; application ports are pending.
 Linux application operations still require the existing Bash dependencies.
 Compiled CORE self-update is not enabled; bin/atm remains the legacy entrypoint.
 `
@@ -74,6 +82,8 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 	noMouse := flags.Bool("no-mouse", false, "disable mouse")
 	noAnimation := flags.Bool("no-animation", false, "disable animation")
 	demo := flags.Bool("demo", false, "simulate TUI operations")
+	yes := flags.Bool("yes", false, "confirm native operations")
+	timeout := flags.Duration("timeout", runner.DefaultTimeout, "native operation deadline")
 	flags.Usage = func() { fmt.Fprint(out, Help) }
 	if err := flags.Parse(args); err != nil {
 		if err == flag.ErrHelp {
@@ -103,6 +113,10 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 	}
 	c.NoMouse = *noMouse
 	c.NoAnimation = *noAnimation
+	if *timeout <= 0 {
+		return fmt.Errorf("--timeout must be positive")
+	}
+	c.NativeTimeout, c.AssumeYes = *timeout, *yes
 	if *demo && args[0] != "tui" && args[0] != "menu" {
 		return fmt.Errorf("--demo is available only with tui/menu")
 	}
@@ -148,7 +162,9 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		if err != nil {
 			return err
 		}
-		_, err = tea.NewProgram(tui.New(c, plugins, words, *demo), tea.WithInput(in), tea.WithOutput(out)).Run()
+		model := tui.New(c, plugins, words, *demo)
+		defer model.Close()
+		_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out)).Run()
 		return err
 	case "doctor":
 		if len(args) != 1 {
@@ -161,6 +177,7 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			"plugin_count": len(plugins), "legacy_backend": runtime.GOOS == "linux" && bashErr == nil,
 			"legacy_recovery_pending": !os.IsNotExist(pendingErr), "native_application_backends": "pending",
 			"compiled_core_updater": "pending", "discovery_executes_plugins": false}
+		report["native_executor"] = "jsonl-v1"
 		return outputJSON(out, report)
 	case "plugins":
 		if len(args) == 1 || args[1] == "list" {
@@ -181,7 +198,7 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			}
 			return w.Flush()
 		}
-	case "plugin", "install", "remove", "uninstall", "use", "status":
+	case "plugin", "install", "update", "remove", "uninstall", "use", "status":
 		if len(args) < 2 {
 			return fmt.Errorf("%s requires a plugin ID; Full Setup is available in the TUI", args[0])
 		}
@@ -192,6 +209,15 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		action, rest := args[0], args[2:]
 		if action == "plugin" {
 			action = "menu"
+			if p.Executor == "native" {
+				action = p.Operations[0]
+				for _, op := range p.Operations {
+					if op == "status" {
+						action = op
+						break
+					}
+				}
+			}
 			if len(rest) > 0 {
 				action, rest = rest[0], rest[1:]
 			}
@@ -215,11 +241,48 @@ func execute(c config.Config, plan runner.Plan, in *os.File, out, stderr io.Writ
 			return outputJSON(out, plan)
 		}
 		fmt.Fprint(out, "DRY-RUN:")
+		if plan.Executor == "native" {
+			fmt.Fprintf(out, " native %q %q", plan.PluginID, plan.Operation)
+			for _, arg := range plan.Arguments {
+				fmt.Fprintf(out, " %q", arg)
+			}
+			fmt.Fprintln(out)
+			return nil
+		}
 		for _, arg := range plan.Command {
 			fmt.Fprintf(out, " %q", arg)
 		}
 		fmt.Fprintln(out)
 		return nil
+	}
+	if plan.Executor == "native" {
+		if plan.Operation != "status" && !c.AssumeYes {
+			if asJSON || !term.IsTerminal(in.Fd()) {
+				return fmt.Errorf("native changes require --yes or interactive confirmation")
+			}
+			fmt.Fprintf(stderr, "Run trusted native plugin %s (%s)? [y/N]: ", plan.PluginID, plan.Operation)
+			answer, err := bufio.NewReader(in).ReadString('\n')
+			if err != nil {
+				return err
+			}
+			if strings.ToLower(strings.TrimSpace(answer)) != "y" {
+				return fmt.Errorf("operation cancelled")
+			}
+		}
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+		defer stop()
+		emit := func(e protocol.Event) error {
+			if asJSON {
+				return json.NewEncoder(out).Encode(e)
+			}
+			_, err := fmt.Fprintf(out, "%s: %s\n", e.Type, protocol.SafeText(e.Message))
+			return err
+		}
+		result := runner.RunNative(ctx, c, plan, runner.NativeOptions{Timeout: c.NativeTimeout, Event: emit, Diagnostic: func(s string) error { _, err := fmt.Fprintln(stderr, s); return err }})
+		if err := emit(result.Event()); err != nil {
+			return err
+		}
+		return result.Err()
 	}
 	if asJSON {
 		return fmt.Errorf("legacy interactive operations do not emit JSON; use --dry-run --json for plans")
