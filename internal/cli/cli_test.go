@@ -3,12 +3,53 @@ package cli
 import (
 	"bytes"
 	"encoding/json"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/AtomyCloud/atm/internal/catalog"
+	"github.com/AtomyCloud/atm/internal/plugin"
 )
+
+type catalogTransport func(*http.Request) (*http.Response, error)
+
+func (f catalogTransport) RoundTrip(r *http.Request) (*http.Response, error) { return f(r) }
+
+func TestNativeCatalogCLIWithoutShell(t *testing.T) {
+	home, dir := fixture(t)
+	t.Setenv("PATH", "")
+	t.Setenv("GITHUB_TOKEN", "")
+	previous := http.DefaultTransport
+	t.Cleanup(func() { http.DefaultTransport = previous })
+	calls := 0
+	http.DefaultTransport = catalogTransport(func(r *http.Request) (*http.Response, error) {
+		calls++
+		if r.URL.Host != "api.github.com" {
+			t.Fatal("unexpected origin")
+		}
+		body := `{"sha":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}`
+		if calls == 2 {
+			body = `{"truncated":false,"tree":[]}`
+		}
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(body)), Header: http.Header{}}, nil
+	})
+	var out, errors bytes.Buffer
+	if code := Run([]string{"--home", home, "--json", "plugins", "search", "brave"}, os.Stdin, &out, &errors); code != 0 {
+		t.Fatal(code, &errors)
+	}
+	var snapshot catalog.Snapshot
+	if err := json.Unmarshal(out.Bytes(), &snapshot); err != nil || snapshot.Source != catalog.Source || len(snapshot.Entries) != 0 || calls != 2 {
+		t.Fatal(snapshot, calls, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("read-only search wrote config")
+	}
+}
 
 func fixture(t *testing.T) (string, string) {
 	t.Helper()
@@ -22,6 +63,42 @@ func fixture(t *testing.T) (string, string) {
 	}
 	t.Setenv("ATM_CONFIG_DIR", dir)
 	return home, dir
+}
+
+func TestNativeCatalogDryRunAndOutput(t *testing.T) {
+	home, dir := fixture(t)
+	t.Setenv("PATH", "")
+	// This invalid token would fail before any request if dry-run entered the client.
+	t.Setenv("GITHUB_TOKEN", "invalid\ntoken")
+	var out, errors bytes.Buffer
+	if code := Run([]string{"--home", home, "--dry-run", "--json", "plugins", "search", "brave"}, os.Stdin, &out, &errors); code != 0 {
+		t.Fatal(code, &errors)
+	}
+	var plan map[string]any
+	if err := json.Unmarshal(out.Bytes(), &plan); err != nil || plan["executor"] != "native-core" || plan["query"] != "brave" || plan["dry_run"] != true {
+		t.Fatal(plan, err)
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("search dry-run wrote config")
+	}
+	snapshot := catalog.Snapshot{Source: catalog.Source, Commit: strings.Repeat("a", 40), Entries: []catalog.Entry{{Manifest: plugin.Manifest{ID: "brave", Name: "Brave", Version: "0.0.1", Executor: "legacy-bash"}, Local: true}}}
+	out.Reset()
+	if err := printCatalog(&out, snapshot, false); err != nil || !strings.Contains(out.String(), "Brave") || !strings.Contains(out.String(), "true") {
+		t.Fatal(out.String(), err)
+	}
+	out.Reset()
+	if err := printCatalog(&out, snapshot, true); err != nil {
+		t.Fatal(err)
+	}
+	var got catalog.Snapshot
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil || got.Commit != snapshot.Commit || len(got.Entries) != 1 {
+		t.Fatal(got, err)
+	}
+	out.Reset()
+	if err := printCatalog(&out, catalog.Snapshot{Source: catalog.Source}, false); err != nil || !strings.Contains(out.String(), "No plugins found") {
+		t.Fatal(err)
+	}
 }
 
 func TestVersionAndDiscoveryWithoutShell(t *testing.T) {

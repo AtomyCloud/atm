@@ -40,6 +40,9 @@
   "ATM_TUI_UPDATE_PLUGIN": "Update plugin code",
   "ATM_TUI_UPDATE_ALL": "Update all plugin code",
   "ATM_TUI_CATALOG": "Official plugin catalog",
+  "ATM_TUI_CATALOG_LOADING": "Reading official plugin catalog...",
+  "ATM_TUI_CATALOG_LOCAL": "Local",
+  "ATM_TUI_CATALOG_REMOTE": "Not downloaded",
   "ATM_TUI_RESULTS_EMPTY": "No operations in this session",
   "ATM_TUI_CONTINUE": "Press Enter to return to ATM",
   "ATM_TUI_DEMO": "Simulation completed; no applications changed"

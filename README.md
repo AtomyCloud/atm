@@ -8,6 +8,10 @@
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).
 > macOS Terminal packages are also built for Intel and Apple Silicon. Native
 > installation services are under development; application plugin ports remain pending.
+> Official catalog search now runs natively in Go on Linux, macOS and Windows
+> (`atm plugins search` and the TUI catalog). Plugin downloads/code updates and
+> PATH integration still use the Linux legacy backend; the CORE migration is
+> not complete. See [native catalog search](docs/en-us/NATIVE-PLUGIN-CATALOG.md).
 
 ## Legacy v0.0.1 (Linux / Bash)
 

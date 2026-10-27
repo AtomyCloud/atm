@@ -186,6 +186,23 @@ class TUITests(unittest.TestCase):
                 finally:
                     terminal.close()
 
+    def test_native_catalog_dry_run_and_terminal_restore(self):
+        with tempfile.TemporaryDirectory() as temp:
+            terminal = Terminal(ROOT, Path(temp) / "config", 40, 14,
+                                ("--dry-run", "--no-animation"))
+            try:
+                terminal.wait_for(b"ATM 0.0.2")
+                terminal.send(b"u")
+                terminal.wait_for(b"Official plugin catalog")
+                terminal.send(b"\x1b[B\x1b[B\x1b[B\r")
+                terminal.wait_for(b"plugins search")
+                terminal.send(b"q")
+                self.assertEqual(terminal.proc.wait(timeout=5), 0)
+                self.assertEqual(termios.tcgetattr(terminal.slave), terminal.before)
+                self.assertFalse((Path(temp) / "config").exists())
+            finally:
+                terminal.close()
+
     def test_interactive_handoff_and_nonzero_exit(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -42,7 +42,7 @@ Usage: atm [global options] <command>
   remove <id> <version>         Remove one version
   uninstall <id>                Uninstall through the Linux backend
   lang list|current|set <locale>
-  plugins search [text]         Search the official catalog (Linux backend)
+  plugins search [text]         Search the official catalog natively (read-only)
   plugins download <id>         Download an official plugin (Linux backend)
   updates check|plugin <id>|all|changes|backups
   path apply                    Apply legacy Linux integration
@@ -176,10 +176,14 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			"home": c.Home, "apps_dir": c.AppsDir, "plugins_dir": c.PluginsDir, "preferences": c.PreferenceFile(),
 			"plugin_count": len(plugins), "legacy_backend": runtime.GOOS == "linux" && bashErr == nil,
 			"legacy_recovery_pending": !os.IsNotExist(pendingErr), "native_application_backends": "pending",
-			"compiled_core_updater": "pending", "discovery_executes_plugins": false}
+			"compiled_core_updater": "pending", "discovery_executes_plugins": false,
+			"native_catalog_search": true, "native_catalog_download": "pending"}
 		report["native_executor"] = "jsonl-v1"
 		return outputJSON(out, report)
 	case "plugins":
+		if len(args) >= 2 && args[1] == "search" {
+			return searchCatalog(c, plugins, strings.Join(args[2:], " "), out, *jsonOutput)
+		}
 		if len(args) == 1 || args[1] == "list" {
 			if len(args) > 3 || (len(args) == 3 && args[2] != "--json") {
 				return fmt.Errorf("usage: plugins list [--json]")

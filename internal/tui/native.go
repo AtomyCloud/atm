@@ -71,6 +71,9 @@ func (c *nativeController) close() {
 }
 
 func (m Model) Close() {
+	if m.catalogController != nil {
+		m.catalogController.close()
+	}
 	if m.controller != nil {
 		m.controller.close()
 	}

@@ -15,6 +15,7 @@ import (
 	"charm.land/lipgloss/v2"
 	"github.com/charmbracelet/x/ansi"
 
+	"github.com/AtomyCloud/atm/internal/catalog"
 	"github.com/AtomyCloud/atm/internal/config"
 	"github.com/AtomyCloud/atm/internal/i18n"
 	"github.com/AtomyCloud/atm/internal/plugin"
@@ -32,31 +33,34 @@ type hit struct {
 }
 
 type Model struct {
-	c               config.Config
-	words           i18n.Catalog
-	plugins         []plugin.Plugin
-	locales         []string
-	screen          string
-	selected        string
-	cursor, offset  int
-	width, height   int
-	input           textinput.Model
-	editing         bool
-	pendingAction   string
-	plan            runner.Plan
-	message         string
-	status          string
-	results         []string
-	started, now    time.Time
-	demo            bool
-	demoStart       time.Time
-	bar             progress.Model
-	color           bool
-	controller      *nativeController
-	active          *nativeSession
-	nativeLogs      []string
-	nativeProgress  float64
-	quitAfterNative bool
+	c                 config.Config
+	words             i18n.Catalog
+	plugins           []plugin.Plugin
+	locales           []string
+	screen            string
+	selected          string
+	cursor, offset    int
+	width, height     int
+	input             textinput.Model
+	editing           bool
+	pendingAction     string
+	plan              runner.Plan
+	message           string
+	status            string
+	results           []string
+	started, now      time.Time
+	demo              bool
+	demoStart         time.Time
+	bar               progress.Model
+	color             bool
+	controller        *nativeController
+	active            *nativeSession
+	nativeLogs        []string
+	nativeProgress    float64
+	quitAfterNative   bool
+	catalogController *catalogController
+	catalogActive     *catalogSession
+	catalogSnapshot   catalog.Snapshot
 }
 
 func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool) Model {
@@ -68,8 +72,9 @@ func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool
 	now := time.Now()
 	return Model{c: c, plugins: plugins, words: words, locales: locales, screen: "plugins", input: input,
 		width: 80, height: 24, started: now, now: now, demo: demo,
-		controller: &nativeController{},
-		bar:        progress.New(progress.WithDefaultBlend()), color: os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb",
+		controller:        &nativeController{},
+		catalogController: newCatalogController(),
+		bar:               progress.New(progress.WithDefaultBlend()), color: os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb",
 		status: words.T("ATM_TUI_READY")}
 }
 
@@ -86,6 +91,16 @@ func (m Model) Init() tea.Cmd {
 func (m Model) rows() []row {
 	rows := []row{}
 	switch m.screen {
+	case "catalog":
+		for _, e := range m.catalogSnapshot.Filter(m.input.Value(), m.c.Sort) {
+			state := m.words.T("ATM_TUI_CATALOG_REMOTE")
+			if e.Local {
+				state = m.words.T("ATM_TUI_CATALOG_LOCAL")
+			}
+			rows = append(rows, row{e.ID, e.Name, e.Version + " | " + e.Executor + " | " + state})
+		}
+	case "catalog-loading":
+		rows = append(rows, row{"cancel-catalog", m.words.T("ATM_TUI_NO"), ""})
 	case "plugins":
 		query := strings.ToLower(m.input.Value())
 		for _, p := range m.plugins {
@@ -138,7 +153,7 @@ func (m Model) rows() []row {
 		for i := len(m.nativeLogs) - 1; i >= 0; i-- {
 			rows = append(rows, row{"result", m.nativeLogs[i], ""})
 		}
-	case "message":
+	case "message", "catalog-details":
 		for _, line := range strings.Split(m.message, "\n") {
 			rows = append(rows, row{"result", line, ""})
 		}
@@ -147,9 +162,14 @@ func (m Model) rows() []row {
 }
 
 func (m *Model) navigate(screen string) {
+	if m.catalogActive != nil {
+		m.catalogActive.cancel()
+		m.catalogActive = nil
+		m.status = m.words.T("ATM_TUI_CANCELLED")
+	}
 	m.screen, m.cursor, m.offset, m.editing = screen, 0, 0, false
 	m.input.Blur()
-	if screen == "plugins" {
+	if screen == "plugins" || screen == "catalog" {
 		m.input.SetValue("")
 	}
 }
@@ -169,6 +189,8 @@ func (m *Model) clamp() {
 
 func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	switch msg := msg.(type) {
+	case catalogMessage:
+		return m.receiveCatalog(msg)
 	case nativeMessage:
 		return m.receiveNative(msg)
 	case tea.WindowSizeMsg:
@@ -263,7 +285,13 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q":
 			return m, tea.Quit
 		case "esc", "backspace":
-			m.navigate("plugins")
+			if m.screen == "catalog-details" {
+				query := m.input.Value()
+				m.navigate("catalog")
+				m.input.SetValue(query)
+			} else {
+				m.navigate("plugins")
+			}
 		case "up", "k":
 			m.cursor--
 			m.clamp()
@@ -285,7 +313,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.activate()
 		case "/":
-			if m.screen == "plugins" {
+			if m.screen == "plugins" || m.screen == "catalog" {
 				m.editing = true
 				return m, m.input.Focus()
 			}
@@ -356,6 +384,18 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	}
 	key := rows[m.cursor].key
 	switch m.screen {
+	case "catalog-loading":
+		m.navigate("core")
+		m.status = m.words.T("ATM_TUI_CANCELLED")
+	case "catalog":
+		for _, e := range m.catalogSnapshot.Entries {
+			if e.ID == key {
+				m.message = fmt.Sprintf("%s (%s)\n%s\n%s\n%s\nPlatforms: %s\nCommit: %s\n%s", e.Name, e.ID,
+					e.Version, e.Description, e.Executor, strings.Join(e.Platforms, ", "), m.catalogSnapshot.Commit, catalog.Source)
+				m.navigate("catalog-details")
+				break
+			}
+		}
 	case "native":
 		if key == "native-close" {
 			m.navigate("plugins")
@@ -383,7 +423,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "core":
 		switch key {
 		case "doctor":
-			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative application backends: pending\nCompiled CORE updater: pending", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
+			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog search: available\nNative catalog download: pending\nNative application backends: pending\nCompiled CORE updater: pending", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
 			m.navigate("message")
 		case "download":
 			m.navigate("download")
@@ -395,7 +435,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		case "update-all":
 			return m.prepareCore([]string{"updates", "all"})
 		case "catalog":
-			return m.prepareCore([]string{"plugins", "search"})
+			return m.startCatalog()
 		case "full":
 			return m.prepareCore([]string{"install"})
 		case "path":
@@ -531,6 +571,10 @@ func (m Model) render() (string, []hit) {
 	lines = append(lines, strings.Repeat("-", m.width))
 	title := m.words.T("ATM_TUI_" + strings.ToUpper(m.screen))
 	switch m.screen {
+	case "catalog":
+		title = m.words.T("ATM_TUI_FILTER") + ": " + m.input.View()
+	case "catalog-loading":
+		title = m.words.T("ATM_TUI_CATALOG_LOADING")
 	case "plugins":
 		title = m.words.T("ATM_TUI_FILTER") + ": " + m.input.View()
 	case "actions":
@@ -547,6 +591,8 @@ func (m Model) render() (string, []hit) {
 		title = m.bar.ViewAs(min(1, m.now.Sub(m.demoStart).Seconds()/2))
 	case "native":
 		title = m.bar.ViewAs(m.nativeProgress)
+	case "catalog-details":
+		title = m.words.T("ATM_TUI_CATALOG")
 	case "message":
 		title = m.words.T("ATM_TUI_LOGS")
 	}
@@ -557,11 +603,13 @@ func (m Model) render() (string, []hit) {
 			key = "ATM_TUI_NATIVE_TRUST"
 		}
 		lines = append(lines, m.words.T(key))
+	} else if m.screen == "catalog" {
+		lines = append(lines, m.words.T("ATM_TUI_CATALOG"))
 	} else {
 		lines = append(lines, "")
 	}
 	hits := []hit{}
-	if m.screen == "plugins" {
+	if m.screen == "plugins" || m.screen == "catalog" {
 		hits = append(hits, hit{0, 4, m.width, 0, "search"})
 	}
 	rows := m.rows()
@@ -585,7 +633,7 @@ func (m Model) render() (string, []hit) {
 			}
 			hits = append(hits, hit{0, 6 + i, m.width, index, ""})
 		} else if i == 0 {
-			if m.screen == "plugins" {
+			if m.screen == "plugins" || m.screen == "catalog" {
 				text = m.words.T("ATM_TUI_EMPTY")
 			}
 			if m.screen == "logs" {

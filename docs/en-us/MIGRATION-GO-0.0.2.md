@@ -11,6 +11,9 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 - Mouse selection/scroll, arrow-key navigation, search, sorting, language
   selection, action confirmation and a time-based animated ASCII logo.
 - Native, read-only plugin discovery, configuration import and diagnostics.
+- Native official catalog search in the CLI and TUI, with pinned metadata,
+  Git blob verification, filters and cancellation; no Bash/Python required.
+  See [Native Plugin Catalog](https://github.com/AtomyCloud/atm/blob/main/docs/en-us/NATIVE-PLUGIN-CATALOG.md).
 - Declarative `plugin.json` contracts for all 16 existing plugins. Metadata-only
   fallback supports older official plugins without executing their shell files.
 - Linux compatibility executor for existing plugin operations and selected CORE
@@ -34,7 +37,8 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
 | Existing application install/remove/version switching | Bash compatibility | Unavailable |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
-| Official catalog and plugin code updates | Existing Bash/Python backend | Pending native implementation |
+| Official catalog search | Native Go | Native Go; real Windows validation pending |
+| Plugin downloads and plugin code updates | Existing Bash/Python backend | Pending native implementation |
 | Compiled CORE self-update | Pending | Pending |
 | Native Node, Go and VS Code application backends | Pending | Pending |
 
@@ -95,6 +99,11 @@ Confirmation defaults to Cancel. Very small terminals display a resize notice.
 
 ## Configuration And Compatibility
 
+- Official catalog search is native on Linux/macOS/Windows. It makes bounded
+  read-only requests to the fixed official repository, without installing or
+  executing plugins. Dry-run/demo skip these requests. Download/code update
+  actions still use the separate Linux legacy backend; catalog visibility does
+  not mean a plugin has a native implementation for your operating system.
 - Resolve ATM home from `--home`, then `ATM_HOME`, then beside the executable
   (or its parent when placed in `bin`). The current directory is not silently
   adopted, and home is never persisted as an application installation path.

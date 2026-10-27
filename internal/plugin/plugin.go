@@ -154,6 +154,12 @@ func readLegacy(dir string) (Manifest, error) {
 	if err != nil {
 		return Manifest{}, err
 	}
+	return LegacyManifest(values)
+}
+
+// LegacyManifest interprets literal metadata shared by local and remote discovery.
+func LegacyManifest(values map[string]string) (Manifest, error) {
+	var err error
 	order, _ := strconv.Atoi(values["ATM_PLUGIN_ORDER_VALUE"])
 	api := 1
 	if value := values["ATM_PLUGIN_MIN_CORE_API_VALUE"]; value != "" {

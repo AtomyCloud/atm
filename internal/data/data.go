@@ -52,6 +52,14 @@ func Assignments(path string) (map[string]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	return ParseAssignments(b, path)
+}
+
+// ParseAssignments also handles verified remote metadata without temporary files.
+func ParseAssignments(b []byte, path string) (map[string]string, error) {
+	if len(b) > MaxFileSize {
+		return nil, fmt.Errorf("metadata exceeds 1 MiB: %s", path)
+	}
 	f, err := syntax.NewParser(syntax.Variant(syntax.LangBash)).Parse(bytes.NewReader(b), path)
 	if err != nil {
 		return nil, err
