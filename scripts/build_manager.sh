@@ -13,7 +13,7 @@ ATM_BUILD_TARGETS=(windows-amd64 linux-amd64 linux-arm64 darwin-amd64 darwin-arm
 
 atm_build_help() {
     printf '%s\n' \
-        'ATM Build Manager' \
+        '🏭 ATM Build Manager' \
         'Usage: bash scripts/build_manager.sh [options]' \
         '' \
         'No arguments: interactive menu (EOF exits without building).' \
@@ -30,7 +30,7 @@ atm_build_help() {
         'macOS builds are Terminal executables, not Finder .app bundles.'
 }
 
-atm_build_error() { printf 'ERROR: %s\n' "$*" >&2; }
+atm_build_error() { printf '❌ ERROR: %s\n' "$*" >&2; }
 
 atm_build_valid_target() {
     case "$1" in
@@ -65,7 +65,7 @@ atm_build_dependencies() {
     required="$(atm_build_go_host list -m -f '{{.GoVersion}}')" || {
         atm_build_error 'Go cannot load this module. Check the required version in go.mod.'; return 1;
     }
-    printf 'Required Go: %s\n' "$required"
+    printf '🔧 Required Go: %s\n' "$required"
     atm_build_go_host version || return 1
     if [[ "$ATM_BUILD_FORMAT" == binaries ]]; then
         if command -v sha256sum >/dev/null 2>&1; then ATM_BUILD_HASH=sha256sum
@@ -112,7 +112,7 @@ atm_build_binary() {
         else shasum -a 256 "$name" > "$name.sha256"
         fi
     ) || return 1
-    printf 'Built: %s\n' "$dir/$name"
+    printf '✅ Built: %s\n' "$dir/$name"
 }
 
 atm_build_run() (
@@ -137,9 +137,9 @@ atm_build_run() (
     printf 'This build did not complete. Earlier successful targets may be present.\n' > "$run_dir/BUILD-INCOMPLETE" || return 1
     commit="$(atm_build_commit)" || return 1
     printf 'format=%s\ncommit=%s\ntarget=%s\n' "$ATM_BUILD_FORMAT" "$commit" "$selection" > "$run_dir/build-info.txt" || return 1
-    printf '\nOutput: %s\n' "$run_dir"
+    printf '\n📂 Output: %s\n' "$run_dir"
     for target in "${targets[@]}"; do
-        printf '\nBuilding %s (%s)...\n' "$target" "$ATM_BUILD_FORMAT"
+        printf '\n🔨 Building %s (%s)...\n' "$target" "$ATM_BUILD_FORMAT"
         if [[ "$ATM_BUILD_FORMAT" == packages ]]; then
             if ! atm_build_go_host run ./tools/package -os "${target%-*}" -arch "${target##*-}" -out "$run_dir"; then
                 atm_build_error "Build failed: $target. Incomplete output retained at $run_dir"; return 1
@@ -149,22 +149,22 @@ atm_build_run() (
         fi
     done
     rm -- "$run_dir/BUILD-INCOMPLETE" || return 1
-    printf '\nBuild completed: %s\n' "$run_dir"
+    printf '\n✅ Build completed: %s\n' "$run_dir"
     if [[ "$ATM_BUILD_FORMAT" == binaries ]]; then
-        printf 'Binary-only output: run with --home pointing to a matching ATM runtime.\n'
-        printf 'For standalone distributions with plugins/locales, use --format packages.\n'
+        printf 'ℹ️  Binary-only output: run with --home pointing to a matching ATM runtime.\n'
+        printf '📦 For standalone distributions with plugins/locales, use --format packages.\n'
     fi
 )
 
 atm_build_menu() {
     local choice target
     while true; do
-        printf '\nATM Build Manager\n=================\nOutput: %s\nFormat: %s\n' "$ATM_BUILD_OUT" "$ATM_BUILD_FORMAT"
+        printf '\n🏭 ATM Build Manager\n===================\n📂 Output: %s\n📦 Format: %s\n' "$ATM_BUILD_OUT" "$ATM_BUILD_FORMAT"
         printf '%s\n' \
-            '1) Windows (amd64)' '2) Linux (amd64)' '3) Linux (arm64)' \
-            '4) macOS (Intel)' '5) macOS (Apple Silicon)' '6) Build ALL platforms' \
-            '7) Switch format: binaries / portable packages' '0) Exit'
-        printf 'Choose option [0]: '
+            '1) 🪟 Windows (amd64)' '2) 🐧 Linux (amd64)' '3) 🐧 Linux (arm64)' \
+            '4) 🍎 macOS (Intel)' '5) 🍎 macOS (Apple Silicon)' '6) 🚀 Build ALL platforms' \
+            '7) 🔄 Switch format: binaries / portable packages' '0) 🚪 Exit'
+        printf '👉 Choose option [0]: '
         IFS= read -r choice || return 0
         case "$choice" in
             0|'') return 0 ;;
@@ -174,7 +174,7 @@ atm_build_menu() {
             *) atm_build_error 'Invalid option.'; continue ;;
         esac
         if ! atm_build_run "$target"; then atm_build_error 'Build stopped; no installation or upload was performed.'; fi
-        printf '\nPress Enter to return to the menu: '
+        printf '\n↩️  Press Enter to return to the menu: '
         IFS= read -r choice || return 0
     done
 }
