@@ -8,10 +8,11 @@
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).
 > macOS Terminal packages are also built for Intel and Apple Silicon. Native
 > installation services are under development; application plugin ports remain pending.
-> Official catalog search now runs natively in Go on Linux, macOS and Windows
-> (`atm plugins search` and the TUI catalog). Plugin downloads/code updates and
-> PATH integration still use the Linux legacy backend; the CORE migration is
-> not complete. See [native catalog search](docs/en-us/NATIVE-PLUGIN-CATALOG.md).
+> Official catalog search and plugin code downloads now run natively in Go on
+> Linux, macOS and Windows (`atm plugins search|download` and the TUI catalog).
+> Downloads require confirmation and never replace existing plugins. Component
+> code updates and PATH integration still use the Linux legacy backend; the CORE
+> migration is not complete. See [native catalog](docs/en-us/NATIVE-PLUGIN-CATALOG.md).
 
 ## Legacy v0.0.1 (Linux / Bash)
 
@@ -134,7 +135,8 @@ sudo
 python3
 ```
 
-`python3` is required for the official plugin catalog (Python standard library only).
+`python3` is required for the legacy Bash plugin catalog (Python standard library
+only). Native Go catalog search/download does not require Python or Bash.
 
 `sudo` is not used for desktop launchers. It is only needed for optional system-level command setup.
 

@@ -14,6 +14,9 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 - Native official catalog search in the CLI and TUI, with pinned metadata,
   Git blob verification, filters and cancellation; no Bash/Python required.
   See [Native Plugin Catalog](https://github.com/AtomyCloud/atm/blob/main/docs/en-us/NATIVE-PLUGIN-CATALOG.md).
+- Native plugin code downloads with confirmation, pinned files, private staging,
+  Go-based Bash syntax checks, origin receipts and non-replacing publication.
+  Restart ATM to load downloaded plugins; no application is installed by download.
 - Declarative `plugin.json` contracts for all 16 existing plugins. Metadata-only
   fallback supports older official plugins without executing their shell files.
 - Linux compatibility executor for existing plugin operations and selected CORE
@@ -38,7 +41,8 @@ plugins retain `0.0.1`; no installed applications are migrated automatically.
 | Existing application install/remove/version switching | Bash compatibility | Unavailable |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
-| Plugin downloads and plugin code updates | Existing Bash/Python backend | Pending native implementation |
+| Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
+| Existing component code updates | Existing Bash/Python backend | Pending native implementation |
 | Compiled CORE self-update | Pending | Pending |
 | Native Node, Go and VS Code application backends | Pending | Pending |
 
@@ -99,11 +103,11 @@ Confirmation defaults to Cancel. Very small terminals display a resize notice.
 
 ## Configuration And Compatibility
 
-- Official catalog search is native on Linux/macOS/Windows. It makes bounded
-  read-only requests to the fixed official repository, without installing or
-  executing plugins. Dry-run/demo skip these requests. Download/code update
-  actions still use the separate Linux legacy backend; catalog visibility does
-  not mean a plugin has a native implementation for your operating system.
+- Official catalog search/download is native on Linux/macOS/Windows. Search
+  remains read-only; download requires consent before staging and publication.
+  Neither operation executes plugins or installs their applications. Dry-run/demo
+  skip network and writes. Existing component updates still use the separate
+  Linux legacy backend. Downloaded legacy plugins remain Linux-only.
 - Resolve ATM home from `--home`, then `ATM_HOME`, then beside the executable
   (or its parent when placed in `bin`). The current directory is not silently
   adopted, and home is never persisted as an application installation path.
@@ -198,7 +202,7 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 
 1. Integrate the native download/extraction/receipt/activation services with the
    first real plugin; add its required archive-link handling and managed removal.
-2. Port the official catalog to Go and migrate application-specific interactive
+2. Port component update services (catalog search/download are now native) and migrate application-specific interactive
    menus into native screens, preserving pinning and existing ownership guards.
 3. Deliver native Node, then Go and VS Code backends with verified official
    artifacts, stable launchers, ownership checks and version switching.

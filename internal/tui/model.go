@@ -61,6 +61,10 @@ type Model struct {
 	catalogController *catalogController
 	catalogActive     *catalogSession
 	catalogSnapshot   catalog.Snapshot
+	catalogID         string
+	downloadPlan      *catalog.DownloadPlan
+	quitAfterCatalog  bool
+	pendingPlugins    map[string]bool
 }
 
 func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool) Model {
@@ -74,6 +78,7 @@ func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool
 		width: 80, height: 24, started: now, now: now, demo: demo,
 		controller:        &nativeController{},
 		catalogController: newCatalogController(),
+		pendingPlugins:    map[string]bool{},
 		bar:               progress.New(progress.WithDefaultBlend()), color: os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb",
 		status: words.T("ATM_TUI_READY")}
 }
@@ -99,7 +104,7 @@ func (m Model) rows() []row {
 			}
 			rows = append(rows, row{e.ID, e.Name, e.Version + " | " + e.Executor + " | " + state})
 		}
-	case "catalog-loading":
+	case "catalog-loading", "catalog-downloading":
 		rows = append(rows, row{"cancel-catalog", m.words.T("ATM_TUI_NO"), ""})
 	case "plugins":
 		query := strings.ToLower(m.input.Value())
@@ -138,8 +143,14 @@ func (m Model) rows() []row {
 		}
 	case "sort":
 		rows = []row{{"az", "A-Z", ""}, {"za", "Z-A", ""}, {"default", m.words.T("ATM_PLUGINS_SORT_DEFAULT"), ""}}
-	case "confirm":
+	case "confirm", "catalog-confirm":
 		rows = []row{{"no", m.words.T("ATM_TUI_NO"), ""}, {"yes", m.words.T("ATM_TUI_YES"), ""}}
+		if m.screen == "catalog-confirm" && m.downloadPlan != nil {
+			i := m.downloadPlan.Info()
+			for _, line := range []string{i.ID, i.Source, "Commit: " + i.Commit, fmt.Sprintf("%d files / %d bytes", i.Files, i.Bytes), m.c.PluginsDir} {
+				rows = append(rows, row{"result", line, ""})
+			}
+		}
 	case "logs":
 		for i := len(m.results) - 1; i >= 0; i-- {
 			rows = append(rows, row{"result", m.results[i], ""})
@@ -154,6 +165,13 @@ func (m Model) rows() []row {
 			rows = append(rows, row{"result", m.nativeLogs[i], ""})
 		}
 	case "message", "catalog-details":
+		if m.screen == "catalog-details" {
+			for _, e := range m.catalogSnapshot.Entries {
+				if e.ID == m.catalogID && !e.Local {
+					rows = append(rows, row{"catalog-download", m.words.T("ATM_TUI_CATALOG_DOWNLOAD"), ""})
+				}
+			}
+		}
 		for _, line := range strings.Split(m.message, "\n") {
 			rows = append(rows, row{"result", line, ""})
 		}
@@ -219,12 +237,26 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			m.results = m.results[len(m.results)-100:]
 		}
 		if refreshed, err := plugin.Discover(m.c, runtime.GOOS); err == nil {
-			m.plugins = refreshed
+			m.plugins = nil
+			for _, p := range refreshed {
+				if !m.pendingPlugins[p.ID] {
+					m.plugins = append(m.plugins, p)
+				}
+			}
 		} else {
 			m.status = err.Error()
 		}
 	case tea.KeyPressMsg:
 		key := msg.String()
+		if m.catalogActive != nil && m.catalogActive.publishing {
+			switch key {
+			case "q", "ctrl+c":
+				return m.cancelDownload(true)
+			case "esc", "enter":
+				return m.cancelDownload(false)
+			}
+			return m, nil
+		}
 		if m.active != nil {
 			switch key {
 			case "q", "ctrl+c":
@@ -266,7 +298,7 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m.preparePlugin(m.pendingAction, []string{m.input.Value()})
 				}
 				if m.screen == "download" {
-					return m.prepareCore([]string{"plugins", "download", m.input.Value()})
+					return m.prepareDownload(m.input.Value(), nil)
 				}
 				return m, nil
 			}
@@ -346,6 +378,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		_, hits := m.render()
 		for _, h := range hits {
 			if msg.Y == h.y && msg.X >= h.x && msg.X < h.x+h.width {
+				if m.catalogActive != nil && m.catalogActive.publishing {
+					if h.nav == "quit" {
+						return m.cancelDownload(true)
+					}
+					if h.nav == "cancel-catalog" || (h.nav == "" && h.index == 0) {
+						return m.cancelDownload(false)
+					}
+					return m, nil
+				}
 				if m.active != nil {
 					if h.nav == "quit" {
 						return m.cancelNative(true)
@@ -384,12 +425,25 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	}
 	key := rows[m.cursor].key
 	switch m.screen {
+	case "catalog-confirm":
+		if key == "yes" {
+			return m.startDownload()
+		}
+		if key == "no" {
+			m.downloadPlan = nil
+			m.navigate("core")
+		}
+	case "catalog-details":
+		if key == "catalog-download" {
+			return m.prepareDownload(m.catalogID, &m.catalogSnapshot)
+		}
 	case "catalog-loading":
 		m.navigate("core")
 		m.status = m.words.T("ATM_TUI_CANCELLED")
 	case "catalog":
 		for _, e := range m.catalogSnapshot.Entries {
 			if e.ID == key {
+				m.catalogID = e.ID
 				m.message = fmt.Sprintf("%s (%s)\n%s\n%s\n%s\nPlatforms: %s\nCommit: %s\n%s", e.Name, e.ID,
 					e.Version, e.Description, e.Executor, strings.Join(e.Platforms, ", "), m.catalogSnapshot.Commit, catalog.Source)
 				m.navigate("catalog-details")
@@ -423,7 +477,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "core":
 		switch key {
 		case "doctor":
-			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog search: available\nNative catalog download: pending\nNative application backends: pending\nCompiled CORE updater: pending", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
+			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog search: available\nNative catalog download: available\nNative application backends: pending\nCompiled CORE updater: pending", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
 			m.navigate("message")
 		case "download":
 			m.navigate("download")
@@ -575,6 +629,10 @@ func (m Model) render() (string, []hit) {
 		title = m.words.T("ATM_TUI_FILTER") + ": " + m.input.View()
 	case "catalog-loading":
 		title = m.words.T("ATM_TUI_CATALOG_LOADING")
+	case "catalog-downloading":
+		title = m.words.T("ATM_TUI_CATALOG_DOWNLOADING")
+	case "catalog-confirm":
+		title = m.words.T("ATM_TUI_CATALOG_DOWNLOAD")
 	case "plugins":
 		title = m.words.T("ATM_TUI_FILTER") + ": " + m.input.View()
 	case "actions":
@@ -603,6 +661,8 @@ func (m Model) render() (string, []hit) {
 			key = "ATM_TUI_NATIVE_TRUST"
 		}
 		lines = append(lines, m.words.T(key))
+	} else if m.screen == "catalog-confirm" {
+		lines = append(lines, m.words.T("ATM_TUI_CATALOG_TRUST"))
 	} else if m.screen == "catalog" {
 		lines = append(lines, m.words.T("ATM_TUI_CATALOG"))
 	} else {
@@ -646,6 +706,9 @@ func (m Model) render() (string, []hit) {
 	nav := []row{{"plugins", m.words.T("ATM_TUI_PLUGINS"), ""}, {"core", "ATM", ""}, {"languages", m.words.T("ATM_TUI_LANGUAGE"), ""}, {"sort", m.words.T("ATM_TUI_SORT"), ""}, {"logs", m.words.T("ATM_TUI_LOGS"), ""}, {"quit", m.words.T("ATM_MENU_EXIT"), ""}}
 	if m.active != nil {
 		nav = []row{{"cancel-native", m.words.T("ATM_TUI_NO"), ""}, {"quit", m.words.T("ATM_MENU_EXIT"), ""}}
+	}
+	if m.catalogActive != nil && m.catalogActive.publishing {
+		nav = []row{{"cancel-catalog", m.words.T("ATM_TUI_NO"), ""}, {"quit", m.words.T("ATM_MENU_EXIT"), ""}}
 	}
 	for _, n := range nav {
 		label := "[" + n.label + "] "

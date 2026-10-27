@@ -43,7 +43,7 @@ Usage: atm [global options] <command>
   uninstall <id>                Uninstall through the Linux backend
   lang list|current|set <locale>
   plugins search [text]         Search the official catalog natively (read-only)
-  plugins download <id>         Download an official plugin (Linux backend)
+  plugins download <id>         Download verified official plugin code natively
   updates check|plugin <id>|all|changes|backups
   path apply                    Apply legacy Linux integration
 
@@ -177,10 +177,16 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			"plugin_count": len(plugins), "legacy_backend": runtime.GOOS == "linux" && bashErr == nil,
 			"legacy_recovery_pending": !os.IsNotExist(pendingErr), "native_application_backends": "pending",
 			"compiled_core_updater": "pending", "discovery_executes_plugins": false,
-			"native_catalog_search": true, "native_catalog_download": "pending"}
+			"native_catalog_search": true, "native_catalog_download": true}
 		report["native_executor"] = "jsonl-v1"
 		return outputJSON(out, report)
 	case "plugins":
+		if len(args) >= 2 && args[1] == "download" {
+			if len(args) != 3 {
+				return fmt.Errorf("usage: plugins download <id>")
+			}
+			return downloadCatalog(c, args[2], in, out, stderr, *jsonOutput)
+		}
 		if len(args) >= 2 && args[1] == "search" {
 			return searchCatalog(c, plugins, strings.Join(args[2:], " "), out, *jsonOutput)
 		}

@@ -43,6 +43,12 @@
   "ATM_TUI_CATALOG_LOADING": "Reading official plugin catalog...",
   "ATM_TUI_CATALOG_LOCAL": "Local",
   "ATM_TUI_CATALOG_REMOTE": "Not downloaded",
+  "ATM_TUI_CATALOG_DOWNLOAD": "Download plugin code",
+  "ATM_TUI_CATALOG_PREPARING": "Verifying download plan...",
+  "ATM_TUI_CATALOG_DOWNLOADING": "Downloading and verifying plugin code...",
+  "ATM_TUI_CATALOG_CANCELLING": "Cancelling; waiting for download cleanup",
+  "ATM_TUI_CATALOG_TRUST": "Plugins are trusted code. Download does not execute them.",
+  "ATM_TUI_CATALOG_RESTART": "Restart ATM to load the plugin. No application was installed.",
   "ATM_TUI_RESULTS_EMPTY": "No operations in this session",
   "ATM_TUI_CONTINUE": "Press Enter to return to ATM",
   "ATM_TUI_DEMO": "Simulation completed; no applications changed"

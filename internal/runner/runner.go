@@ -76,8 +76,6 @@ func Core(c config.Config, args []string) (Plan, error) {
 	case "plugins":
 		if len(args) > 1 {
 			switch args[1] {
-			case "download":
-				allowed = len(args) == 3 && plugin.IDPattern.MatchString(args[2])
 			case "check-updates":
 				allowed = len(args) == 2
 			case "update":

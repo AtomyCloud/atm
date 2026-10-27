@@ -30,7 +30,7 @@ func TestPlansAndGuards(t *testing.T) {
 	if _, err = Plugin(c, p, "use", nil); err == nil {
 		t.Fatal("missing version accepted")
 	}
-	for _, args := range [][]string{{"updates", "core"}, {"self-update", "--git"}, {"updates", "restore", "id"}, {"setup", "portable"}, {"plugins", "download", "../bad"}, {"plugins", "search"}} {
+	for _, args := range [][]string{{"updates", "core"}, {"self-update", "--git"}, {"updates", "restore", "id"}, {"setup", "portable"}, {"plugins", "download", "../bad"}, {"plugins", "search"}, {"plugins", "download", "brave"}} {
 		if _, err := Core(c, args); err == nil {
 			t.Fatal("unsafe legacy operation accepted", args)
 		}

@@ -1,5 +1,5 @@
-// Package catalog reads only the official main/plugins catalog; it never executes
-// or installs code. Git blob identities bind metadata to a single main commit.
+// Package catalog discovers and downloads official plugin code without executing it.
+// Git blob identities bind downloaded files to a single main commit.
 package catalog
 
 import (
@@ -37,9 +37,11 @@ type Entry struct {
 }
 
 type Snapshot struct {
-	Source  string  `json:"source"`
-	Commit  string  `json:"commit"`
-	Entries []Entry `json:"entries"`
+	Source   string  `json:"source"`
+	Commit   string  `json:"commit"`
+	Entries  []Entry `json:"entries"`
+	revision string
+	files    map[string]map[string]treeEntry
 }
 
 type Client struct {
@@ -87,6 +89,9 @@ func (c *Client) get(ctx context.Context, route string, limit int64, dst any) er
 	}
 	b, err := io.ReadAll(io.LimitReader(resp.Body, limit+1))
 	if err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
 		return fmt.Errorf("cannot read official catalog response")
 	}
 	if int64(len(b)) > limit {
@@ -121,15 +126,30 @@ func safePath(path string) bool {
 }
 
 func (c *Client) blob(ctx context.Context, entry treeEntry) ([]byte, error) {
-	if entry.Type != "blob" || (entry.Mode != "100644" && entry.Mode != "100755") ||
-		!shaPattern.MatchString(entry.SHA) || entry.Size == nil || *entry.Size < 0 || *entry.Size > data.MaxFileSize {
-		return nil, fmt.Errorf("invalid catalog metadata blob: %s", entry.Path)
+	b, err := c.blobBytes(ctx, entry, data.MaxFileSize)
+	if err != nil {
+		return nil, err
+	}
+	if !utf8.Valid(b) {
+		return nil, fmt.Errorf("catalog metadata must be UTF-8")
+	}
+	return b, nil
+}
+
+func validBlob(entry treeEntry, limit int64) bool {
+	return entry.Type == "blob" && (entry.Mode == "100644" || entry.Mode == "100755") &&
+		shaPattern.MatchString(entry.SHA) && entry.Size != nil && *entry.Size >= 0 && *entry.Size <= limit
+}
+
+func (c *Client) blobBytes(ctx context.Context, entry treeEntry, limit int64) ([]byte, error) {
+	if !validBlob(entry, limit) {
+		return nil, fmt.Errorf("invalid catalog blob: %s", entry.Path)
 	}
 	var value struct {
 		Encoding string `json:"encoding"`
 		Content  string `json:"content"`
 	}
-	if err := c.get(ctx, "/git/blobs/"+entry.SHA, 2*data.MaxFileSize, &value); err != nil {
+	if err := c.get(ctx, "/git/blobs/"+entry.SHA, 2*limit+1024, &value); err != nil {
 		return nil, err
 	}
 	if value.Encoding != "base64" {
@@ -145,9 +165,6 @@ func (c *Client) blob(ctx context.Context, entry treeEntry) ([]byte, error) {
 	h.Write(b)
 	if fmt.Sprintf("%x", h.Sum(nil)) != entry.SHA {
 		return nil, fmt.Errorf("catalog Git blob checksum mismatch")
-	}
-	if !utf8.Valid(b) {
-		return nil, fmt.Errorf("catalog metadata must be UTF-8")
 	}
 	return b, nil
 }
@@ -191,9 +208,7 @@ func parseManifest(b []byte, id string, legacy bool) (plugin.Manifest, error) {
 	return m, nil
 }
 
-func (c *Client) Search(ctx context.Context, query string) (Snapshot, error) {
-	ctx, cancel := context.WithTimeout(ctx, Timeout)
-	defer cancel()
+func (c *Client) snapshot(ctx context.Context) (Snapshot, error) {
 	var tip struct {
 		SHA string `json:"sha"`
 	}
@@ -244,8 +259,26 @@ func (c *Client) Search(ctx context.Context, query string) (Snapshot, error) {
 	if len(ids) > 200 {
 		return Snapshot{}, fmt.Errorf("catalog exceeds 200 plugins")
 	}
+	return Snapshot{Source: Source, Commit: tip.SHA, revision: tip.SHA, files: files, Entries: []Entry{}}, nil
+}
+
+func (c *Client) Search(ctx context.Context, query string) (Snapshot, error) {
+	ctx, cancel := context.WithTimeout(ctx, Timeout)
+	defer cancel()
+	result, err := c.snapshot(ctx)
+	if err != nil {
+		return Snapshot{}, err
+	}
+	files := result.files
+	ids := []string{}
+	for id, group := range files {
+		_, jsonOK := group["plugin.json"]
+		_, legacyOK := group["plugin.metadata"]
+		if jsonOK || legacyOK {
+			ids = append(ids, id)
+		}
+	}
 	sort.Strings(ids)
-	result := Snapshot{Source: Source, Commit: tip.SHA, Entries: []Entry{}}
 	for _, id := range ids {
 		if err := ctx.Err(); err != nil {
 			return Snapshot{}, err

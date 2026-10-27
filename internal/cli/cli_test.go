@@ -101,6 +101,38 @@ func TestNativeCatalogDryRunAndOutput(t *testing.T) {
 	}
 }
 
+func TestNativeDownloadConfirmationAndDryRun(t *testing.T) {
+	home, dir := fixture(t)
+	plugins := filepath.Join(t.TempDir(), "plugins")
+	t.Setenv("ATM_PLUGIN_DIR", plugins)
+	t.Setenv("PATH", "")
+	t.Setenv("GITHUB_TOKEN", "invalid\ntoken")
+	for _, tc := range []struct {
+		args     []string
+		ok       bool
+		contains string
+	}{
+		{[]string{"--dry-run", "--json", "plugins", "download", "alpha"}, true, "native-core"},
+		{[]string{"--json", "plugins", "download", "alpha"}, false, "--yes"},
+		{[]string{"--dry-run", "plugins", "download", "../bad"}, false, "invalid plugin ID"},
+		{[]string{"--dry-run", "plugins", "download"}, false, "usage:"},
+		{[]string{"--dry-run", "plugins", "download", "alpha", "extra"}, false, "usage:"},
+	} {
+		var out, stderr bytes.Buffer
+		code := Run(append([]string{"--home", home}, tc.args...), os.Stdin, &out, &stderr)
+		if (code == 0) != tc.ok || !strings.Contains(out.String()+stderr.String(), tc.contains) {
+			t.Fatal(tc, code, out.String(), stderr.String())
+		}
+	}
+	if _, err := os.Stat(plugins); !os.IsNotExist(err) {
+		t.Fatal("unconfirmed/dry-run created plugin root")
+	}
+	entries, err := os.ReadDir(dir)
+	if err != nil || len(entries) != 0 {
+		t.Fatal("unconfirmed/dry-run wrote preferences")
+	}
+}
+
 func TestVersionAndDiscoveryWithoutShell(t *testing.T) {
 	home, dir := fixture(t)
 	t.Setenv("PATH", t.TempDir())
