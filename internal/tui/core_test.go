@@ -1,0 +1,86 @@
+package tui
+
+import (
+	"strings"
+	"testing"
+
+	tea "charm.land/bubbletea/v2"
+	"github.com/AtomyCloud/atm/internal/core"
+	"github.com/AtomyCloud/atm/internal/updates"
+)
+
+func TestCoreDryRunConfirmationIsNative(t *testing.T) {
+	m := model(t)
+	updated, cmd := m.prepareCore([]string{"updates", "all"})
+	m = updated.(Model)
+	if cmd != nil || m.screen != "confirm" || m.cursor != 0 || m.plan.Executor != "native-core" {
+		t.Fatal(m.screen, m.plan)
+	}
+	m.cursor = 2
+	updated, cmd = m.activate()
+	if cmd != nil || updated.(Model).screen != "confirm" {
+		t.Fatal("preview row acted as confirmation")
+	}
+	m.cursor = 1
+	updated, cmd = m.activate()
+	m = updated.(Model)
+	if cmd != nil || m.screen != "message" || !strings.Contains(m.message, "native-core") {
+		t.Fatal(m.screen, m.message)
+	}
+}
+
+func TestCoreUpdateResultsRequireRestart(t *testing.T) {
+	m := model(t)
+	s := &catalogSession{}
+	m.catalogActive = s
+	r := core.Result{Value: updates.Report{Rows: []updates.Row{{Component: "plugin:node", Status: "available"}}}}
+	updated, _ := m.receiveCatalog(catalogMessage{session: s, core: true, coreResult: &r})
+	m = updated.(Model)
+	if m.updateStates["node"] != "available" {
+		t.Fatal(m.updateStates)
+	}
+	m.catalogActive = s
+	r = core.Result{ChangedPlugins: []string{"node"}}
+	updated, _ = m.receiveCatalog(catalogMessage{session: s, core: true, coreResult: &r})
+	m = updated.(Model)
+	if !m.pendingPlugins["node"] {
+		t.Fatal("missing restart guard")
+	}
+	for _, p := range m.plugins {
+		if p.ID == "node" && p.Available {
+			t.Fatal("updated plugin immediately executable")
+		}
+	}
+}
+
+func TestCorePendingBlocksNavigationAndCancels(t *testing.T) {
+	m := model(t)
+	cancelled := false
+	m.catalogActive = &catalogSession{publishing: true, cancel: func() { cancelled = true }}
+	m.screen = "core-running"
+	updated, _ := m.Update(tea.KeyPressMsg{Code: 'p'})
+	m = updated.(Model)
+	if m.screen != "core-running" {
+		t.Fatal("navigated during mutation")
+	}
+	updated, cmd := m.Update(tea.KeyPressMsg{Code: 'q'})
+	m = updated.(Model)
+	if !cancelled || !m.quitAfterCatalog || cmd != nil {
+		t.Fatal("quit did not await cleanup")
+	}
+}
+
+func TestChangedCodeBlocksAllLegacyEntryPointsUntilRestart(t *testing.T) {
+	m := model(t)
+	m.pendingPlugins["brave"] = true
+	m.selected = "node"
+	m.screen = "actions"
+	updated, cmd := m.preparePlugin("install", nil)
+	if cmd != nil || updated.(Model).screen == "confirm" {
+		t.Fatal("unchanged legacy plugin could load changed code")
+	}
+	updated, cmd = m.prepareCore([]string{"install"})
+	if cmd != nil || updated.(Model).screen == "confirm" {
+		t.Fatal("Full Setup bypassed restart guard")
+	}
+}

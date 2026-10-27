@@ -62,6 +62,7 @@ func fixture(t *testing.T) (string, string) {
 		t.Setenv(key, "")
 	}
 	t.Setenv("ATM_CONFIG_DIR", dir)
+	t.Setenv("ATM_STATE_DIR", dir)
 	return home, dir
 }
 

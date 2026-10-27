@@ -218,11 +218,15 @@ func (c *Client) snapshot(ctx context.Context) (Snapshot, error) {
 	if !shaPattern.MatchString(tip.SHA) {
 		return Snapshot{}, fmt.Errorf("invalid official main commit")
 	}
+	return c.snapshotAt(ctx, tip.SHA)
+}
+
+func (c *Client) snapshotAt(ctx context.Context, revision string) (Snapshot, error) {
 	var tree struct {
 		Truncated *bool       `json:"truncated"`
 		Tree      []treeEntry `json:"tree"`
 	}
-	if err := c.get(ctx, "/git/trees/"+tip.SHA+"?recursive=1", maxResponse, &tree); err != nil {
+	if err := c.get(ctx, "/git/trees/"+revision+"?recursive=1", maxResponse, &tree); err != nil {
 		return Snapshot{}, err
 	}
 	if tree.Truncated == nil || *tree.Truncated || tree.Tree == nil || len(tree.Tree) > 50000 {
@@ -259,7 +263,7 @@ func (c *Client) snapshot(ctx context.Context) (Snapshot, error) {
 	if len(ids) > 200 {
 		return Snapshot{}, fmt.Errorf("catalog exceeds 200 plugins")
 	}
-	return Snapshot{Source: Source, Commit: tip.SHA, revision: tip.SHA, files: files, Entries: []Entry{}}, nil
+	return Snapshot{Source: Source, Commit: revision, revision: revision, files: files, Entries: []Entry{}}, nil
 }
 
 func (c *Client) Search(ctx context.Context, query string) (Snapshot, error) {

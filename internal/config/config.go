@@ -26,6 +26,7 @@ type Config struct {
 	Home          string
 	PluginsDir    string
 	ConfigDir     string
+	StateDir      string
 	AppsDir       string
 	Language      string
 	Sort          string
@@ -103,6 +104,16 @@ func Load(home string, dry bool) (Config, error) {
 		case "ATM_APPS_DIR":
 			c.Preferences.AppsDir = v
 		}
+	}
+	c.StateDir = env("ATM_STATE_DIR", legacy["ATM_STATE_DIR"])
+	if c.StateDir == "" {
+		c.StateDir = filepath.Join(userHome, ".local", "share", "atm")
+		if runtime.GOOS == "windows" {
+			c.StateDir = filepath.Join(configDir, "state")
+		}
+	}
+	if !filepath.IsAbs(c.StateDir) {
+		return c, fmt.Errorf("ATM state directory must be absolute")
 	}
 	if err := data.JSON(c.PreferenceFile(), &c.Preferences); err != nil && !os.IsNotExist(err) {
 		return c, err

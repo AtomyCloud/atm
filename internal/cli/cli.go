@@ -20,6 +20,8 @@ import (
 	"github.com/charmbracelet/x/term"
 
 	"github.com/AtomyCloud/atm/internal/config"
+	"github.com/AtomyCloud/atm/internal/core"
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 	"github.com/AtomyCloud/atm/internal/i18n"
 	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/protocol"
@@ -45,7 +47,13 @@ Usage: atm [global options] <command>
   plugins search [text]         Search the official catalog natively (read-only)
   plugins download <id>         Download verified official plugin code natively
   updates check|plugin <id>|all|changes|backups
-  path apply                    Apply legacy Linux integration
+  updates restore <backup-id>   Restore a native plugin code backup
+  updates recover plugins      Recover an interrupted plugin transaction
+  updates verify <id> <commit>  Explicitly verify an official plugin baseline
+  path show|apply               Inspect/apply native user PATH integration
+  setup portable --manifest-sha256 <digest>
+                               Install an explicitly approved local package
+  install                       Full Setup, orchestrated natively
 
 Global options (before the command):
   --home PATH   ATM distribution directory; never persisted as Apps path
@@ -60,7 +68,7 @@ Global options (before the command):
 
 Native JSONL executors support Linux, macOS and Windows; application ports are pending.
 Linux application operations still require the existing Bash dependencies.
-Compiled CORE self-update is not enabled; bin/atm remains the legacy entrypoint.
+Compiled CORE replacement awaits an approved Ed25519 key; bin/atm remains legacy.
 `
 
 func Run(args []string, in *os.File, out, stderr io.Writer) int {
@@ -142,6 +150,21 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		fmt.Fprintln(out, "sort", p.Sort)
 		return nil
 	}
+	if core.IsCommand(args) {
+		var items []plugin.Plugin
+		if args[0] == "install" {
+			items, err = plugin.Discover(c, runtime.GOOS)
+			if err != nil {
+				return err
+			}
+		}
+		return executeCore(c, args, items, in, out, stderr, *jsonOutput)
+	}
+	if args[0] != "doctor" {
+		if err = coreupdate.StartupGuard(c.Home); err != nil {
+			return err
+		}
+	}
 	plugins, err := plugin.Discover(c, runtime.GOOS)
 	if err != nil {
 		return err
@@ -176,9 +199,13 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 			"home": c.Home, "apps_dir": c.AppsDir, "plugins_dir": c.PluginsDir, "preferences": c.PreferenceFile(),
 			"plugin_count": len(plugins), "legacy_backend": runtime.GOOS == "linux" && bashErr == nil,
 			"legacy_recovery_pending": !os.IsNotExist(pendingErr), "native_application_backends": "pending",
-			"compiled_core_updater": "pending", "discovery_executes_plugins": false,
-			"native_catalog_search": true, "native_catalog_download": true}
+			"compiled_core_updater": "blocked: approved Ed25519 public key required", "discovery_executes_plugins": false,
+			"native_catalog_search": true, "native_catalog_download": true,
+			"native_component_updates": true, "native_setup": true, "native_full_setup": true,
+			"plugin_desktop_integration": "pending native contract"}
+		report["compiled_recovery_pending"] = coreupdate.StartupGuard(c.Home) != nil
 		report["native_executor"] = "jsonl-v1"
+		report["state_dir"] = c.StateDir
 		return outputJSON(out, report)
 	case "plugins":
 		if len(args) >= 2 && args[1] == "download" {
@@ -238,11 +265,7 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		}
 		return execute(c, plan, in, out, stderr, *jsonOutput)
 	}
-	plan, err := runner.Core(c, args)
-	if err != nil {
-		return err
-	}
-	return execute(c, plan, in, out, stderr, *jsonOutput)
+	return fmt.Errorf("unknown command: %s", strings.Join(args, " "))
 }
 
 func execute(c config.Config, plan runner.Plan, in *os.File, out, stderr io.Writer, asJSON bool) error {

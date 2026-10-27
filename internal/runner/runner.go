@@ -2,6 +2,7 @@
 package runner
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -12,6 +13,7 @@ import (
 	"strings"
 
 	"github.com/AtomyCloud/atm/internal/config"
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 	"github.com/AtomyCloud/atm/internal/plugin"
 )
 
@@ -60,51 +62,25 @@ func Plugin(c config.Config, p plugin.Plugin, action string, args []string) (Pla
 	return Plan{Schema: 1, Executor: "legacy-bash", Protocol: "tty-v1", Command: append(command, args...), Directory: c.Home, DryRun: c.DryRun}, nil
 }
 
-func Core(c config.Config, args []string) (Plan, error) {
-	if runtime.GOOS != "linux" {
-		return Plan{}, fmt.Errorf("this operation requires the Linux compatibility backend")
-	}
-	if len(args) == 0 {
-		return Plan{}, fmt.Errorf("missing legacy operation")
-	}
-	allowed := false
-	switch args[0] {
-	case "path":
-		allowed = len(args) == 2 && args[1] == "apply"
-	case "install":
-		allowed = len(args) == 1
-	case "plugins":
-		if len(args) > 1 {
-			switch args[1] {
-			case "check-updates":
-				allowed = len(args) == 2
-			case "update":
-				allowed = len(args) == 3 && (args[2] == "--all" || plugin.IDPattern.MatchString(args[2]))
-			}
-		}
-	case "updates":
-		if len(args) == 2 {
-			allowed = slices.Contains([]string{"check", "all", "changes", "backups"}, args[1])
-		}
-		if len(args) == 3 {
-			allowed = args[1] == "plugin" && plugin.IDPattern.MatchString(args[2])
-		}
-	case "self-update":
-		allowed = len(args) == 2 && args[1] == "--check"
-	}
-	if !allowed {
-		return Plan{}, fmt.Errorf("operation not enabled in the migration: %s; use the original bin/atm explicitly for legacy administration", strings.Join(args, " "))
-	}
-	command := []string{"bash", filepath.Join(c.Home, "bin", "atm")}
-	return Plan{Schema: 1, Executor: "legacy-bash", Protocol: "tty-v1", Command: append(command, args...), Directory: c.Home, DryRun: c.DryRun}, nil
+// Core is retained as a refusal guard for old callers. CORE administration must
+// use internal/core; only application plugins may enter the compatibility bridge.
+func Core(_ config.Config, args []string) (Plan, error) {
+	return Plan{}, fmt.Errorf("legacy CORE delegation disabled: %s", strings.Join(args, " "))
 }
 
 func Command(c config.Config, plan Plan) (*exec.Cmd, error) {
 	if c.DryRun || plan.DryRun {
 		return nil, fmt.Errorf("dry-run plans must not be executed")
 	}
-	if len(plan.Command) < 2 || plan.Command[0] != "bash" {
+	if len(plan.Command) < 4 || plan.Command[0] != "bash" || plan.Command[1] != filepath.Join(c.Home, "libexec", "atm-legacy.sh") ||
+		!plugin.IDPattern.MatchString(plan.Command[3]) || !slices.Contains(plugin.Actions, plan.Command[2]) {
 		return nil, fmt.Errorf("invalid execution plan")
+	}
+	if err := coreupdate.StartupGuard(c.Home); err != nil {
+		return nil, err
+	}
+	if _, err := os.Lstat(filepath.Join(c.PluginsDir, ".atm-update-pending.json")); !os.IsNotExist(err) {
+		return nil, fmt.Errorf("plugin recovery pending; run updates recover plugins")
 	}
 	if _, err := os.Lstat(filepath.Join(c.Home, ".atm-core-update-pending")); !os.IsNotExist(err) {
 		return nil, fmt.Errorf("legacy CORE recovery pending; execution blocked")
@@ -119,7 +95,8 @@ func Command(c config.Config, plan Plan) (*exec.Cmd, error) {
 	cmd := exec.Command(bash, plan.Command[1:]...)
 	cmd.Dir = plan.Directory
 	values := map[string]string{"ATM_HOME": c.Home, "ATM_PLUGIN_DIR": c.PluginsDir, "ATM_CONFIG_DIR": c.ConfigDir,
-		"ATM_APPS_DIR": c.AppsDir, "ATM_LANG": c.Language, "ATM_PLUGIN_SORT_ORDER": c.Sort,
+		"ATM_STATE_DIR": c.StateDir,
+		"ATM_APPS_DIR":  c.AppsDir, "ATM_LANG": c.Language, "ATM_PLUGIN_SORT_ORDER": c.Sort,
 		"ATM_DRY_RUN": "0", "BASH_ENV": "", "ENV": ""}
 	for _, value := range os.Environ() {
 		key, _, _ := strings.Cut(value, "=")
@@ -136,6 +113,12 @@ func Command(c config.Config, plan Plan) (*exec.Cmd, error) {
 func ExitCode(err error) int {
 	if err == nil {
 		return 0
+	}
+	if errors.Is(err, context.Canceled) {
+		return 130
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return 124
 	}
 	var native *NativeError
 	if errors.As(err, &native) {

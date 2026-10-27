@@ -34,6 +34,7 @@ type Manifest struct {
 	Protocol    string            `json:"protocol"`
 	Operations  []string          `json:"operations"`
 	Executables map[string]string `json:"executables,omitempty"`
+	FullSetup   bool              `json:"full_setup,omitempty"`
 }
 
 type Plugin struct {
@@ -170,7 +171,8 @@ func LegacyManifest(values map[string]string) (Manifest, error) {
 	}
 	m := Manifest{Schema: 1, ID: values["ATM_PLUGIN_ID"], Name: values["ATM_PLUGIN_NAME_VALUE"],
 		Version: values["ATM_PLUGIN_VERSION_VALUE"], Description: values["ATM_PLUGIN_DESCRIPTION_VALUE"],
-		Order: order, MinAPI: api, Platforms: []string{"linux"}, Executor: "legacy-bash", Protocol: "tty-v1"}
+		Order: order, MinAPI: api, Platforms: []string{"linux"}, Executor: "legacy-bash", Protocol: "tty-v1",
+		FullSetup: values["ATM_PLUGIN_FULL_SETUP_VALUE"] == "1"}
 	for _, action := range Actions {
 		if values["ATM_PLUGIN_"+strings.ToUpper(action)+"_FUNC_VALUE"] != "" {
 			m.Operations = append(m.Operations, action)

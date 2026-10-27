@@ -51,5 +51,14 @@
   "ATM_TUI_CATALOG_RESTART": "Restart ATM to load the plugin. No application was installed.",
   "ATM_TUI_RESULTS_EMPTY": "No operations in this session",
   "ATM_TUI_CONTINUE": "Press Enter to return to ATM",
-  "ATM_TUI_DEMO": "Simulation completed; no applications changed"
+  "ATM_TUI_DEMO": "Simulation completed; no applications changed",
+  "ATM_TUI_CORE_PATH": "Configure ATM user PATH",
+  "ATM_TUI_CORE_CHANGES": "Inspect plugin code changes",
+  "ATM_TUI_CORE_BACKUPS": "List plugin code backups",
+  "ATM_TUI_CORE_RESTORE": "Restore plugin code backup",
+  "ATM_TUI_CORE_RECOVER": "Recover interrupted plugin update",
+  "ATM_TUI_CORE_SETUP": "Install portable ATM package",
+  "ATM_TUI_CORE_UPDATE": "Update compiled CORE",
+  "ATM_TUI_CORE_INPUT": "Plugin ID / backup ID / approved package SHA-256",
+  "ATM_TUI_CORE_TRUST": "Confirm the prepared native CORE operation"
 }

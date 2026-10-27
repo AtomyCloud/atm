@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "full_setup": true,
   "id": "java",
   "name": "Java / JDK",
   "version": "0.0.1",

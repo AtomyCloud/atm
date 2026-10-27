@@ -9,6 +9,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/AtomyCloud/atm/internal/catalog"
+	"github.com/AtomyCloud/atm/internal/core"
 )
 
 type catalogSession struct {
@@ -18,11 +19,14 @@ type catalogSession struct {
 }
 
 type catalogMessage struct {
-	session  *catalogSession
-	snapshot catalog.Snapshot
-	err      error
-	plan     *catalog.DownloadPlan
-	result   *catalog.DownloadResult
+	session      *catalogSession
+	snapshot     catalog.Snapshot
+	err          error
+	plan         *catalog.DownloadPlan
+	result       *catalog.DownloadResult
+	core         bool
+	corePrepared *core.Execution
+	coreResult   *core.Result
 }
 
 // A shared lifetime makes Close cancel searches started by any model copy.
@@ -157,6 +161,9 @@ func (m Model) startCatalog() (tea.Model, tea.Cmd) {
 func (m Model) receiveCatalog(msg catalogMessage) (tea.Model, tea.Cmd) {
 	if msg.session != m.catalogActive || m.catalogActive == nil {
 		return m, nil
+	}
+	if msg.core {
+		return m.receiveCore(msg)
 	}
 	m.catalogActive = nil
 	if msg.err != nil {

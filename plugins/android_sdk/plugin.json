@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "full_setup": true,
   "id": "android_sdk",
   "name": "Android SDK",
   "version": "0.0.1",

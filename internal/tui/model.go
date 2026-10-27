@@ -17,6 +17,7 @@ import (
 
 	"github.com/AtomyCloud/atm/internal/catalog"
 	"github.com/AtomyCloud/atm/internal/config"
+	"github.com/AtomyCloud/atm/internal/core"
 	"github.com/AtomyCloud/atm/internal/i18n"
 	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/protocol"
@@ -65,6 +66,9 @@ type Model struct {
 	downloadPlan      *catalog.DownloadPlan
 	quitAfterCatalog  bool
 	pendingPlugins    map[string]bool
+	corePlan          core.Plan
+	corePrepared      *core.Execution
+	updateStates      map[string]string
 }
 
 func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool) Model {
@@ -79,6 +83,7 @@ func New(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, demo bool
 		controller:        &nativeController{},
 		catalogController: newCatalogController(),
 		pendingPlugins:    map[string]bool{},
+		updateStates:      map[string]string{},
 		bar:               progress.New(progress.WithDefaultBlend()), color: os.Getenv("NO_COLOR") == "" && os.Getenv("TERM") != "dumb",
 		status: words.T("ATM_TUI_READY")}
 }
@@ -104,7 +109,7 @@ func (m Model) rows() []row {
 			}
 			rows = append(rows, row{e.ID, e.Name, e.Version + " | " + e.Executor + " | " + state})
 		}
-	case "catalog-loading", "catalog-downloading":
+	case "catalog-loading", "catalog-downloading", "core-running":
 		rows = append(rows, row{"cancel-catalog", m.words.T("ATM_TUI_NO"), ""})
 	case "plugins":
 		query := strings.ToLower(m.input.Value())
@@ -129,14 +134,16 @@ func (m Model) rows() []row {
 		for _, action := range p.Operations {
 			rows = append(rows, row{action, m.words.T("ATM_TUI_" + strings.ToUpper(action)), ""})
 		}
-		if p.Executor == "legacy-bash" {
-			rows = append(rows, row{"update-plugin", m.words.T("ATM_TUI_UPDATE_PLUGIN"), ""})
-		}
+		rows = append(rows, row{"update-plugin", m.words.T("ATM_TUI_UPDATE_PLUGIN"), ""})
 	case "core":
 		rows = []row{{"doctor", m.words.T("ATM_MENU_DOCTOR"), ""},
 			{"check", m.words.T("ATM_TUI_UPDATE_CHECK"), ""}, {"update-all", m.words.T("ATM_TUI_UPDATE_ALL"), ""},
 			{"catalog", m.words.T("ATM_TUI_CATALOG"), ""}, {"download", m.words.T("ATM_PLUGINS_AVAILABLE"), ""},
-			{"full", m.words.T("ATM_MENU_FULL_SETUP"), ""}, {"path", m.words.T("ATM_MENU_PATH"), ""}}
+			{"full", m.words.T("ATM_MENU_FULL_SETUP"), ""}, {"path", m.words.T("ATM_TUI_CORE_PATH"), ""},
+			{"update-one", m.words.T("ATM_TUI_UPDATE_PLUGIN"), ""},
+			{"changes", m.words.T("ATM_TUI_CORE_CHANGES"), ""}, {"backups", m.words.T("ATM_TUI_CORE_BACKUPS"), ""},
+			{"restore", m.words.T("ATM_TUI_CORE_RESTORE"), ""}, {"recover", m.words.T("ATM_TUI_CORE_RECOVER"), ""},
+			{"setup", m.words.T("ATM_TUI_CORE_SETUP"), ""}, {"core-update", m.words.T("ATM_TUI_CORE_UPDATE"), ""}}
 	case "languages":
 		for _, locale := range m.locales {
 			rows = append(rows, row{locale, locale, ""})
@@ -145,6 +152,16 @@ func (m Model) rows() []row {
 		rows = []row{{"az", "A-Z", ""}, {"za", "Z-A", ""}, {"default", m.words.T("ATM_PLUGINS_SORT_DEFAULT"), ""}}
 	case "confirm", "catalog-confirm":
 		rows = []row{{"no", m.words.T("ATM_TUI_NO"), ""}, {"yes", m.words.T("ATM_TUI_YES"), ""}}
+		if m.screen == "confirm" && m.plan.Executor == "native-core" {
+			var value any = m.corePlan
+			if m.corePrepared != nil {
+				value = m.corePrepared.Preview
+			}
+			b, _ := json.MarshalIndent(value, "", "  ")
+			for _, line := range strings.Split(string(b), "\n") {
+				rows = append(rows, row{"result", line, ""})
+			}
+		}
 		if m.screen == "catalog-confirm" && m.downloadPlan != nil {
 			i := m.downloadPlan.Info()
 			for _, line := range []string{i.ID, i.Source, "Commit: " + i.Commit, fmt.Sprintf("%d files / %d bytes", i.Files, i.Bytes), m.c.PluginsDir} {
@@ -289,6 +306,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.screen == "download" {
 					m.navigate("core")
 				}
+				if m.screen == "core-input" {
+					m.navigate("core")
+				}
 				return m, nil
 			}
 			if key == "enter" {
@@ -299,6 +319,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				if m.screen == "download" {
 					return m.prepareDownload(m.input.Value(), nil)
+				}
+				if m.screen == "core-input" {
+					return m.submitCoreInput()
 				}
 				return m, nil
 			}
@@ -477,7 +500,7 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "core":
 		switch key {
 		case "doctor":
-			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog search: available\nNative catalog download: available\nNative application backends: pending\nCompiled CORE updater: pending", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
+			m.message = fmt.Sprintf("ATM %s (%s)\nPlatform: %s\nHome: %s\nApps: %s\nPlugins: %d\nNative catalog: available\nNative plugin code updates/recovery: available\nNative setup/ATM PATH/Full Setup: available\nApplication integration/backends: pending\nCompiled CORE updater: blocked pending approved Ed25519 key", version.Version, version.Commit, m.c.Platform(), m.c.Home, m.c.AppsDir, len(m.plugins))
 			m.navigate("message")
 		case "download":
 			m.navigate("download")
@@ -494,6 +517,18 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			return m.prepareCore([]string{"install"})
 		case "path":
 			return m.prepareCore([]string{"path", "apply"})
+		case "changes", "backups":
+			return m.prepareCore([]string{"updates", key})
+		case "recover":
+			return m.prepareCore([]string{"updates", "recover", "plugins"})
+		case "core-update":
+			return m.prepareCore([]string{"updates", "core"})
+		case "restore", "update-one", "setup":
+			m.pendingAction = key
+			m.navigate("core-input")
+			m.input.SetValue("")
+			m.editing = true
+			return m, m.input.Focus()
 		}
 	case "languages":
 		words, err := i18n.Load(m.c.Home, key)
@@ -524,7 +559,10 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		plugin.Sort(m.plugins, key)
 		m.navigate("plugins")
 	case "confirm":
-		if key != "yes" {
+		if key != "yes" && key != "no" {
+			return m, nil
+		}
+		if key == "no" {
 			m.navigate("plugins")
 			return m, nil
 		}
@@ -537,7 +575,11 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 			return m, nil
 		}
 		if m.c.DryRun {
-			b, _ := json.MarshalIndent(m.plan, "", "  ")
+			var value any = m.plan
+			if m.plan.Executor == "native-core" {
+				value = m.corePlan
+			}
+			b, _ := json.MarshalIndent(value, "", "  ")
 			m.message = string(b)
 			m.navigate("message")
 			m.status = m.words.T("ATM_TUI_DRY_RUN")
@@ -545,6 +587,9 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 		}
 		if m.plan.Executor == "native" {
 			return m.startNative()
+		}
+		if m.plan.Executor == "native-core" {
+			return m.startCoreExecution()
 		}
 		cmd, err := runner.Command(m.c, m.plan)
 		if err != nil {
@@ -559,6 +604,10 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 
 func (m Model) preparePlugin(action string, args []string) (tea.Model, tea.Cmd) {
 	p, err := plugin.Find(m.plugins, m.selected)
+	if err == nil && p.Executor == "legacy-bash" && len(m.pendingPlugins) > 0 {
+		m.status = m.words.T("ATM_TUI_CATALOG_RESTART")
+		return m, nil
+	}
 	if err == nil {
 		m.plan, err = runner.Plugin(m.c, p, action, args)
 	}
@@ -572,14 +621,27 @@ func (m Model) preparePlugin(action string, args []string) (tea.Model, tea.Cmd) 
 }
 
 func (m Model) prepareCore(args []string) (tea.Model, tea.Cmd) {
+	if len(args) == 1 && args[0] == "install" && len(m.pendingPlugins) > 0 {
+		for _, p := range m.plugins {
+			if p.Enabled && p.FullSetup && p.Executor == "legacy-bash" {
+				m.status = m.words.T("ATM_TUI_CATALOG_RESTART")
+				return m, nil
+			}
+		}
+	}
 	var err error
-	m.plan, err = runner.Core(m.c, args)
+	m.corePlan, err = core.Prepare(m.c, args, m.plugins)
 	if err != nil {
 		m.status = err.Error()
 		return m, nil
 	}
-	m.navigate("confirm")
-	return m, nil
+	m.plan = runner.Plan{Executor: "native-core", Arguments: m.corePlan.Arguments, DryRun: m.c.DryRun}
+	m.corePrepared = nil
+	if m.c.DryRun || m.demo {
+		m.navigate("confirm")
+		return m, nil
+	}
+	return m.resolveCore()
 }
 
 func clean(s string) string {
@@ -645,6 +707,10 @@ func (m Model) render() (string, []hit) {
 		title = m.words.T("ATM_TUI_VERSION_PROMPT") + ": " + m.input.View()
 	case "download":
 		title = "Plugin ID: " + m.input.View()
+	case "core-input":
+		title = m.words.T("ATM_TUI_CORE_INPUT") + ": " + m.input.View()
+	case "core-running":
+		title = m.words.T("ATM_TUI_RUNNING")
 	case "demo":
 		title = m.bar.ViewAs(min(1, m.now.Sub(m.demoStart).Seconds()/2))
 	case "native":
@@ -659,6 +725,9 @@ func (m Model) render() (string, []hit) {
 		key := "ATM_TUI_TRUST"
 		if m.plan.Executor == "native" {
 			key = "ATM_TUI_NATIVE_TRUST"
+		}
+		if m.plan.Executor == "native-core" {
+			key = "ATM_TUI_CORE_TRUST"
 		}
 		lines = append(lines, m.words.T(key))
 	} else if m.screen == "catalog-confirm" {
@@ -686,6 +755,9 @@ func (m Model) render() (string, []hit) {
 			text = prefix + clean(r.label)
 			if r.detail != "" {
 				text += "  |  " + clean(r.detail)
+			}
+			if m.screen == "plugins" && m.updateStates[r.key] == "available" {
+				text += "  " + m.paint("Update", "#55aaff", true)
 			}
 			text = ansi.Truncate(text, m.width, "...")
 			if index == m.cursor {
@@ -737,6 +809,9 @@ func (m Model) View() tea.View {
 }
 
 func (m Model) planLabel() string {
+	if m.plan.Executor == "native-core" {
+		return strings.Join(m.plan.Arguments, " ")
+	}
 	if m.plan.Executor == "native" {
 		return strings.Join(append([]string{m.plan.PluginID, m.plan.Operation}, m.plan.Arguments...), " ")
 	}

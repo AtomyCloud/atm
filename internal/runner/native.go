@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/AtomyCloud/atm/internal/config"
+	"github.com/AtomyCloud/atm/internal/coreupdate"
 	"github.com/AtomyCloud/atm/internal/data"
 	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/protocol"
@@ -169,6 +170,12 @@ func interrupted(id string, err error) Outcome {
 }
 
 func validateNativePlan(c config.Config, p Plan) (string, error) {
+	if err := coreupdate.StartupGuard(c.Home); err != nil {
+		return "", err
+	}
+	if _, err := os.Lstat(filepath.Join(c.PluginsDir, ".atm-update-pending.json")); !os.IsNotExist(err) {
+		return "", fmt.Errorf("plugin recovery pending; run updates recover plugins")
+	}
 	if p.Schema != 2 || p.Executor != "native" || p.Protocol != "jsonl-v1" || !plugin.IDPattern.MatchString(p.PluginID) {
 		return "", fmt.Errorf("invalid native plan")
 	}

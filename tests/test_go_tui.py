@@ -75,6 +75,25 @@ class TUITests(unittest.TestCase):
         return home
 
     @unittest.skipUnless(NATIVE, "ATM_TEST_NATIVE_FIXTURE required")
+    def test_native_full_setup_without_shell(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            home = self.native_home(root)
+            manifest_path = home / "plugins/native_fixture/plugin.json"
+            manifest = json.loads(manifest_path.read_text())
+            manifest["full_setup"] = True
+            manifest_path.write_text(json.dumps(manifest))
+            env = {k: v for k, v in os.environ.items() if not k.startswith("ATM_")}
+            env.update(PATH="/nonexistent", HOME=str(root), ATM_CONFIG_DIR=str(root / "config"),
+                       ATM_STATE_DIR=str(root / "state"), ATM_APPS_DIR=str(root / "Apps"))
+            result = subprocess.run([str(BINARY), "--home", str(home), "--yes", "--json", "install"],
+                                    env=env, cwd=root, capture_output=True, text=True, timeout=15)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertEqual(json.loads(result.stdout)["items"], [{"id": "native_fixture", "status": "success"}])
+            self.assertFalse((root / "Apps").exists())
+            self.assertFalse((root / "state").exists())
+
+    @unittest.skipUnless(NATIVE, "ATM_TEST_NATIVE_FIXTURE required")
     def test_native_cli_stream_confirmation_and_dryrun(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

@@ -2,7 +2,9 @@
 
 The migration executable (`0.0.2`) implements official catalog **search and code
 download** in Go on Linux, macOS and Windows. This does not complete the CORE
-migration: existing component code updates and PATH integration still use the Linux legacy backend.
+migration: native component maintenance and ATM PATH integration are described
+in [Native CORE Administration](NATIVE-CORE-ADMINISTRATION.md). Application
+integration and production compiled updates remain incomplete.
 Compiled CORE self-update remains unavailable. The original `bin/atm` is unchanged.
 
 ## CLI

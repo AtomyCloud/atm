@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "full_setup": true,
   "id": "node",
   "name": "Node.js",
   "version": "0.0.1",

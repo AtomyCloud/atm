@@ -11,8 +11,11 @@
 > Official catalog search and plugin code downloads now run natively in Go on
 > Linux, macOS and Windows (`atm plugins search|download` and the TUI catalog).
 > Downloads require confirmation and never replace existing plugins. Component
-> code updates and PATH integration still use the Linux legacy backend; the CORE
-> migration is not complete. See [native catalog](docs/en-us/NATIVE-PLUGIN-CATALOG.md).
+> checks, guarded plugin code updates/recovery, portable setup, ATM user PATH
+> integration and Full Setup orchestration now have native Go routes. Compiled
+> CORE replacement remains blocked pending an approved signing key and release
+> policy; application PATH/desktop integration and platform acceptance remain
+> incomplete. See [native administration](docs/en-us/NATIVE-CORE-ADMINISTRATION.md).
 
 ## Legacy v0.0.1 (Linux / Bash)
 

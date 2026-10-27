@@ -1,5 +1,6 @@
 {
   "schema": 1,
+  "full_setup": true,
   "id": "android_studio",
   "name": "Android Studio",
   "version": "0.0.1",
