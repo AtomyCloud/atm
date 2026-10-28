@@ -157,9 +157,23 @@ func TestDryRunPlanAndPreferences(t *testing.T) {
 		t.Skip("Linux plan")
 	}
 	home, dir := fixture(t)
+	plugins := t.TempDir()
+	path := filepath.Join(plugins, "fixture")
+	if err := os.Mkdir(path, 0700); err != nil {
+		t.Fatal(err)
+	}
+	manifest, err := json.Marshal(plugin.Manifest{Schema: 1, ID: "fixture", Name: "Fixture", Version: "0.0.1", MinAPI: 1,
+		Platforms: []string{"linux"}, Executor: "legacy-bash", Protocol: "tty-v1", Operations: []string{"install"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(path, "plugin.json"), manifest, 0600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("ATM_PLUGIN_DIR", plugins)
 	t.Setenv("PATH", t.TempDir())
 	var out, errors bytes.Buffer
-	code := Run([]string{"--home", home, "--dry-run", "--json", "install", "go", "--version", "1.26.0"}, os.Stdin, &out, &errors)
+	code := Run([]string{"--home", home, "--dry-run", "--json", "install", "fixture", "--version", "1.26.0"}, os.Stdin, &out, &errors)
 	if code != 0 {
 		t.Fatal(code, &errors)
 	}

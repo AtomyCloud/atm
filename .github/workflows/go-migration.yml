@@ -44,10 +44,10 @@ jobs:
           go build -o "$RUNNER_TEMP/atm" ./cmd/atm
           go build -o "$RUNNER_TEMP/native-fixture" ./tools/native-fixture
           ATM_TEST_NATIVE_FIXTURE="$RUNNER_TEMP/native-fixture" python3 tests/test_go_tui.py "$RUNNER_TEMP/atm"
-      - name: Native Node source-checkout build and no-write checks
+      - name: Native plugin source-checkout builds and no-write checks
         if: runner.os == 'Linux'
         run: |
-          bash scripts/build_manager.sh --node-local --target all
+          bash scripts/build_manager.sh --plugins-local --target all
           python3 tests/check_go_packages.py --source "$RUNNER_TEMP/atm"
 
   packages:

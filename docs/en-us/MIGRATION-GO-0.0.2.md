@@ -69,7 +69,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Capability | Linux | Windows |
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
-| Application install/remove/version switching | Native Node.js; other plugins use Bash compatibility | Node.js backend pending |
+| Application install/remove/version switching | Native Node.js, Go, Java/JDK and Trivy; remaining plugins use Bash compatibility | Application backends pending |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
 | Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
@@ -77,8 +77,11 @@ remain separate. No installed copy is updated automatically. Use the
 | Portable setup and ATM user PATH | Native Go | Native Go; real validation pending |
 | Full Setup orchestration | Native Go; legacy apps explicitly bridged | Native plugins only; app ports pending |
 | Compiled CORE self-update | Signed enrollment/update/recovery enabled with consent; actual newer-release acceptance pending | Enabled with external trusted executable; automated handoff and host acceptance pending |
-| Native Node.js application backend | Implemented; Linux human acceptance pending | Pending |
-| Native Go and VS Code application backends | Pending | Pending |
+| Native Node.js application backend | Implemented; Linux human acceptance passed | Pending |
+| Native Go toolchain backend | Implemented; automated Linux checks passed, human acceptance pending | Pending |
+| Native Trivy backend | Binary/Docker modes implemented; automated Linux checks passed, human acceptance pending | Pending |
+| Native Java/JDK backend | Vendor/custom JDK lifecycle implemented; automated Linux checks passed, human acceptance pending | Pending |
+| Remaining application backends | Sequential migration in progress | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
 executables, native process-group execution and CI test jobs for both architectures.
@@ -244,10 +247,10 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 
 ## Remaining Migration Work
 
-1. Human acceptance of the native Linux Node.js backend. Its menus, official
-   archive download/extraction, ownership receipts, removal and PATH integration
-   are implemented separately from the already accepted Linux CORE milestone.
-2. Port other application plugins, beginning with Go and VS Code. Preserve
+1. Human acceptance of the native Linux Go toolchain backend. Native Node.js was
+   accepted by the maintainer on 2026-10-28; Linux ARM64 runtime remains pending.
+2. Port remaining application plugins one at a time, simplest to most complex,
+   advancing after automated gates. Go, Trivy and Java/JDK passed; Flutter is next. Preserve
    plugin-owned application behavior and the generic native menu/integration contracts.
    Legacy backup import remains separate from native plugin code backups.
 3. Implement/test Node.js on other hosts; Linux ARM64 runtime acceptance is pending.

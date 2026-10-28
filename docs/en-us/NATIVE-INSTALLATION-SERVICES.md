@@ -1,9 +1,11 @@
 # Native Installation Services
 
-Status: experimental internal services in migration 0.0.2, Patch v27.2. These
-services are tested with temporary artifacts; no production installer/menu uses
-them yet. The existing Bash plugins, installed apps, PATH and profiles are unchanged.
-This is not a stable third-party SDK or a completed native Node port.
+Status: experimental internal services introduced in migration 0.0.2, Patch v27.2.
+These services are tested with temporary artifacts and are not a stable third-party
+SDK. This page documents `internal/install.Manager`, not every application's backend.
+The native Node.js and Go backends use plugin-owned lifecycle policies to preserve
+their existing layouts; they do not silently adopt legacy roots into this Manager.
+See the [Node](../../plugins/node/README.md) and [Go](../../plugins/go/README.md) guides.
 
 ## Ownership And API
 
@@ -12,7 +14,7 @@ by `PluginID`. The parent directory must already exist. First installation creat
 the root with private POSIX permissions and an `owner.json` marker. Windows uses
 the parent directory's inherited ACLs; choose a private per-user parent. An existing directory
 without a valid matching marker is refused, including empty directories and legacy
-installations. Use a separate root for the first native application pilot.
+installations. A caller using this Manager must use a dedicated owned root.
 
 The plugin owns release resolution, approved origins, checksum provenance, archive
 selection, application validation and launchers. The generic service contains no
@@ -58,9 +60,9 @@ at most 240 bytes and 16 components;
 installation root paths can contain spaces and Unicode. Files request private POSIX modes, with
 only the executable bit retained where supported; no owners/setuid bits are copied.
 
-**Initial scope intentionally rejects links and PAX archives.** The Node pilot
-must handle its shipped npm/npx link layout explicitly, without weakening archive
-confinement or permitting arbitrary link extraction. Compressed tar.xz, app
+**This Manager intentionally rejects links and PAX archives.** The native Node
+backend handles its npm/npx links in a separate confined, plugin-owned extractor.
+Compressed tar.xz, app
 bundles, MSI/DEB/PKG installation and post-install scripts are not implemented.
 
 ## Transaction Layout
@@ -117,7 +119,8 @@ that exit abruptly before/after the activation commit. No actual application is
 downloaded or installed. Linux results are local; Windows/macOS execution must be
 confirmed by the expanded GitHub Actions matrix and manual standard-user testing.
 
-Next: integrate an external native Node pilot, including its real archive layout,
-trusted release/checksum resolution, node/npm/npx launchers and managed removal.
-Keep the legacy application root separate until migration/adoption is explicitly
-designed. Native catalog distribution and signed CORE self-update remain pending.
+Native Node.js is implemented and accepted on Linux; native Go has passed automated
+Linux checks. Remaining application ports proceed separately. The native catalog
+and signed CORE update/recovery services are already implemented; source catalog
+downloads do not compile missing application backends. Never interpret these generic
+services as authorization to adopt or delete an application's existing data.

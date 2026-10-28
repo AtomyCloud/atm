@@ -1,0 +1,20 @@
+{
+ "title": "Go - official portable releases / installed versions - https://go.dev/",
+ "complete": "Go operation complete",
+ "latest": "Choose from latest five stable releases",
+ "custom": "Install exact version",
+ "version_prompt": "Go version (e.g. 1.26.2)",
+ "install_version": "Install Go %s",
+ "use_version": "Use Go %s",
+ "remove_version": "Remove Go %s",
+ "update": "Update to latest stable release",
+ "status": "Installed versions and current selection",
+ "use": "Use installed version",
+ "remove": "Remove owned version",
+ "uninstall": "Uninstall unchanged native versions (keep workspace)",
+ "integrate": "Refresh GOROOT, GOPATH and PATH integration",
+ "empty": "No eligible installed versions",
+ "offline": "Official releases unavailable; installed versions remain available from the Go menu",
+ "current": "(current)",
+ "back": "Back to Go menu"
+}

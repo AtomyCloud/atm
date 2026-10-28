@@ -2,9 +2,29 @@
 
 Status: implemented in the opt-in ATM 0.0.2 migration. Linux fixture tests cover
 execution and the terminal UI. Windows builds compile; Windows runtime and
-standard-user acceptance remain pending. Node.js now provides a native Go Linux
-backend (human acceptance pending); the other application plugins retain their
-explicit Bash compatibility backends. Node's legacy entrypoint is retained separately.
+standard-user acceptance remain pending. Node.js provides a native Go Linux
+backend accepted by the maintainer; the Go toolchain, Java/JDK and Trivy backends have passed
+automated Linux checks, with human acceptance pending. Remaining application plugins retain
+explicit Bash compatibility backends until individually migrated. The separate
+legacy entrypoint is retained.
+
+## Building Local Backends
+
+Native source lives in `plugins/<id>/native`. The packager discovers schema-2
+manifests, builds each declared executable for the selected target, and verifies
+its architecture. A missing local native source fails the build. Unsupported
+targets contain no native executable for that plugin and cannot fall back to Bash.
+Packages exclude development sources, tests and prebuilt checkout binaries.
+
+```bash
+bash scripts/build_manager.sh --plugins-local --target linux-amd64
+```
+
+This creates ignored development binaries and checksums at the manifest paths.
+`--target all` covers all five CORE build targets, skipping undeclared plugin
+targets. The older `--node-local` option remains a Node-only compatibility alias.
+The official source catalog does not compile plugins: use a complete platform
+package or build the local source before execution.
 
 ## Manifest And Execution
 

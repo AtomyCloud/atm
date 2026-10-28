@@ -93,7 +93,7 @@ func TestDryRunConfirmationCannotStartProcess(t *testing.T) {
 		t.Skip("Linux plans")
 	}
 	m := model(t)
-	m.selected = "go"
+	useLegacyFixture(&m)
 	updated, _ := m.preparePlugin("install", nil)
 	m = updated.(Model)
 	if m.screen != "confirm" || m.cursor != 0 {
@@ -105,6 +105,15 @@ func TestDryRunConfirmationCannotStartProcess(t *testing.T) {
 	if cmd != nil || m.screen != "message" || !strings.Contains(m.message, "\"dry_run\": true") {
 		t.Fatal("dry-run executed", m.screen)
 	}
+}
+
+func useLegacyFixture(m *Model) {
+	m.plugins = []plugin.Plugin{{Manifest: plugin.Manifest{
+		Schema: 1, ID: "fixture", Name: "Fixture", Version: "0.0.1", MinAPI: 1,
+		Executor: "legacy-bash", Protocol: "tty-v1", Platforms: []string{"linux"},
+		Operations: []string{"menu", "install"}, FullSetup: true,
+	}, Available: true, Enabled: true}}
+	m.selected = "fixture"
 }
 
 func TestDemoAndLogoAnimation(t *testing.T) {

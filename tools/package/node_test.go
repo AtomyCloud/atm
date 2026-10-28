@@ -55,12 +55,12 @@ func TestRuntimeExclusions(t *testing.T) {
 		"plugins/node/internal-docs/notes.md", "plugins/node/.codex/agent.toml", "plugins/node/cache.pyc",
 		"plugins/node/trace.log", "plugins/node/helper.go",
 	} {
-		if !excludedRuntimePath(filepath.FromSlash(path)) {
+		if !excludedRuntimePath(filepath.FromSlash(path), map[string]bool{"node": true}) {
 			t.Errorf("runtime leaks %s", path)
 		}
 	}
 	for _, path := range []string{"plugins/node/plugin.json", "plugins/node/plugin.sh", "plugins/node/plugin.metadata", "plugins/node/lang/en-us.lang", "bin/atm"} {
-		if excludedRuntimePath(filepath.FromSlash(path)) {
+		if excludedRuntimePath(filepath.FromSlash(path), map[string]bool{"node": true}) {
 			t.Errorf("required runtime excluded: %s", path)
 		}
 	}
@@ -139,7 +139,10 @@ func TestNodePackageTargetCoverage(t *testing.T) {
 	delete(m.Executables, "linux/amd64")
 	root := t.TempDir()
 	t.Chdir(root)
-	if err := os.MkdirAll("plugins/node", 0755); err != nil {
+	if err := os.MkdirAll("plugins/node/native", 0755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile("plugins/node/native/main.go", []byte("package main\nfunc main() {}\n"), 0644); err != nil {
 		t.Fatal(err)
 	}
 	data, err := json.Marshal(m)
@@ -150,8 +153,8 @@ func TestNodePackageTargetCoverage(t *testing.T) {
 		t.Fatal(err)
 	}
 	stage := filepath.Join(root, "stage")
-	if _, err := buildNode("linux", "amd64", stage); err == nil {
-		t.Fatal("missing supported target silently omitted")
+	if files, err := buildNode("linux", "amd64", stage); err != nil || len(files) != 0 {
+		t.Fatal("undeclared architecture must be unavailable", files, err)
 	}
 	for _, target := range [][2]string{{"windows", "amd64"}, {"darwin", "amd64"}, {"darwin", "arm64"}} {
 		files, err := buildNode(target[0], target[1], stage)

@@ -249,7 +249,7 @@ func TestCorePendingBlocksNavigationAndCancels(t *testing.T) {
 func TestChangedCodeBlocksAllLegacyEntryPointsUntilRestart(t *testing.T) {
 	m := model(t)
 	m.pendingPlugins["brave"] = true
-	m.selected = "go"
+	useLegacyFixture(&m)
 	m.screen = "actions"
 	updated, cmd := m.preparePlugin("install", nil)
 	if cmd != nil || updated.(Model).screen == "confirm" {

@@ -2,12 +2,13 @@
 
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
-> executor supporting progress and cancellation. Existing Linux plugins run
-> through a compatibility backend; native Windows application installation remains
+> executor supporting progress and cancellation. Node.js, Go, Java/JDK and Trivy have native Linux
+> backends; remaining plugins use an explicit compatibility backend while being
+> migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
 > unchanged. See the [migration guide](docs/en-us/MIGRATION-GO-0.0.2.md).
 > macOS Terminal packages are also built for Intel and Apple Silicon. Native
-> CORE installation services are implemented; application plugin ports remain pending.
+> CORE installation services are implemented; remaining application plugin ports are in progress.
 > Official catalog search and plugin code downloads now run natively in Go on
 > Linux, macOS and Windows (`atm plugins search|download` and the TUI catalog).
 > Downloads require confirmation and never replace existing plugins. Component
@@ -74,8 +75,8 @@ to keep this exact snapshot. Preserve any existing installation before switching
   
 </div>
 
-ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js
-backend are written in Go. The v0.0.1 legacy entrypoint and other application
+ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
+Go toolchain, Java/JDK and Trivy backends are written in Go. The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
 versions side by side, switch active versions, configure PATH and create desktop
@@ -97,9 +98,9 @@ Desktop apps: ~/.local/share/applications
 
 | Plugin | ID | Version | Purpose |
 |---|---|---:|---|
-| Java / JDK | `java` | `0.0.1` | Install and switch Java/JDK versions from supported vendors or custom URLs. |
+| [Java / JDK](plugins/java/README.md) | `java` | `0.0.1` | Install and switch Java/JDK versions from supported vendors or checksummed custom URLs. |
 | Flutter SDK | `flutter` | `0.0.1` | Install, switch, remove, and uninstall Flutter SDK versions. |
-| Go | `go` | `0.0.1` | Install, switch, remove, and uninstall Go versions and manage a Go workspace. |
+| [Go](plugins/go/README.md) | `go` | `0.0.1` | Install, switch, remove, and uninstall Go versions while preserving the Go workspace. |
 | VS Code | `vscode` | `0.0.1` | Install VS Code versions, switch installed versions, configure CLI and desktop launchers. |
 | Android Studio | `android_studio` | `0.0.1` | Install and switch Android Studio versions and create desktop launchers. |
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
@@ -369,6 +370,13 @@ Each plugin owns its submenu. Menus show the current detected version/status, th
 
 ### Java / JDK
 
+Compiled ATM uses a native Go Linux backend for OpenJDK, Corretto, Temurin,
+Microsoft OpenJDK, GraalVM and custom HTTPS archives with an explicit SHA-256.
+It preserves unowned installations, manages JAVA_HOME/PATH, and refuses silent
+major-version upgrades or replacement of a different artifact at an existing
+version. See the [Java plugin guide](plugins/java/README.md) for supported selectors,
+custom download inputs and ownership rules. The menu below is **legacy `bin/atm`**:
+
 ```text
 ☕ Java / JDK Installer
 Current: <status>
@@ -410,6 +418,13 @@ q) Exit
 Use this submenu to install one of the predefined Flutter versions, choose a specific version, list installed versions, remove one version, or uninstall Flutter completely.
 
 ### Go
+
+Compiled ATM uses a native Go backend on Linux amd64/arm64. It offers the latest
+five compatible stable official releases, exact versions, updates, installed-version
+selection and owned-version removal. The workspace and unowned installations are
+preserved. GOROOT, GOPATH and PATH integration uses a separate managed profile block.
+See the [Go plugin guide](plugins/go/README.md) for native commands and safeguards.
+The menu below describes the retained **legacy `bin/atm`** workflow:
 
 ```text
 🐹 Go Installer

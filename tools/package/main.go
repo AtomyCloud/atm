@@ -1,7 +1,7 @@
 // Build local migration packages. No installation, upload or publication.
-// Native Node binaries are generated from plugins/node/native into private staging.
+// Native binaries are generated from plugins/ID/native into private staging.
 // Source-only catalog snapshots do not contain these ignored executables: use a
-// built runtime package or scripts/build_manager.sh --node-local --target all.
+// built runtime package or scripts/build_manager.sh --plugins-local --target all.
 // Discovery and execution never compile the backend or fall back to plugin.sh.
 package main
 
@@ -39,9 +39,14 @@ func main() {
 	arch := flag.String("arch", "amd64", "amd64 or arm64")
 	out := flag.String("out", "", "local output directory (required)")
 	nodeOnly := flag.Bool("node-only", false, "build only the native Node plugin beneath --out")
+	pluginsOnly := flag.Bool("plugins-only", false, "build all local native plugins beneath --out; unavailable targets are omitted")
 	flag.Parse()
 	var err error
-	if *nodeOnly {
+	if *nodeOnly && *pluginsOnly {
+		err = fmt.Errorf("-node-only and -plugins-only cannot be combined")
+	} else if *pluginsOnly {
+		err = buildPluginsOnly(*targetOS, *arch, *out)
+	} else if *nodeOnly {
 		err = buildNodeOnly(*targetOS, *arch, *out)
 	} else {
 		err = build(*targetOS, *arch, *out)
@@ -61,6 +66,14 @@ func build(targetOS, arch, out string) error {
 	}
 	if _, err := os.Stat("go.mod"); err != nil {
 		return fmt.Errorf("run from the ATM repository root")
+	}
+	manifests, err := discoverNative()
+	if err != nil {
+		return err
+	}
+	nativeIDs := map[string]bool{}
+	for _, m := range manifests {
+		nativeIDs[m.ID] = true
 	}
 	commit := "development"
 	if b, err := exec.Command("git", "rev-parse", "HEAD").Output(); err == nil {
@@ -90,17 +103,17 @@ func build(targetOS, arch, out string) error {
 		return err
 	}
 	files := []payload{{binaryName, b, 0755}}
-	node, err := buildNode(targetOS, arch, temp)
+	native, err := buildNative(manifests, targetOS, arch, temp)
 	if err != nil {
 		return err
 	}
-	files = append(files, node...)
+	files = append(files, native...)
 	for _, root := range []string{"bin", "lib", "libexec", "plugins", "lang", "core-api.json", "LICENSE"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if excludedRuntimePath(path) {
+			if excludedRuntimePath(path, nativeIDs) {
 				if d.IsDir() {
 					return filepath.SkipDir
 				}

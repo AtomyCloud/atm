@@ -479,11 +479,20 @@ class TUITests(unittest.TestCase):
     def test_keyboard_mouse_and_terminal_restore(self):
         for width, height in ((80, 24), (40, 14), (120, 35)):
             with self.subTest(size=(width, height)), tempfile.TemporaryDirectory() as temp:
-                terminal = Terminal(ROOT, Path(temp) / "config", width, height, ("--dry-run", "--no-animation"))
+                home = self.core_home(Path(temp))
+                plugin = home / "plugins/fixture"
+                plugin.mkdir()
+                (plugin / "plugin.json").write_text(json.dumps({
+                    "schema": 1, "id": "fixture", "name": "Fixture", "version": "0.0.1",
+                    "description": "Legacy navigation fixture", "order": 1, "min_core_api": 1,
+                    "platforms": ["linux"], "executor": "legacy-bash", "protocol": "tty-v1",
+                    "operations": ["menu"],
+                }))
+                terminal = Terminal(home, Path(temp) / "config", width, height, ("--dry-run", "--no-animation"))
                 try:
                     terminal.wait_for(b"ATM 0.0.2")
-                    terminal.send(b"/manage go\r")
-                    terminal.wait_for(b"Go")
+                    terminal.send(b"/fixture\r")
+                    terminal.wait_for(b"Fixture")
                     terminal.send(b"\x1b[<0;2;7M\x1b[<0;2;7m")
                     terminal.wait_for(b"Open plugin menu")
                     terminal.send(b"q")

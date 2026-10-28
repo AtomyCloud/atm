@@ -26,6 +26,7 @@ case "$1" in
     while [[ $# -gt 0 ]]; do
       case "$1" in
         -node-only) node=1; shift ;;
+        -plugins-only) node=1; shift ;;
         -out) out="$2"; shift 2 ;;
         -os) os="$2"; shift 2 ;;
         -arch) arch="$2"; shift 2 ;;
@@ -34,8 +35,10 @@ case "$1" in
     done
     if [[ "$node" == 1 ]]; then
       [[ "${BUILD_TEST_FAIL_NODE:-0}" != 1 ]] || exit 7
+      [[ "$os" == linux ]] || exit 0
       mkdir -p "$out/plugins/node/bin/$os-$arch"
       printf 'inert Node binary\n' > "$out/plugins/node/bin/$os-$arch/atm-node"
+      printf 'inert checksum\n' > "$out/plugins/node/bin/$os-$arch/atm-node.sha256"
     fi
     ;;
   *) exit 2 ;;
@@ -50,7 +53,7 @@ func TestBuildManagerNativeNode(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, scenario := range []string{"binaries", "packages", "local", "unsupported-local", "failed-node", "local-out-refused"} {
+	for _, scenario := range []string{"binaries", "packages", "local", "plugins-local", "unsupported-local", "failed-node", "local-out-refused", "plugins-out-refused", "conflicting-local"} {
 		t.Run(scenario, func(t *testing.T) {
 			root := t.TempDir()
 			write := func(name, contents string) {
@@ -79,6 +82,14 @@ func TestBuildManagerNativeNode(t *testing.T) {
 				if scenario == "local-out-refused" {
 					args = append(args, "--out", filepath.Join(root, "elsewhere"))
 				}
+			case "plugins-local", "plugins-out-refused", "conflicting-local":
+				args = append(args, "--plugins-local")
+				if scenario == "plugins-out-refused" {
+					args = append(args, "--out", filepath.Join(root, "elsewhere"))
+				}
+				if scenario == "conflicting-local" {
+					args = append(args, "--node-local")
+				}
 			}
 			cmd := exec.Command("bash", args...)
 			cmd.Dir = root
@@ -87,7 +98,7 @@ func TestBuildManagerNativeNode(t *testing.T) {
 				cmd.Env = append(cmd.Env, "BUILD_TEST_FAIL_NODE=1")
 			}
 			output, err := cmd.CombinedOutput()
-			if scenario == "unsupported-local" || scenario == "local-out-refused" {
+			if scenario == "unsupported-local" || scenario == "local-out-refused" || scenario == "plugins-out-refused" || scenario == "conflicting-local" {
 				if err == nil {
 					t.Fatal("invalid local build accepted", string(output))
 				}
@@ -116,8 +127,12 @@ func TestBuildManagerNativeNode(t *testing.T) {
 				}
 				return
 			}
-			if strings.Count(string(calls), "run ./tools/package -node-only") != 2 {
-				t.Fatal("expected two native Node builds", string(calls))
+			flag, count := "-plugins-only", 5
+			if scenario == "local" {
+				flag, count = "-node-only", 2
+			}
+			if strings.Count(string(calls), "run ./tools/package "+flag) != count {
+				t.Fatal("incorrect native build targets", string(calls))
 			}
 			for _, target := range []string{"linux-amd64", "linux-arm64"} {
 				pattern := filepath.Join(root, "plugins", "node", "bin", target, "atm-node")

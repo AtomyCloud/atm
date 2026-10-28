@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path, PurePosixPath
 import platform as host_platform
+import re
 import shutil
 import struct
 import subprocess
@@ -13,19 +14,73 @@ import tempfile
 import zipfile
 
 
-def node_manifest(data):
+TARGET_MACHINES = {
+    "linux/amd64": 62, "linux/arm64": 183, "windows/amd64": 0x8664,
+    "darwin/amd64": 0x01000007, "darwin/arm64": 0x0100000C,
+}
+ROUTE_ARGS = {
+    "menu": [], "status": [], "install": [], "update": [],
+    "use": ["1.2.3"], "remove": ["1.2.3"], "uninstall": [], "integrate": [],
+}
+
+
+def native_manifest(data, plugin_id):
     manifest = json.loads(data)
     assert manifest["schema"] == manifest["min_core_api"] == 2
-    assert manifest["id"] == "node" and manifest["version"] == "0.0.1"
+    assert manifest["id"] == plugin_id and manifest["version"] == "0.0.1"
+    assert re.fullmatch(r"[a-z][a-z0-9_]{0,63}", plugin_id)
     assert manifest["executor"] == "native" and manifest["protocol"] == "jsonl-v1"
-    assert manifest["full_setup"] is True
-    assert manifest["platforms"] == ["linux"]
-    assert manifest["operations"] == ["menu", "status", "install", "update", "use", "remove", "uninstall", "integrate"]
-    assert manifest["executables"] == {
-        "linux/amd64": "bin/linux-amd64/atm-node",
-        "linux/arm64": "bin/linux-arm64/atm-node",
-    }
+    assert manifest["operations"] and len(set(manifest["operations"])) == len(manifest["operations"])
+    assert set(manifest["operations"]) <= ROUTE_ARGS.keys(), "add per-operation dry-run arguments"
+    assert manifest["executables"]
+    assert len(set(manifest["executables"].values())) == len(manifest["executables"])
+    assert {target.split("/")[0] for target in manifest["executables"]} == set(manifest["platforms"])
+    for target, relative in manifest["executables"].items():
+        path = PurePosixPath(relative)
+        assert target in TARGET_MACHINES
+        assert not path.is_absolute() and ".." not in path.parts and "\\" not in relative
+        assert path.as_posix() == relative and path.parts[0] == "bin" and len(path.parts) > 1
+        if target.startswith("windows/"):
+            assert relative.lower().endswith(".exe")
     return manifest
+
+
+def node_manifest(data):
+    """Compatibility helper for callers of the original Node checker."""
+    return native_manifest(data, "node")
+
+
+def source_manifests(source):
+    manifests = {}
+    for path in sorted((source / "plugins").glob("*/plugin.json")):
+        data = json.loads(path.read_bytes())
+        if data.get("schema") == 2 or data.get("executor") == "native":
+            manifest = native_manifest(path.read_bytes(), path.parent.name)
+            assert (path.parent / "native").is_dir(), f"missing native source: {path.parent}"
+            manifests[manifest["id"]] = manifest
+    return manifests
+
+
+def check_architecture(data, target):
+    machine = TARGET_MACHINES[target]
+    if target.startswith("windows/"):
+        assert data[:2] == b"MZ"
+        pe = struct.unpack_from("<I", data, 0x3C)[0]
+        assert data[pe:pe + 4] == b"PE\x00\x00"
+        assert struct.unpack_from("<H", data, pe + 4)[0] == machine
+    elif target.startswith("darwin/"):
+        assert data[:4] == b"\xcf\xfa\xed\xfe"
+        assert struct.unpack_from("<I", data, 4)[0] == machine
+        assert struct.unpack_from("<I", data, 12)[0] == 2
+    else:
+        assert data[:6] == b"\x7fELF\x02\x01"
+        assert struct.unpack_from("<H", data, 18)[0] == machine
+
+
+def host_target():
+    arch = {"x86_64": "amd64", "AMD64": "amd64", "aarch64": "arm64", "arm64": "arm64"}.get(host_platform.machine())
+    system = {"Linux": "linux", "Darwin": "darwin", "Windows": "windows"}.get(host_platform.system())
+    return f"{system}/{arch}"
 
 
 def isolated_environment(root):
@@ -44,23 +99,32 @@ def snapshot(root):
 
 
 def verify_source(executable):
-    """Isolated source manifest and dry-run checks; never run the Node backend."""
+    """Isolated manifest and dry-run checks; never run a native backend."""
     source = Path(__file__).resolve().parents[1]
-    manifest = node_manifest((source / "plugins/node/plugin.json").read_bytes())
-    arch = {"x86_64": "amd64", "aarch64": "arm64"}.get(host_platform.machine())
-    assert sys.platform.startswith("linux") and arch, "source checks require Linux amd64/arm64"
-    relative = Path("plugins/node") / manifest["executables"]["linux/" + arch]
-    with tempfile.TemporaryDirectory(prefix="atm-node-source-") as temp:
+    for manifest in source_manifests(source).values():
+        verify_native_source(executable, source, manifest)
+
+
+def verify_native_source(executable, source, manifest):
+    plugin_id = manifest["id"]
+    target = host_target()
+    assert target in TARGET_MACHINES, "unsupported test host"
+    with tempfile.TemporaryDirectory(prefix="atm-native-source-") as temp:
         root = Path(temp)
         runtime = root / "runtime"
-        node = runtime / "plugins/node"
-        node.mkdir(parents=True)
+        plugin = runtime / "plugins" / plugin_id
+        plugin.mkdir(parents=True)
         shutil.copyfile(source / "core-api.json", runtime / "core-api.json")
         shutil.copytree(source / "lang", runtime / "lang")
-        shutil.copyfile(source / "plugins/node/plugin.json", node / "plugin.json")
+        shutil.copyfile(source / "plugins" / plugin_id / "plugin.json", plugin / "plugin.json")
         # A legacy entrypoint is present but must never be selected as fallback.
-        (node / "plugin.sh").write_text("exit 99\n")
+        marker = root / "legacy-executed"
+        (plugin / "plugin.sh").write_text(f'#!/bin/sh\nprintf fallback > "{marker}"\nexit 99\n')
+        (plugin / "plugin.sh").chmod(0o755)
         env = isolated_environment(root)
+        # Node status also supports a direct system-binary probe outside PATH.
+        # Point its documented override at an absent fixture, never /usr/bin/node.
+        env["ATM_NODE_SYSTEM_BINARY"] = str(root / "absent-system-node")
         command = [str(executable.resolve()), "--home", str(runtime), "--json"]
 
         def run(*args, check=True):
@@ -70,27 +134,52 @@ def verify_source(executable):
         before = snapshot(root)
         discovered, = json.loads(run("plugins", "list").stdout)
         assert discovered["executor"] == "native" and not discovered["available"]
-        assert run("--dry-run", "install", "node", check=False).returncode != 0
-        assert run("status", "node", check=False).returncode != 0
+        for operation in manifest["operations"]:
+            assert run("--dry-run", "plugin", plugin_id, operation,
+                       *ROUTE_ARGS[operation], check=False).returncode != 0
+        if "status" in manifest["operations"]:
+            assert run("status", plugin_id, check=False).returncode != 0
         assert snapshot(root) == before, "missing-binary paths modified disk"
+        if target not in manifest["executables"]:
+            print(f"PASS source {plugin_id}: unavailable on {target}, no fallback/writes")
+            return
+        relative = Path("plugins") / plugin_id / manifest["executables"][target]
         binary = runtime / relative
         binary.parent.mkdir(parents=True)
         shutil.copyfile(source / relative, binary)
+        check_architecture(binary.read_bytes(), target)
+        digest = (source / (str(relative) + ".sha256")).read_text().split()[0]
+        assert hashlib.sha256(binary.read_bytes()).hexdigest() == digest
         binary.chmod(0o755)
         before = snapshot(root)
         discovered, = json.loads(run("plugins", "list").stdout)
         assert discovered["available"] and discovered["executor"] == "native"
         for operation in manifest["operations"]:
-            args = ["26.0.0"] if operation in ("use", "remove") else []
-            plan = json.loads(run("--dry-run", "plugin", "node", operation, *args).stdout)
+            plan = json.loads(run("--dry-run", "plugin", plugin_id, operation, *ROUTE_ARGS[operation]).stdout)
             assert plan["executor"] == "native" and plan["protocol"] == "jsonl-v1"
             assert plan["operation"] == operation and plan["dry_run"] is True
             assert plan["command"] == [str(binary)]
         assert snapshot(root) == before, "dry-run modified disk"
-    print("PASS source: native metadata, missing-binary refusal, no legacy fallback, eight no-write dry-run routes")
+        # These are compiled local backends, never downloaded application payloads.
+        # Empty PATH and isolated HOME avoid probing the developer's installation.
+        for operation in ("menu", "status"):
+            if operation not in manifest["operations"]:
+                continue
+            result = run("--yes", "plugin", plugin_id, operation)
+            events = [json.loads(line) for line in result.stdout.splitlines()]
+            assert events and events[0]["type"] == "started"
+            terminal, = [event for event in events if event["type"] == "result"]
+            assert terminal["status"] == "success", terminal
+            if operation == "menu":
+                assert terminal.get("choices"), "root menu returned no choices"
+                assert all(choice["operation"] in manifest["operations"] for choice in terminal["choices"])
+            assert snapshot(root) == before, f"{operation} modified isolated runtime/home"
+    print(f"PASS source {plugin_id}: native metadata, missing-binary refusal, no fallback, {len(manifest['operations'])} no-write routes")
 
 
 def verify(directory, selected=()):
+    source = Path(__file__).resolve().parents[1]
+    natives = source_manifests(source)
     targets = (
         ("linux-amd64", ".tar.gz", 62),
         ("linux-arm64", ".tar.gz", 183),
@@ -123,38 +212,35 @@ def verify(directory, selected=()):
             assert parts[0] == root and ".." not in parts
             assert not any(p in ("internal-docs", ".git", ".config", ".codex", ".agents", "__pycache__", "tests") for p in parts)
             assert not name.endswith(".go")
-            assert not name.startswith(root + "/plugins/node/native/")
+            assert not any(p.startswith(".") for p in parts)
         manifest = json.loads(entries[root + "/release.json"])
         assert manifest["version"] == "0.0.2" and manifest["migration"] is True
         assert manifest["os"] + "-" + manifest["arch"] == platform
         assert set(entries) == {root + "/" + name for name in manifest["files"]} | {root + "/release.json"}
         for name, digest in manifest["files"].items():
             assert hashlib.sha256(entries[root + "/" + name]).hexdigest() == digest
-        node = node_manifest(entries[root + "/plugins/node/plugin.json"])
-        node_files = {name for name in entries if name.startswith(root + "/plugins/node/bin/")}
-        if platform.startswith("linux"):
-            entry = root + "/plugins/node/" + node["executables"][platform.replace("-", "/")]
-            assert node_files == {entry}, "missing or foreign Node executable"
-            native = entries[entry]
-            assert native[:6] == b"\x7fELF\x02\x01"
-            assert struct.unpack_from("<H", native, 18)[0] == machine
-            assert modes[entry] & 0o111, "Node executable permission missing"
-        else:
-            assert not node_files, "unsupported Node backend must remain unavailable"
+        target = platform.replace("-", "/")
+        packaged = {}
+        for name, data in entries.items():
+            parts = PurePosixPath(name).parts
+            if len(parts) == 4 and parts[1] == "plugins" and parts[3] == "plugin.json":
+                declared = json.loads(data)
+                if declared.get("schema") == 2 or declared.get("executor") == "native":
+                    packaged[parts[2]] = native_manifest(data, parts[2])
+        assert packaged == natives, "native manifests differ from source"
+        for plugin_id, native in packaged.items():
+            prefix = root + "/plugins/" + plugin_id + "/"
+            assert not any(name.startswith(prefix + "native/") for name in entries)
+            binaries = {name for name in entries if name.startswith(prefix + "bin/")}
+            relative = native["executables"].get(target)
+            expected = {prefix + relative} if relative else set()
+            assert binaries == expected, f"{plugin_id}: missing, stale or foreign native executable"
+            if relative:
+                check_architecture(entries[prefix + relative], target)
+                assert modes[prefix + relative] & 0o111, "native executable permission missing"
         exe = entries[root + ("/atm.exe" if platform.startswith("windows") else "/atm")]
-        if platform.startswith("windows"):
-            assert exe[:2] == b"MZ"
-            pe = struct.unpack_from("<I", exe, 0x3C)[0]
-            assert exe[pe:pe + 4] == b"PE\x00\x00"
-            assert struct.unpack_from("<H", exe, pe + 4)[0] == machine
-        elif platform.startswith("darwin"):
-            assert exe[:4] == b"\xcf\xfa\xed\xfe"
-            assert struct.unpack_from("<I", exe, 4)[0] == machine
-            assert struct.unpack_from("<I", exe, 12)[0] == 2
-        else:
-            assert exe[:4] == b"\x7fELF"
-            assert struct.unpack_from("<H", exe, 18)[0] == machine
-        if platform == "linux-amd64" and sys.platform.startswith("linux") and host_platform.machine() == "x86_64":
+        check_architecture(exe, target)
+        if target == host_target() and extension == ".tar.gz":
             with tempfile.TemporaryDirectory() as temp:
                 with tarfile.open(path) as archive:
                     archive.extractall(temp, filter="data")
@@ -164,9 +250,10 @@ def verify(directory, selected=()):
                 assert "atm 0.0.2" in result.stdout
                 result = subprocess.run([str(executable), "--json", "plugins", "list"], env=env, text=True, capture_output=True, check=True, timeout=20)
                 plugins = json.loads(result.stdout)
-                assert len(plugins) == 16
-                node, = [item for item in plugins if item["id"] == "node"]
-                assert node["available"] and node["executor"] == "native"
+                for plugin_id, native in natives.items():
+                    item, = [item for item in plugins if item["id"] == plugin_id]
+                    assert item["executor"] == "native"
+                    assert item["available"] == (target in native["executables"])
         print(f"PASS {platform}: archive checksum, payload hashes, runtime-only paths and executable architecture")
 
 
