@@ -1,0 +1,22 @@
+{
+ "title":"Android Studio - pinned editions - https://developer.android.com/studio/archive",
+ "complete":"Android Studio operation complete",
+ "back":"Back to Android Studio menu",
+ "install_version":"Install %s | %s",
+ "use_version":"Use %s",
+ "remove_version":"Remove %s",
+ "custom":"Install custom HTTPS archive with SHA-256",
+ "custom_next":"Continue custom archive selection",
+ "custom_hash":"Verify and install custom archive",
+ "name_prompt":"Display name",
+ "version_prompt":"Distribution version (e.g. 2025.3.4.6)",
+ "package_prompt":"Package filename ending in .tar.gz",
+ "url_prompt":"HTTPS archive URL",
+ "hash_prompt":"Expected SHA-256 from trusted publisher",
+ "status":"Installed editions and current selection",
+ "use":"Change active edition",
+ "remove":"Remove unchanged native-owned edition",
+ "uninstall":"Uninstall unchanged native-owned editions",
+ "integrate":"Configure user PATH and desktop entry",
+ "empty":"No eligible installed editions"
+}

@@ -1,23 +1,29 @@
 {
-  "schema": 1,
+  "schema": 2,
   "full_setup": true,
   "id": "flutter",
   "name": "Flutter SDK",
   "version": "0.0.1",
   "description": "Install and manage Flutter SDK versions",
   "order": 2,
-  "min_core_api": 1,
+  "min_core_api": 2,
   "platforms": [
     "linux"
   ],
-  "executor": "legacy-bash",
-  "protocol": "tty-v1",
+  "executor": "native",
+  "protocol": "jsonl-v1",
   "operations": [
     "menu",
     "status",
     "install",
+    "update",
     "remove",
     "uninstall",
-    "use"
-  ]
+    "use",
+    "integrate"
+  ],
+  "executables": {
+    "linux/amd64": "bin/linux-amd64/atm-flutter",
+    "linux/arm64": "bin/linux-arm64/atm-flutter"
+  }
 }

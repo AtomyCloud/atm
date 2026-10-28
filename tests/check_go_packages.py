@@ -88,7 +88,8 @@ def isolated_environment(root):
     env.update(HOME=str(root / "user"), XDG_CONFIG_HOME=str(root / "config"),
                XDG_DATA_HOME=str(root / "data"), XDG_CACHE_HOME=str(root / "cache"),
                ATM_CONFIG_DIR=str(root / "config"), ATM_STATE_DIR=str(root / "state"),
-               ATM_APPS_DIR=str(root / "apps"), ATM_LANG="en-us", PATH="")
+               ATM_APPS_DIR=str(root / "apps"), ATM_LANG="en-us", PATH="",
+               ATM_NODE_SYSTEM_BINARY=str(root / "absent-system-node"))
     return env
 
 
@@ -98,8 +99,25 @@ def snapshot(root):
             for path in root.rglob("*")}
 
 
+def verify_read_only_backend(run, manifest, root):
+    """Run only locally compiled menu/status, never downloaded applications."""
+    before = snapshot(root)
+    for operation in ("menu", "status"):
+        if operation not in manifest["operations"]:
+            continue
+        result = run("--yes", "plugin", manifest["id"], operation)
+        events = [json.loads(line) for line in result.stdout.splitlines()]
+        assert events and events[0]["type"] == "started"
+        terminal, = [event for event in events if event["type"] == "result"]
+        assert terminal["status"] == "success", terminal
+        if operation == "menu":
+            assert terminal.get("choices"), "root menu returned no choices"
+            assert all(choice["operation"] in manifest["operations"] for choice in terminal["choices"])
+        assert snapshot(root) == before, f"{manifest['id']} {operation} modified isolated runtime/home"
+
+
 def verify_source(executable):
-    """Isolated manifest and dry-run checks; never run a native backend."""
+    """Isolated dry-run routes and read-only compiled menu/status checks."""
     source = Path(__file__).resolve().parents[1]
     for manifest in source_manifests(source).values():
         verify_native_source(executable, source, manifest)
@@ -122,9 +140,6 @@ def verify_native_source(executable, source, manifest):
         (plugin / "plugin.sh").write_text(f'#!/bin/sh\nprintf fallback > "{marker}"\nexit 99\n')
         (plugin / "plugin.sh").chmod(0o755)
         env = isolated_environment(root)
-        # Node status also supports a direct system-binary probe outside PATH.
-        # Point its documented override at an absent fixture, never /usr/bin/node.
-        env["ATM_NODE_SYSTEM_BINARY"] = str(root / "absent-system-node")
         command = [str(executable.resolve()), "--home", str(runtime), "--json"]
 
         def run(*args, check=True):
@@ -160,20 +175,7 @@ def verify_native_source(executable, source, manifest):
             assert plan["operation"] == operation and plan["dry_run"] is True
             assert plan["command"] == [str(binary)]
         assert snapshot(root) == before, "dry-run modified disk"
-        # These are compiled local backends, never downloaded application payloads.
-        # Empty PATH and isolated HOME avoid probing the developer's installation.
-        for operation in ("menu", "status"):
-            if operation not in manifest["operations"]:
-                continue
-            result = run("--yes", "plugin", plugin_id, operation)
-            events = [json.loads(line) for line in result.stdout.splitlines()]
-            assert events and events[0]["type"] == "started"
-            terminal, = [event for event in events if event["type"] == "result"]
-            assert terminal["status"] == "success", terminal
-            if operation == "menu":
-                assert terminal.get("choices"), "root menu returned no choices"
-                assert all(choice["operation"] in manifest["operations"] for choice in terminal["choices"])
-            assert snapshot(root) == before, f"{operation} modified isolated runtime/home"
+        verify_read_only_backend(run, manifest, root)
     print(f"PASS source {plugin_id}: native metadata, missing-binary refusal, no fallback, {len(manifest['operations'])} no-write routes")
 
 
@@ -254,6 +256,14 @@ def verify(directory, selected=()):
                     item, = [item for item in plugins if item["id"] == plugin_id]
                     assert item["executor"] == "native"
                     assert item["available"] == (target in native["executables"])
+                    if not item["available"]:
+                        continue
+
+                    def run(*args):
+                        return subprocess.run([str(executable), "--json", *args], env=env,
+                                              text=True, capture_output=True, check=True, timeout=20)
+
+                    verify_read_only_backend(run, native, Path(temp))
         print(f"PASS {platform}: archive checksum, payload hashes, runtime-only paths and executable architecture")
 
 

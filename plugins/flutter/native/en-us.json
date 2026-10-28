@@ -1,0 +1,20 @@
+{
+  "title": "Flutter SDK - https://docs.flutter.dev/install/archive",
+  "complete": "Flutter operation complete",
+  "latest": "Choose from latest five stable releases",
+  "custom": "Install exact stable version",
+  "version_prompt": "Flutter version (e.g. 3.47.8)",
+  "install_version": "Install Flutter %s",
+  "use_version": "Use Flutter %s",
+  "remove_version": "Remove Flutter %s",
+  "update": "Update within the active SDK channel",
+  "status": "Installed versions and current selection",
+  "use": "Use installed version",
+  "remove": "Remove unchanged owned version",
+  "uninstall": "Uninstall unchanged native versions (modified SDKs are preserved)",
+  "integrate": "Add selected Flutter to user PATH",
+  "empty": "No eligible installed versions",
+  "offline": "Official releases unavailable; installed versions remain accessible",
+  "current": "(current)",
+  "back": "Back to Flutter menu"
+}

@@ -2,7 +2,8 @@
 
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
-> executor supporting progress and cancellation. Node.js, Go, Java/JDK and Trivy have native Linux
+> executor supporting progress and cancellation. Node.js, Go, Java/JDK, Flutter,
+> Android Studio and Trivy have native Linux
 > backends; remaining plugins use an explicit compatibility backend while being
 > migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
@@ -76,7 +77,8 @@ to keep this exact snapshot. Preserve any existing installation before switching
 </div>
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
-Go toolchain, Java/JDK and Trivy backends are written in Go. The v0.0.1 legacy entrypoint and other application
+Go toolchain, Java/JDK, Flutter, Android Studio and Trivy backends are written in Go.
+The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
 versions side by side, switch active versions, configure PATH and create desktop
@@ -99,10 +101,10 @@ Desktop apps: ~/.local/share/applications
 | Plugin | ID | Version | Purpose |
 |---|---|---:|---|
 | [Java / JDK](plugins/java/README.md) | `java` | `0.0.1` | Install and switch Java/JDK versions from supported vendors or checksummed custom URLs. |
-| Flutter SDK | `flutter` | `0.0.1` | Install, switch, remove, and uninstall Flutter SDK versions. |
+| [Flutter SDK](plugins/flutter/README.md) | `flutter` | `0.0.1` | Latest-five/custom official releases, channel-aware updates, version switching and guarded removal. |
 | [Go](plugins/go/README.md) | `go` | `0.0.1` | Install, switch, remove, and uninstall Go versions while preserving the Go workspace. |
 | VS Code | `vscode` | `0.0.1` | Install VS Code versions, switch installed versions, configure CLI and desktop launchers. |
-| Android Studio | `android_studio` | `0.0.1` | Install and switch Android Studio versions and create desktop launchers. |
+| [Android Studio](plugins/android_studio/README.md) | `android_studio` | `0.0.1` | Verified pinned/custom IDE archives, version switching and owned user desktop integration. |
 | Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 | [Docker](plugins/docker/README.md) | `docker` | `0.0.1` | Install Docker Engine, Compose, and Desktop; export and restore image archives. |
@@ -398,6 +400,13 @@ Use this submenu to install supported JDK distributions, install a custom JDK ta
 
 ### Flutter SDK
 
+Compiled ATM uses the native Go backend. It discovers the latest five compatible
+stable releases and exact custom versions from official metadata, verifies SHA-256,
+extracts XZ natively and retains the active channel during updates. SDK selection
+tolerates regenerable caches; removal refuses modified files. PATH integration is
+explicit. See the [Flutter guide](plugins/flutter/README.md) for commands, ownership
+rules and architecture availability. The menu below belongs to legacy `bin/atm`.
+
 ```text
 🦋 Flutter SDK Installer
 Current: <status>
@@ -483,6 +492,15 @@ x-scheme-handler/vscode -> code-url-handler.desktop
 ```
 
 ### Android Studio
+
+Compiled ATM uses a native Go backend on Linux amd64. It retains the five pinned
+selectors below, with official download URLs and SHA-256 hashes for each, and
+requires an explicit checksum for custom archives. These selectors are not a
+dynamic latest-release list. Status inspects IDE metadata without launching Java
+or the IDE. PATH and owned desktop integration are explicit; modified installs,
+user settings and projects are preserved. See the
+[Android Studio guide](plugins/android_studio/README.md) for native commands and
+limits. The menu below describes the unchanged legacy `bin/atm` workflow.
 
 ```text
 🤖 Android Studio Installer

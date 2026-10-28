@@ -69,7 +69,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Capability | Linux | Windows |
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
-| Application install/remove/version switching | Native Node.js, Go, Java/JDK and Trivy; remaining plugins use Bash compatibility | Application backends pending |
+| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio and Trivy; remaining plugins use Bash compatibility | Application backends pending |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
 | Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
@@ -81,6 +81,8 @@ remain separate. No installed copy is updated automatically. Use the
 | Native Go toolchain backend | Implemented; automated Linux checks passed, human acceptance pending | Pending |
 | Native Trivy backend | Binary/Docker modes implemented; automated Linux checks passed, human acceptance pending | Pending |
 | Native Java/JDK backend | Vendor/custom JDK lifecycle implemented; automated Linux checks passed, human acceptance pending | Pending |
+| Native Flutter backend | Official checksummed XZ SDK lifecycle and channel-aware updates; human acceptance pending | Pending |
+| Native Android Studio backend | Pinned/custom checksummed IDE lifecycle and owned desktop integration on amd64; human acceptance pending | Pending |
 | Remaining application backends | Sequential migration in progress | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
@@ -215,6 +217,13 @@ not include developer notes, Git history or user-level configuration. Build only
 from a reviewed checkout: local changes under runtime directories are included
 and builds from a dirty checkout are marked `-dirty`.
 
+`python3 -B tests/check_go_packages.py <package-directory>` checks all five targets'
+hashes, payload boundaries and executable architectures. On the matching host it
+also runs native root menus and status with an isolated HOME and empty PATH,
+asserting no filesystem changes. It never runs foreign-platform binaries or
+downloads/executes application payloads. This is automated smoke coverage, not
+human acceptance of an installed SDK or other-platform runtime validation.
+
 Checksums detect corruption; they are **not signatures or proof of origin**.
 The maintainer-approved Ed25519 public key is embedded, and signed full-package
 verification is available offline. Local Linux0.0.2 packages were signed and the
@@ -250,7 +259,8 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 1. Human acceptance of the native Linux Go toolchain backend. Native Node.js was
    accepted by the maintainer on 2026-10-28; Linux ARM64 runtime remains pending.
 2. Port remaining application plugins one at a time, simplest to most complex,
-   advancing after automated gates. Go, Trivy and Java/JDK passed; Flutter is next. Preserve
+   advancing after automated gates. Go, Trivy, Java/JDK, Flutter and Android Studio
+   are implemented; VS Code is next. Preserve
    plugin-owned application behavior and the generic native menu/integration contracts.
    Legacy backup import remains separate from native plugin code backups.
 3. Implement/test Node.js on other hosts; Linux ARM64 runtime acceptance is pending.

@@ -3,9 +3,13 @@
 Status: experimental internal services introduced in migration 0.0.2, Patch v27.2.
 These services are tested with temporary artifacts and are not a stable third-party
 SDK. This page documents `internal/install.Manager`, not every application's backend.
-The native Node.js and Go backends use plugin-owned lifecycle policies to preserve
+The native Node.js, Go, Java, Trivy, Flutter and Android Studio backends use
+plugin-owned lifecycle policies to preserve
 their existing layouts; they do not silently adopt legacy roots into this Manager.
-See the [Node](../../plugins/node/README.md) and [Go](../../plugins/go/README.md) guides.
+See the [Node](../../plugins/node/README.md), [Go](../../plugins/go/README.md),
+[Java](../../plugins/java/README.md), [Trivy](../../plugins/trivy/README.md) and
+[Flutter](../../plugins/flutter/README.md) and
+[Android Studio](../../plugins/android_studio/README.md) guides.
 
 ## Ownership And API
 
@@ -62,8 +66,9 @@ only the executable bit retained where supported; no owners/setuid bits are copi
 
 **This Manager intentionally rejects links and PAX archives.** The native Node
 backend handles its npm/npx links in a separate confined, plugin-owned extractor.
-Compressed tar.xz, app
-bundles, MSI/DEB/PKG installation and post-install scripts are not implemented.
+Compressed tar.xz, app bundles, MSI/DEB/PKG installation and post-install scripts
+are not implemented in this generic Manager. Flutter handles tar.xz in its own
+bounded, plugin-owned Go extractor; this does not change the Manager contract.
 
 ## Transaction Layout
 
@@ -119,8 +124,9 @@ that exit abruptly before/after the activation commit. No actual application is
 downloaded or installed. Linux results are local; Windows/macOS execution must be
 confirmed by the expanded GitHub Actions matrix and manual standard-user testing.
 
-Native Node.js is implemented and accepted on Linux; native Go has passed automated
-Linux checks. Remaining application ports proceed separately. The native catalog
+Native Node.js is implemented and accepted on Linux; native Go, Java, Trivy,
+Flutter and Android Studio have automated Linux coverage. Remaining application
+ports proceed separately. The native catalog
 and signed CORE update/recovery services are already implemented; source catalog
 downloads do not compile missing application backends. Never interpret these generic
 services as authorization to adopt or delete an application's existing data.
