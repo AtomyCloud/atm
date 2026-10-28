@@ -86,7 +86,8 @@ applies to REA child supervision, including static JavaScript/Electron analysis.
 Python and coreutils `timeout` are no longer ATM helper dependencies. Python,
 Java, Ghidra, Hopper, IDA, Frida and other provider requirements remain task-specific.
 
-**Native automatic prerequisite repair is not implemented.** Manage Node through
+**This stage intentionally uses diagnostics and separate prerequisite installation.**
+Native automatic repair is outside the approved scope. Manage Node through
 the native Node plugin separately and install `procps`/`procps-ng` through your
 distribution. No cross-plugin dispatch, APT/sudo, repository changes or automatic
 provider preparation occurs. This is an explicit reduction from legacy automatic

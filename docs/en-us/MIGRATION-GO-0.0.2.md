@@ -86,7 +86,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Native VS Code backend | Official stable releases, portable data preservation, explicit extensions and owned integration; human acceptance pending | Pending |
 | Native Android SDK backend | Native package/dependency management and plan-bound license acceptance on amd64; human acceptance pending | Pending |
 | Native spotatui backend | ATM/local portable lifecycle, explicit dependency trust and native launchers; Linux version tested and accepted by maintainer | Pending |
-| Native REA backend | ATM/custom npm lifecycle, pinned Node launcher and offline manual detection; automated checks passed, human acceptance pending; automatic dependency repair deferred | Pending |
+| Native REA backend | ATM/custom npm lifecycle, pinned Node launcher and offline manual detection; automated checks passed, human acceptance pending; separate prerequisite installation by design | Pending |
 | Remaining application backends | Sequential migration in progress | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
@@ -265,8 +265,8 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 2. Port remaining application plugins one at a time, simplest to most complex,
    advancing after automated gates. Go, Trivy, Java/JDK, Flutter, Android Studio,
    VS Code, Android SDK, spotatui and REA have native backends; OS Packages is next.
-   REA automatic prerequisite repair is deferred; native diagnostics provide separate
-   installation guidance. Preserve
+   REA uses diagnostics and separate prerequisite installation by design;
+   automatic repair is outside this stage. Preserve
    plugin-owned application behavior and the generic native menu/integration contracts.
    Legacy backup import remains separate from native plugin code backups.
 3. Implement/test Node.js on other hosts; Linux ARM64 runtime acceptance is pending.
