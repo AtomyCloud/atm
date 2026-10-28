@@ -1,0 +1,17 @@
+{
+  "title": "AI Tools - native preview",
+  "complete": "AI preview operation complete",
+  "preview": "Preview only: PicoClaw, Hermes Desktop AppImage and Codex CLI. Hermes Agent, Ollama and system Desktop packages remain Pending; the production AI plugin is unchanged.",
+  "status": "Recorded portable installations",
+  "install": "Install latest official binary",
+  "custom": "Install exact stable version",
+  "version_prompt": "Stable version X.Y.Z",
+  "update": "Update owned installation",
+  "use": "Use version",
+  "remove": "Remove inactive version",
+  "uninstall": "Remove all owned preview versions (keep user data)",
+  "back": "Back",
+  "trust": "Download consent trusts the named upstream executable and its GitHub release SHA-256 metadata. This is not an independent signature. ATM does not run it, install dependencies, change PATH or configure services.",
+  "appimage": "AppImage runtime dependencies (including compatible FUSE when required) must be installed separately. ATM does not execute or extract the AppImage runtime.",
+  "preserved": "Manual and legacy installations, models, credentials, settings and profiles are not adopted or removed. Versions reported here come only from private preview receipts."
+}

@@ -758,6 +758,13 @@ rules, recovery behavior and differences from the retained Bash implementation.
 
 ### AI Tools
 
+AI migration is in progress. The normal menu still uses the existing legacy
+backend. A separate native preview covers portable PicoClaw, Hermes Desktop
+AppImage and Codex CLI; it is not selected automatically or included as a
+production native backend. Hermes Agent, Ollama and system Desktop management
+remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
+scope, isolated testing and ownership boundaries.
+
 ```text
 🧠 AI Tools Installer
 Current: <status>
@@ -765,6 +772,7 @@ Current: <status>
 1) Hermes
 2) Ollama
 3) PicoClaw
+4) Codex
 b) Back
 q) Exit
 ```

@@ -1,0 +1,168 @@
+"""Opt-in AI preview checks through CORE; never execute legacy or provider code."""
+import json
+import hashlib
+from pathlib import Path
+import shutil
+import subprocess
+import sys
+import tempfile
+
+from check_go_packages import (host_target, isolated_environment, native_manifest,
+                               seed_user_state, snapshot, verify_read_only_trace)
+
+
+def check(executable, backend):
+    source = Path(__file__).resolve().parents[1]
+    production = json.loads((source / "plugins/ai/plugin.json").read_bytes())
+    assert production["executor"] == "legacy-bash", "revisit preview gate after full AI parity"
+    data = (source / "plugins/ai/tests/native-preview.json").read_bytes()
+    manifest = native_manifest(data, "ai")
+    assert not manifest.get("full_setup", False)
+    assert host_target() in manifest["executables"]
+    tracer = shutil.which("strace")
+    assert tracer, "strace required to verify no subprocess/network activity"
+    with tempfile.TemporaryDirectory(prefix="atm-ai CLI-") as directory:
+        root = Path(directory)
+        runtime = root / "runtime"
+        plugin = runtime / "plugins/ai"
+        plugin.mkdir(parents=True)
+        seed_user_state(root)
+        shutil.copyfile(source / "core-api.json", runtime / "core-api.json")
+        shutil.copytree(source / "lang", runtime / "lang")
+        (plugin / "plugin.json").write_bytes(data)
+        target = plugin / manifest["executables"][host_target()]
+        target.parent.mkdir(parents=True)
+        shutil.copyfile(backend, target)
+        target.chmod(0o700)
+        env = isolated_environment(root)
+        for key in tuple(env):
+            if key.startswith(("HERMES_", "OLLAMA_", "PICOCLAW_", "CODEX_", "OPENAI_")):
+                env.pop(key)
+        marker = root / "unexpected-provider-execution"
+        payload = f'#!/bin/sh\nprintf unexpected > "{marker}"\n'
+        for relative in ("user/.local/bin/hermes", "user/.local/bin/ollama",
+                         "user/.local/bin/codex", "user/.local/bin/picoclaw",
+                         "apps/ai/picoclaw/picoclaw", "apps/ai/codex/cli/bin/codex",
+                         "apps/hermes/hermes-desktop/current.AppImage"):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(payload)
+            path.chmod(0o700)
+        for relative in ("user/.codex/auth.json", "user/.hermes/config.yaml",
+                         "user/.picoclaw/config.json", "user/.ollama/models/sentinel"):
+            path = root / relative
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text("synthetic private data\n")
+            path.chmod(0o600)
+        for path in root.rglob("*"):
+            if path.is_dir():
+                path.chmod(0o700)
+        base = [str(executable), "--home", str(runtime), "--json"]
+        count = 0
+
+        def run(*args, success=True, started=True, read_only=True):
+            nonlocal count
+            before = snapshot(root)
+            with tempfile.TemporaryDirectory(prefix="atm-ai-trace-") as trace_dir:
+                trace = Path(trace_dir) / "trace"
+                result = subprocess.run(
+                    [tracer, "-f", "-qq", "-s", "4096", "-e",
+                     "trace=execve,execveat,connect", "-o", str(trace), *base, *args],
+                    env=env, input="", capture_output=True, text=True, timeout=20)
+                assert (result.returncode == 0) == success, (args, result.stdout, result.stderr)
+                verify_read_only_trace(trace.read_text(), executable, target if started else None)
+            after = snapshot(root)
+            if read_only:
+                assert after == before, (args, "unexpected user-state change")
+            else:
+                changed = {p for p in before.keys() | after.keys() if before.get(p) != after.get(p)}
+                owned = "apps/ai/picoclaw/native-v1"
+                assert all(p == owned or p.startswith(owned + "/") for p in changed), (args, changed)
+            assert not marker.exists(), "provider executable ran"
+            count += 1
+            return result
+
+        run("status", "ai")
+        menu = run("--yes", "plugin", "ai")
+        assert json.loads(menu.stdout.splitlines()[-1])["choices"], "preview menu empty"
+        for provider in ("picoclaw", "hermes-desktop", "codex-cli"):
+            submenu = run("--yes", "plugin", "ai", "menu", provider)
+            choices = json.loads(submenu.stdout.splitlines()[-1])["choices"]
+            assert {c["id"] for c in choices} >= {"install", "custom", "update", "uninstall"}
+            for action in ("install", "update"):
+                run("--yes", "plugin", "ai", action, "--provider", provider, success=False)
+            run("--yes", "plugin", "ai", "install", "--provider", provider,
+                "--version", "../../escape", "--trust-download", success=False)
+            run("--yes", "plugin", "ai", "install", "--provider", provider,
+                "--provider", provider, "--trust-download", success=False)
+            run("--yes", "plugin", "ai", "menu", provider, "--trust-download", success=False)
+        for pending in ("hermes-agent", "ollama", "hermes-desktop-system", "codex-desktop"):
+            run("--yes", "plugin", "ai", "menu", pending, success=False)
+            run("--yes", "plugin", "ai", "install", "--provider", pending,
+                "--trust-download", success=False)
+        run("install", "ai", success=False, started=False)
+        run("--yes", "plugin", "ai", "status", "--unexpected", success=False)
+        run("--yes", "plugin", "ai", "menu", "unknown-view", success=False)
+        for operation in ("install", "update", "remove", "uninstall"):
+            if operation in manifest["operations"]:
+                run("--yes", "plugin", "ai", operation, "--unexpected", success=False)
+        for operation in manifest["operations"]:
+            result = run("--dry-run", "plugin", "ai", operation, started=False)
+            plan = json.loads(result.stdout)
+            assert plan["dry_run"] and plan["executor"] == "native"
+
+        # Seed receipt-owned ELF fixtures, never downloaded or run. This tests the
+        # compiled selection/removal paths independently of HTTP/install unit tests.
+        owned = root / "apps/ai/picoclaw/native-v1"
+        owned.mkdir(mode=0o700)
+        versions = owned / "versions"
+        versions.mkdir(mode=0o700)
+
+        def state_file(path, value):
+            path.write_text(json.dumps(value) + "\n")
+            path.chmod(0o600)
+
+        state_file(owned / "owner.json", {"Schema": 1, "Plugin": "ai", "Provider": "picoclaw"})
+        payload = Path(backend).read_bytes()
+        digest = hashlib.sha256(payload).hexdigest()
+        for version in ("0.1.0", "0.2.0"):
+            directory = versions / version
+            directory.mkdir(mode=0o700)
+            tool = directory / "tool"
+            tool.write_bytes(payload)
+            tool.chmod(0o755)
+            arch = host_target().split("/")[1]
+            asset_arch = "x86_64" if arch == "amd64" else "arm64"
+            state_file(directory / "receipt.json", {
+                "Schema": 1, "Plugin": "ai", "BinarySHA256": digest, "BinarySize": len(payload),
+                "Artifact": {"Provider": "picoclaw", "Version": version, "Arch": arch,
+                             "URL": f"https://github.com/sipeed/picoclaw/releases/download/v{version}/picoclaw_Linux_{asset_arch}.tar.gz",
+                             "SHA256": "a" * 64, "Format": "tar.gz", "Entry": "picoclaw", "Size": 100},
+            })
+        active = owned / "current"
+        active.symlink_to("versions/0.1.0/tool")
+        run("status", "ai")
+        run("--yes", "plugin", "ai", "use", "--provider", "picoclaw", "--version", "0.2.0", read_only=False)
+        assert active.readlink().as_posix() == "versions/0.2.0/tool"
+        run("--yes", "plugin", "ai", "remove", "--provider", "picoclaw", "--version", "0.2.0", success=False)
+        inactive = versions / "0.1.0/tool"
+        inactive.write_bytes(payload[:-1] + bytes([payload[-1] ^ 1]))
+        run("--yes", "plugin", "ai", "use", "--provider", "picoclaw", "--version", "0.1.0", success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "picoclaw", success=False)
+        inactive.write_bytes(payload)
+        foreign = owned / "manual-notes"
+        foreign.write_text("unknown files must block removal\n")
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "picoclaw", success=False)
+        foreign.unlink()
+        run("--yes", "plugin", "ai", "remove", "--provider", "picoclaw", "--version", "0.1.0", read_only=False)
+        assert not (versions / "0.1.0").exists() and active.exists()
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "picoclaw", read_only=False)
+        assert not active.is_symlink() and not list(versions.iterdir())
+        run("status", "ai")
+        print(f"PASS AI preview: {count} isolated CLI routes including owned selection/removal; no provider/shell/network execution")
+
+
+if __name__ == "__main__":
+    if len(sys.argv) != 3:
+        raise SystemExit("usage: check_ai_native.py CORE_BINARY AI_PREVIEW_BINARY")
+    check(Path(sys.argv[1]).resolve(strict=True), Path(sys.argv[2]).resolve(strict=True))

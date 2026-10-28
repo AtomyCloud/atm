@@ -73,6 +73,31 @@ func TestNativeDiscoveryAndRuntimeExclusions(t *testing.T) {
 	}
 }
 
+func TestUnactivatedPreviewRetainsLegacyManifest(t *testing.T) {
+	t.Chdir(t.TempDir())
+	preview := nativeFixture(t, "preview")
+	data, err := json.Marshal(preview)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writeFixture(t, "plugins/preview/tests/native-preview.json", string(data))
+	legacy := plugin.Manifest{Schema: 1, MinAPI: 1, ID: "preview", Name: "Preview", Version: "0.0.1",
+		Executor: "legacy-bash", Protocol: "tty-v1", Platforms: []string{"linux"}, Operations: []string{"menu", "status"}}
+	writeManifest(t, legacy)
+	manifests, err := discoverNative()
+	if err != nil || len(manifests) != 0 {
+		t.Fatalf("unactivated preview entered the native build: %v %v", manifests, err)
+	}
+	if excludedRuntimePath("plugins/preview/plugin.json", nil) {
+		t.Fatal("production legacy manifest was excluded")
+	}
+	for _, path := range []string{"plugins/preview/native/main.go", "plugins/preview/tests/native-preview.json"} {
+		if !excludedRuntimePath(path, nil) {
+			t.Fatalf("development-only file entered runtime package: %s", path)
+		}
+	}
+}
+
 func TestNativeDiscoveryRefusals(t *testing.T) {
 	for _, scenario := range []string{"missing-source", "only-test-source", "traversal", "source-output", "duplicate-output", "hidden-output", "checksum-output", "id-mismatch", "bad-target", "source-link", "manifest-link", "plugin-link"} {
 		t.Run(scenario, func(t *testing.T) {

@@ -1,0 +1,197 @@
+//go:build linux
+
+// AI native preview. The production manifest remains legacy until provider parity.
+package main
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"github.com/AtomyCloud/atm/internal/protocol"
+	"io"
+	"net/http"
+	"os"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+	"time"
+)
+
+type choice = protocol.Choice
+type backend struct {
+	req    protocol.Request
+	arch   string
+	client *http.Client
+	log    func(string)
+	// Unit tests inject transaction faults, never through the process environment.
+	checkpoint func(string) error
+}
+type options struct {
+	provider, version string
+	trust             bool
+}
+
+func newBackend(req protocol.Request, log func(string)) (*backend, error) {
+	if req.PluginID != "ai" || runtime.GOOS != "linux" || (runtime.GOARCH != "amd64" && runtime.GOARCH != "arm64") {
+		return nil, fmt.Errorf("AI preview requires Linux amd64/arm64")
+	}
+	if err := absolutePath(req.AppsDir); err != nil {
+		return nil, err
+	}
+	return &backend{req: req, arch: runtime.GOARCH, client: &http.Client{Timeout: 5 * time.Minute}, log: log}, nil
+}
+func parseOptions(op string, args []string) (options, error) {
+	o := options{version: "latest"}
+	if op == "status" {
+		if len(args) != 0 {
+			return o, fmt.Errorf("status takes no arguments")
+		}
+		return o, nil
+	}
+	if op == "menu" {
+		if len(args) > 1 {
+			return o, fmt.Errorf("menu expects at most one provider")
+		}
+		if len(args) == 1 {
+			o.provider = args[0]
+			if _, ok := providers[o.provider]; !ok {
+				return o, fmt.Errorf("unknown provider")
+			}
+		}
+		return o, nil
+	}
+	switch op {
+	case "install", "update", "use", "remove", "uninstall":
+	default:
+		return o, fmt.Errorf("unsupported AI operation")
+	}
+	seen := map[string]bool{}
+	for i := 0; i < len(args); i++ {
+		key, value, eq := strings.Cut(args[i], "=")
+		if seen[key] {
+			return o, fmt.Errorf("duplicate option %s", key)
+		}
+		seen[key] = true
+		switch key {
+		case "--trust-download":
+			if eq || (op != "install" && op != "update") {
+				return o, fmt.Errorf("download trust is not applicable")
+			}
+			o.trust = true
+		case "--provider", "--version":
+			if !eq {
+				i++
+				if i == len(args) {
+					return o, fmt.Errorf("missing option value")
+				}
+				value = args[i]
+			}
+			if key == "--provider" {
+				o.provider = value
+			} else {
+				o.version = value
+			}
+		default:
+			return o, fmt.Errorf("unknown argument %s", key)
+		}
+	}
+	if _, ok := providers[o.provider]; !ok {
+		return o, fmt.Errorf("explicit supported --provider required")
+	}
+	if o.version != "latest" && !versionRE.MatchString(o.version) {
+		return o, fmt.Errorf("expected stable X.Y.Z or latest")
+	}
+	if (op == "use" || op == "remove") && o.version == "latest" {
+		return o, fmt.Errorf("exact --version required")
+	}
+	if op == "uninstall" && seen["--version"] {
+		return o, fmt.Errorf("uninstall takes no version")
+	}
+	return o, nil
+}
+func (b *backend) execute(ctx context.Context) ([]choice, error) {
+	o, err := parseOptions(b.req.Operation, b.req.Arguments)
+	if err != nil {
+		return nil, err
+	}
+	if err = ctx.Err(); err != nil {
+		return nil, err
+	}
+	switch b.req.Operation {
+	case "menu":
+		return b.menu(ctx, o.provider)
+	case "status":
+		return nil, b.status(ctx)
+	case "install", "update":
+		if !o.trust {
+			return nil, fmt.Errorf("official executable download requires --trust-download; review provider menu")
+		}
+	}
+	err = b.locked(ctx, o.provider, func() error {
+		switch b.req.Operation {
+		case "install", "update":
+			return b.install(ctx, o)
+		case "use":
+			return b.activate(ctx, o.provider, o.version)
+		case "remove":
+			return b.remove(ctx, o.provider, o.version)
+		case "uninstall":
+			return b.uninstall(ctx, o.provider)
+		}
+		return fmt.Errorf("unsupported operation")
+	})
+	return nil, err
+}
+func (b *backend) boundary(name string) error {
+	if b.checkpoint != nil {
+		return b.checkpoint(name)
+	}
+	return nil
+}
+func (b *backend) root(id string) string {
+	return filepath.Join(b.req.AppsDir, providers[id].path, "native-v1")
+}
+func serve(ctx context.Context, in io.Reader, out io.Writer) error {
+	req, err := protocol.ReadRequest(in)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(out)
+	emit := func(kind, message, status string, choices []choice) error {
+		message = protocol.SafeText(message)
+		if len(message) > protocol.MaxMessage {
+			message = message[:protocol.MaxMessage]
+		}
+		return enc.Encode(protocol.Event{Protocol: 1, RequestID: req.RequestID, Type: kind, Message: message, Status: status, Choices: choices})
+	}
+	if err = emit("started", label("title"), "", nil); err != nil {
+		return err
+	}
+	if os.Getenv("ATM_DRY_RUN") == "1" {
+		return emit("result", "Dry-run: no filesystem, network or subprocess activity", "success", nil)
+	}
+	b, err := newBackend(req, func(s string) { _ = emit("log", s, "", nil) })
+	var choices []choice
+	if err == nil {
+		choices, err = b.execute(ctx)
+	}
+	status, message := "success", label("complete")
+	if err != nil {
+		status, message, choices = "error", err.Error(), nil
+		if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+			status = "cancelled"
+		}
+	}
+	return emit("result", message, status, choices)
+}
+func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := serve(ctx, os.Stdin, os.Stdout); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+}

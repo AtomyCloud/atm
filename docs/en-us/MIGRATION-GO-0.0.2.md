@@ -98,6 +98,15 @@ transactions and ARM64 runtime acceptance remain Pending. See the
 [OS Packages guide](../../plugins/os_packages/README.md). Thirteen of sixteen
 backends are native; AI, Docker and Backup & Restore remain to migrate.
 
+AI has a separate, opt-in native preview for portable PicoClaw, Hermes Desktop
+AppImage and Codex CLI. The production manifest remains legacy until the other
+AI routes have native parity; this preview does not increase the 13/16 count.
+See the [AI guide](../../plugins/ai/README.md). The preview does not run upstream
+installer scripts or AI applications, download models, access credentials or
+change services.
+Hermes Agent, Ollama, system Desktop management and real provider acceptance
+remain Pending.
+
 Brave uses explicit system-operation consent, pinned official signing-key bytes,
 temporary repository configuration and retained restore recovery copies. It never
 launches the browser during status. Linux process visibility restrictions may
