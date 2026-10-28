@@ -69,7 +69,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Capability | Linux | Windows |
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
-| Existing application install/remove/version switching | Bash compatibility | Unavailable |
+| Application install/remove/version switching | Native Node.js; other plugins use Bash compatibility | Node.js backend pending |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
 | Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
@@ -77,7 +77,8 @@ remain separate. No installed copy is updated automatically. Use the
 | Portable setup and ATM user PATH | Native Go | Native Go; real validation pending |
 | Full Setup orchestration | Native Go; legacy apps explicitly bridged | Native plugins only; app ports pending |
 | Compiled CORE self-update | Signed enrollment/update/recovery enabled with consent; actual newer-release acceptance pending | Enabled with external trusted executable; automated handoff and host acceptance pending |
-| Native Node, Go and VS Code application backends | Pending | Pending |
+| Native Node.js application backend | Implemented; Linux human acceptance pending | Pending |
+| Native Go and VS Code application backends | Pending | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
 executables, native process-group execution and CI test jobs for both architectures.
@@ -243,17 +244,15 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 
 ## Remaining Migration Work
 
-1. Integrate the native download/extraction/receipt/activation services with the
-   first real plugin; add its required archive-link handling and managed removal.
-2. Complete native application PATH/desktop integration contracts and migrate
-   application-specific interactive menus. Legacy backup import remains separate
-   from the new native plugin backup format.
-3. Deliver native Node, then Go and VS Code backends with verified official
-   artifacts, stable launchers, ownership checks and version switching.
-4. Complete signed full-package discovery, installed baseline/receipt and local
-   conflict handling, replacement and independent recovery integration, including
-   Windows file-in-use handling. The Ed25519 key and full-package scope are approved;
-   offline verification and the experimental binary-only transaction library are
-   not an operational production self-updater.
-5. Validate on real Windows standard-user and ARM64 environments, finish
+1. Human acceptance of the native Linux Node.js backend. Its menus, official
+   archive download/extraction, ownership receipts, removal and PATH integration
+   are implemented separately from the already accepted Linux CORE milestone.
+2. Port other application plugins, beginning with Go and VS Code. Preserve
+   plugin-owned application behavior and the generic native menu/integration contracts.
+   Legacy backup import remains separate from native plugin code backups.
+3. Implement/test Node.js on other hosts; Linux ARM64 runtime acceptance is pending.
+4. Finish the Windows external updater helper and target-host acceptance. Linux
+   signed full-package upgrade/recovery has already passed its separate acceptance;
+   new signing/publication/deployment is not implied by application plugin work.
+5. Validate on real Windows standard-user, macOS and ARM64 environments, finish
    translations and approve release publication before replacing legacy ATM.

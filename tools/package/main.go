@@ -1,4 +1,8 @@
 // Build local migration packages. No installation, upload or publication.
+// Native Node binaries are generated from plugins/node/native into private staging.
+// Source-only catalog snapshots do not contain these ignored executables: use a
+// built runtime package or scripts/build_manager.sh --node-local --target all.
+// Discovery and execution never compile the backend or fall back to plugin.sh.
 package main
 
 import (
@@ -18,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/version"
 )
 
@@ -33,8 +38,15 @@ func main() {
 	targetOS := flag.String("os", "linux", "linux, darwin or windows")
 	arch := flag.String("arch", "amd64", "amd64 or arm64")
 	out := flag.String("out", "", "local output directory (required)")
+	nodeOnly := flag.Bool("node-only", false, "build only the native Node plugin beneath --out")
 	flag.Parse()
-	if err := build(*targetOS, *arch, *out); err != nil {
+	var err error
+	if *nodeOnly {
+		err = buildNodeOnly(*targetOS, *arch, *out)
+	} else {
+		err = build(*targetOS, *arch, *out)
+	}
+	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
@@ -67,16 +79,10 @@ func build(targetOS, arch, out string) error {
 		binaryName += ".exe"
 	}
 	binary := filepath.Join(temp, binaryName)
-	cmd := exec.Command("go", "build", "-trimpath", "-buildvcs=false", "-ldflags", "-s -w -buildid= -X github.com/AtomyCloud/atm/internal/version.Commit="+commit, "-o", binary, "./cmd/atm")
-	for _, value := range os.Environ() {
-		key, _, _ := strings.Cut(value, "=")
-		if key != "GOOS" && key != "GOARCH" && key != "CGO_ENABLED" {
-			cmd.Env = append(cmd.Env, value)
-		}
+	if err := compile(targetOS, arch, binary, "./cmd/atm", "-X github.com/AtomyCloud/atm/internal/version.Commit="+commit); err != nil {
+		return err
 	}
-	cmd.Env = append(cmd.Env, "GOOS="+targetOS, "GOARCH="+arch, "CGO_ENABLED=0")
-	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := plugin.CheckBinary(binary, targetOS+"/"+arch); err != nil {
 		return err
 	}
 	b, err := os.ReadFile(binary)
@@ -84,12 +90,17 @@ func build(targetOS, arch, out string) error {
 		return err
 	}
 	files := []payload{{binaryName, b, 0755}}
+	node, err := buildNode(targetOS, arch, temp)
+	if err != nil {
+		return err
+	}
+	files = append(files, node...)
 	for _, root := range []string{"bin", "lib", "libexec", "plugins", "lang", "core-api.json", "LICENSE"} {
 		err := filepath.WalkDir(root, func(path string, d fs.DirEntry, walkErr error) error {
 			if walkErr != nil {
 				return walkErr
 			}
-			if strings.HasPrefix(d.Name(), ".") || d.Name() == "tests" || d.Name() == "__pycache__" {
+			if excludedRuntimePath(path) {
 				if d.IsDir() {
 					return filepath.SkipDir
 				}
@@ -104,9 +115,6 @@ func build(targetOS, arch, out string) error {
 			}
 			if !info.Mode().IsRegular() {
 				return fmt.Errorf("non-regular runtime file refused: %s", path)
-			}
-			if strings.HasSuffix(path, ".pyc") || strings.HasSuffix(path, ".log") {
-				return nil
 			}
 			data, err := os.ReadFile(path)
 			if err != nil {

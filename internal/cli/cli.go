@@ -291,6 +291,12 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 						break
 					}
 				}
+				for _, op := range p.Operations {
+					if op == "menu" {
+						action = op
+						break
+					}
+				}
 			}
 			if len(rest) > 0 {
 				action, rest = rest[0], rest[1:]
@@ -299,6 +305,21 @@ func run(args []string, in *os.File, out, stderr io.Writer) error {
 		plan, err := runner.Plugin(c, p, action, rest)
 		if err != nil {
 			return err
+		}
+		if plan.Executor == "native" && action == "menu" && !*jsonOutput && !c.DryRun && in != nil && term.IsTerminal(in.Fd()) {
+			if output, ok := out.(*os.File); ok && term.IsTerminal(output.Fd()) {
+				words, err := i18n.Load(home, c.Language)
+				if err != nil {
+					return err
+				}
+				model, err := tui.NewPluginMenu(c, plugins, words, p.ID, rest)
+				if err != nil {
+					return err
+				}
+				defer model.Close()
+				_, err = tea.NewProgram(model, tea.WithInput(in), tea.WithOutput(out)).Run()
+				return err
+			}
 		}
 		return execute(c, plan, in, out, stderr, *jsonOutput)
 	}
@@ -327,7 +348,7 @@ func execute(c config.Config, plan runner.Plan, in *os.File, out, stderr io.Writ
 	}
 	if plan.Executor == "native" {
 		if plan.Operation != "status" && !c.AssumeYes {
-			if asJSON || !term.IsTerminal(in.Fd()) {
+			if asJSON || in == nil || !term.IsTerminal(in.Fd()) {
 				return fmt.Errorf("native changes require --yes or interactive confirmation")
 			}
 			fmt.Fprintf(stderr, "Run trusted native plugin %s (%s)? [y/N]: ", plan.PluginID, plan.Operation)
@@ -351,6 +372,11 @@ func execute(c config.Config, plan runner.Plan, in *os.File, out, stderr io.Writ
 		result := runner.RunNative(ctx, c, plan, runner.NativeOptions{Timeout: c.NativeTimeout, Event: emit, Diagnostic: func(s string) error { _, err := fmt.Fprintln(stderr, s); return err }})
 		if err := emit(result.Event()); err != nil {
 			return err
+		}
+		if !asJSON && result.Status == "success" {
+			for _, choice := range result.Choices {
+				fmt.Fprintf(out, "%s: %s (%s %q)\n", choice.ID, choice.Label, choice.Operation, choice.Arguments)
+			}
 		}
 		return result.Err()
 	}

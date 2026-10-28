@@ -102,7 +102,7 @@ func TestNativeManifestPathsAndTargets(t *testing.T) {
 	for _, change := range []func(*Manifest){
 		func(m *Manifest) { m.MinAPI = 1 }, func(m *Manifest) { m.Schema = 1 }, func(m *Manifest) { m.Protocol = "tty-v1" },
 		func(m *Manifest) { m.Executables["windows/amd64"] = "bin/a.cmd" }, func(m *Manifest) { m.Executables["linux/386"] = "bin/fixture" },
-		func(m *Manifest) { m.Operations = []string{"menu"} }, func(m *Manifest) { m.Operations = []string{"install", "install"} },
+		func(m *Manifest) { m.Operations = []string{"shell"} }, func(m *Manifest) { m.Operations = []string{"install", "install"} },
 		func(m *Manifest) { m.Operations = nil }, func(m *Manifest) { delete(m.Executables, "windows/amd64") },
 	} {
 		m := nativeSample()

@@ -39,7 +39,7 @@ func Plugin(c config.Config, p plugin.Plugin, action string, args []string) (Pla
 	if (action == "remove" || action == "use") && len(args) != 1 {
 		return Plan{}, fmt.Errorf("%s requires one version", action)
 	}
-	if (action == "menu" || action == "status" || action == "uninstall") && len(args) != 0 {
+	if (action == "menu" && p.Executor != "native" || action == "status" || action == "uninstall") && len(args) != 0 {
 		return Plan{}, fmt.Errorf("%s takes no extra arguments", action)
 	}
 	if p.Executor == "native" {

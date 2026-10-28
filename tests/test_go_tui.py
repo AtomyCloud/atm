@@ -381,6 +381,38 @@ class TUITests(unittest.TestCase):
             self.assertFalse(Path(env["ATM_APPS_DIR"]).exists())
 
     @unittest.skipUnless(NATIVE, "ATM_TEST_NATIVE_FIXTURE required")
+    def test_native_menu_choices_custom_version_and_cancel(self):
+        for width, height in ((80, 24), (40, 14), (120, 35)):
+            with self.subTest(size=(width, height)), tempfile.TemporaryDirectory() as temp:
+                root = Path(temp)
+                home = self.native_home(root)
+                path = home / "plugins/native_fixture/plugin.json"
+                manifest = json.loads(path.read_text())
+                manifest["operations"].insert(0, "menu")
+                path.write_text(json.dumps(manifest))
+                env = isolated_env(root)
+                env["PATH"] = "/nonexistent"
+                before = snapshot(root)
+                terminal = Terminal(home, root / "config", width, height,
+                                    ("--no-animation", "plugin", "native_fixture", "menu"), env)
+                try:
+                    terminal.wait_for(b"Run this operation?")
+                    terminal.send(b"\x1b[B\r")
+                    terminal.wait_for(b"Choose a version")
+                    terminal.send(b"\r")
+                    terminal.wait_for(b"Version:")
+                    terminal.send(b"26.2.0\r")
+                    terminal.wait_for(b"Run this operation?")
+                    # Default Cancel must not execute the selected installation.
+                    terminal.send(b"\r")
+                    terminal.wait_for(b"Search")
+                    terminal.send(b"q")
+                    self.assert_terminal_restored(terminal)
+                    self.assertEqual(snapshot(root), before)
+                finally:
+                    terminal.close()
+
+    @unittest.skipUnless(NATIVE, "ATM_TEST_NATIVE_FIXTURE required")
     def test_native_progress_cancel_and_terminal_restore(self):
         for width, height in ((80, 24), (40, 14), (120, 35)):
             with self.subTest(size=(width, height)), tempfile.TemporaryDirectory() as temp:
@@ -450,8 +482,8 @@ class TUITests(unittest.TestCase):
                 terminal = Terminal(ROOT, Path(temp) / "config", width, height, ("--dry-run", "--no-animation"))
                 try:
                     terminal.wait_for(b"ATM 0.0.2")
-                    terminal.send(b"/node\r")
-                    terminal.wait_for(b"Node.js")
+                    terminal.send(b"/manage go\r")
+                    terminal.wait_for(b"Go")
                     terminal.send(b"\x1b[<0;2;7M\x1b[<0;2;7m")
                     terminal.wait_for(b"Open plugin menu")
                     terminal.send(b"q")

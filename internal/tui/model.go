@@ -59,6 +59,10 @@ type Model struct {
 	active            *nativeSession
 	nativeLogs        []string
 	nativeProgress    float64
+	nativeChoices     []protocol.Choice
+	choicePrompt      string
+	choiceArguments   []string
+	choiceTitle       string
 	quitAfterNative   bool
 	catalogController *catalogController
 	catalogActive     *catalogSession
@@ -156,6 +160,14 @@ func (m Model) rows() []row {
 		rows = []row{{"az", "A-Z", ""}, {"za", "Z-A", ""}, {"default", m.words.T("ATM_PLUGINS_SORT_DEFAULT"), ""}}
 	case "confirm", "catalog-confirm":
 		rows = []row{{"no", m.words.T("ATM_TUI_NO"), ""}, {"yes", m.words.T("ATM_TUI_YES"), ""}}
+		if m.screen == "confirm" && m.plan.Executor == "native" {
+			rows = append(rows, row{"result", m.plan.PluginID + " / " + m.plan.Operation, ""})
+			for _, arg := range m.plan.Arguments {
+				for _, line := range strings.Split(ansi.Hardwrap(clean(arg), max(1, m.width-4), false), "\n") {
+					rows = append(rows, row{"result", line, ""})
+				}
+			}
+		}
 		if m.screen == "confirm" && m.plan.Executor == "native-core" {
 			var value any = m.corePlan
 			if m.corePrepared != nil {
@@ -175,6 +187,10 @@ func (m Model) rows() []row {
 	case "logs":
 		for i := len(m.results) - 1; i >= 0; i-- {
 			rows = append(rows, row{"result", m.results[i], ""})
+		}
+	case "native-menu":
+		for _, choice := range m.nativeChoices {
+			rows = append(rows, row{choice.ID, choice.Label, ""})
 		}
 	case "native":
 		label := m.words.T("ATM_TUI_CLOSE")
@@ -319,6 +335,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if m.screen == "version" {
 					m.navigate("actions")
 				}
+				if m.screen == "native-input" {
+					m.navigate("native-menu")
+				}
 				if m.screen == "download" {
 					m.navigate("core")
 				}
@@ -328,8 +347,15 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 			if key == "enter" {
+				if m.screen == "native-input" && strings.TrimSpace(m.input.Value()) == "" {
+					return m, nil
+				}
 				m.editing = false
 				m.input.Blur()
+				if m.screen == "native-input" {
+					args := append(append([]string{}, m.choiceArguments...), strings.TrimSpace(m.input.Value()))
+					return m.preparePlugin(m.pendingAction, args)
+				}
 				if m.screen == "version" {
 					return m.preparePlugin(m.pendingAction, []string{m.input.Value()})
 				}
@@ -464,6 +490,21 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	}
 	key := rows[m.cursor].key
 	switch m.screen {
+	case "native-menu":
+		for _, choice := range m.nativeChoices {
+			if choice.ID != key {
+				continue
+			}
+			if choice.Prompt != "" {
+				m.pendingAction, m.choicePrompt = choice.Operation, choice.Prompt
+				m.choiceArguments = append([]string{}, choice.Arguments...)
+				m.navigate("native-input")
+				m.editing = true
+				m.input.SetValue("")
+				return m, m.input.Focus()
+			}
+			return m.preparePlugin(choice.Operation, choice.Arguments)
+		}
 	case "catalog-confirm":
 		if key == "yes" {
 			return m.startDownload()
@@ -736,6 +777,10 @@ func (m Model) render() (string, []hit) {
 		title = m.words.T("ATM_TUI_CONFIRM") + " " + clean(m.planLabel())
 	case "version":
 		title = m.words.T("ATM_TUI_VERSION_PROMPT") + ": " + m.input.View()
+	case "native-input":
+		title = clean(m.choicePrompt) + ": " + m.input.View()
+	case "native-menu":
+		title = clean(m.choiceTitle)
 	case "download":
 		title = "Plugin ID: " + m.input.View()
 	case "core-input":

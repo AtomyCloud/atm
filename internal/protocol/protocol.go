@@ -34,6 +34,40 @@ type Event struct {
 	Progress  *float64 `json:"progress,omitempty"`
 	Status    string   `json:"status,omitempty"`
 	Code      string   `json:"code,omitempty"`
+	Choices   []Choice `json:"choices,omitempty"`
+}
+
+// Choices describe plugin-owned navigation, never commands to execute implicitly.
+type Choice struct {
+	ID        string   `json:"id"`
+	Label     string   `json:"label"`
+	Operation string   `json:"operation"`
+	Arguments []string `json:"arguments,omitempty"`
+	Prompt    string   `json:"prompt,omitempty"`
+}
+
+func ValidateChoices(choices []Choice) error {
+	if len(choices) > 100 {
+		return fmt.Errorf("too many menu choices")
+	}
+	seen := map[string]bool{}
+	for _, c := range choices {
+		if c.ID == "" || len(c.ID) > 64 || seen[c.ID] || strings.TrimSpace(c.Label) == "" || len(c.Label) > 200 || len(c.Prompt) > 200 || len(c.Arguments) > 127 {
+			return fmt.Errorf("invalid menu choice")
+		}
+		seen[c.ID] = true
+		switch c.Operation {
+		case "menu", "status", "install", "update", "use", "remove", "uninstall", "integrate":
+		default:
+			return fmt.Errorf("invalid menu operation")
+		}
+		for _, s := range append([]string{c.ID, c.Label, c.Prompt}, c.Arguments...) {
+			if len(s) > 4096 || SafeText(s) != s {
+				return fmt.Errorf("invalid menu text or argument")
+			}
+		}
+	}
+	return nil
 }
 
 func Decode(line []byte, value any) error {
@@ -122,6 +156,9 @@ func (s *Stream) Accept(line []byte) (Event, error) {
 	if e.Type != "progress" && e.Progress != nil {
 		return e, fmt.Errorf("progress field on wrong event")
 	}
+	if e.Choices != nil && (e.Type != "result" || e.Status != "success") {
+		return e, fmt.Errorf("menu choices require a successful terminal result")
+	}
 	switch e.Type {
 	case "started":
 		if s.Started {
@@ -136,6 +173,9 @@ func (s *Stream) Accept(line []byte) (Event, error) {
 	case "result":
 		if e.Status != "success" && e.Status != "error" && e.Status != "cancelled" {
 			return e, fmt.Errorf("invalid result status")
+		}
+		if err := ValidateChoices(e.Choices); err != nil {
+			return e, err
 		}
 		s.Result = &e
 	default:

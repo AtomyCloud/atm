@@ -14,6 +14,8 @@ import unittest
 REPO = Path(__file__).resolve().parents[3]
 PRELUDE = r'''
 set -Eeuo pipefail
+# Profile tests may change startup's ATM_HOME; keep the fixture runtime explicit.
+ATM_HOME="$ATM_TEST_NODE_RUNTIME"
 source "$ATM_HOME/lib/atm_core.sh"
 source "$ATM_HOME/lib/atm_manifest.sh"
 source "$ATM_HOME/lib/atm_i18n.sh"
@@ -45,7 +47,7 @@ class SelectionTests(unittest.TestCase):
             binary.chmod(0o755)
         (self.node_root / "current").symlink_to(self.node_root / "24.16.0")
         self.env = {k: v for k, v in os.environ.items() if not k.startswith("ATM_")}
-        self.env.update(ATM_HOME=str(REPO), HOME=str(self.home), ATM_APPS_DIR=str(self.apps),
+        self.env.update(ATM_HOME=str(REPO), ATM_TEST_NODE_RUNTIME=str(REPO), HOME=str(self.home), ATM_APPS_DIR=str(self.apps),
                         ATM_STATE_DIR=str(self.root / "state"), ATM_CACHE_DIR=str(self.root / "cache"),
                         ATM_CONFIG_DIR=str(self.root / "config"), ATM_LANG="en-us", TERM="dumb")
         self.env["ATM_NODE_SYSTEM_BINARY"] = str(self.root / "absent-system-node")

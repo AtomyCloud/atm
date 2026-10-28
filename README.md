@@ -74,8 +74,9 @@ to keep this exact snapshot. Preserve any existing installation before switching
   
 </div>
 
-ATM is a modular, portable-first tool manager. The v0.0.2 CORE is written in Go;
-the v0.0.1 legacy entrypoint and existing Linux application plugins use Bash.
+ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js
+backend are written in Go. The v0.0.1 legacy entrypoint and other application
+plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
 versions side by side, switch active versions, configure PATH and create desktop
 launchers. The detailed application menus and `bin/atm` examples below describe
@@ -562,6 +563,27 @@ q) Exit
 Archives default to `~/Apps/Backups/docker`; custom absolute paths are supported. Exports preserve existing files, and imports require confirmation because tags can be replaced. Archives contain images, not containers or volumes. Only restore trusted archives. See the [Docker plugin guide](plugins/docker/README.md) for CLI examples and limitations.
 
 ### Node.js
+
+The compiled ATM uses a native Go Node.js backend on Linux amd64/arm64. Its
+structured menus offer the latest three official releases for each of majors
+24, 25 and 26, an exact custom version, installation location, installed versions,
+activation, removal and PATH integration. Downloads use official `.tar.gz`
+archives with SHA-256 verification, without invoking Bash, curl, tar or Python.
+Only unchanged native-owned versions are eligible for deletion; legacy versions,
+external installations and user-added files are preserved.
+
+Use a complete Linux ATM package, or build the plugin in a source checkout:
+
+```bash
+bash scripts/build_manager.sh --node-local --target linux-amd64
+go build -o /tmp/atm ./cmd/atm
+/tmp/atm --home "$PWD" plugin node
+```
+
+Native APT installation requires explicit system-package consent and previously
+authorized sudo; it does not read a password through the JSONL protocol. See the
+[Node plugin guide](plugins/node/README.md) for commands, ownership rules and tests.
+Other Node platforms remain pending. The menu below describes **legacy `bin/atm`**:
 
 ```text
 🟢 Node.js Installer

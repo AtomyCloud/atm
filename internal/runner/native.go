@@ -38,6 +38,7 @@ type Outcome struct {
 	Code      string
 	Message   string
 	ExitCode  int
+	Choices   []protocol.Choice
 }
 
 type NativeError struct{ Outcome Outcome }
@@ -52,7 +53,7 @@ func (o Outcome) Err() error {
 	return &NativeError{o}
 }
 func (o Outcome) Event() protocol.Event {
-	return protocol.Event{Protocol: 1, RequestID: o.RequestID, Type: "result", Status: o.Status, Code: o.Code, Message: o.Message}
+	return protocol.Event{Protocol: 1, RequestID: o.RequestID, Type: "result", Status: o.Status, Code: o.Code, Message: o.Message, Choices: o.Choices}
 }
 
 func RunNative(parent context.Context, c config.Config, plan Plan, opts NativeOptions) Outcome {
@@ -61,7 +62,9 @@ func RunNative(parent context.Context, c config.Config, plan Plan, opts NativeOp
 		return Outcome{Status: "error", Code: "identity", Message: err.Error(), ExitCode: 1}
 	}
 	requestID := hex.EncodeToString(id)
-	failure := func(code string, err error) Outcome { return Outcome{requestID, "error", code, err.Error(), 1} }
+	failure := func(code string, err error) Outcome {
+		return Outcome{RequestID: requestID, Status: "error", Code: code, Message: err.Error(), ExitCode: 1}
+	}
 	if c.DryRun || plan.DryRun {
 		return failure("dry_run", fmt.Errorf("dry-run cannot start native processes"))
 	}
@@ -159,14 +162,14 @@ func RunNative(parent context.Context, c config.Config, plan Plan, opts NativeOp
 	if result.Status == "cancelled" {
 		code = 130
 	}
-	return Outcome{requestID, result.Status, result.Code, result.Message, code}
+	return Outcome{RequestID: requestID, Status: result.Status, Code: result.Code, Message: result.Message, ExitCode: code, Choices: result.Choices}
 }
 
 func interrupted(id string, err error) Outcome {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return Outcome{id, "error", "timeout", "Native operation timed out; process tree terminated", 124}
+		return Outcome{RequestID: id, Status: "error", Code: "timeout", Message: "Native operation timed out; process tree terminated", ExitCode: 124}
 	}
-	return Outcome{id, "cancelled", "cancelled", "Native operation cancelled; process tree terminated", 130}
+	return Outcome{RequestID: id, Status: "cancelled", Code: "cancelled", Message: "Native operation cancelled; process tree terminated", ExitCode: 130}
 }
 
 func validateNativePlan(c config.Config, p Plan) (string, error) {

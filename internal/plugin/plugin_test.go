@@ -29,8 +29,11 @@ func TestRepositoryManifests(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !reflect.DeepEqual(p.Manifest, legacy) {
+		if p.Schema == 1 && !reflect.DeepEqual(p.Manifest, legacy) {
 			t.Errorf("metadata drift: %s", p.ID)
+		}
+		if p.Schema == 2 && (p.ID != legacy.ID || p.Name != legacy.Name || p.Version != legacy.Version || p.Order != legacy.Order) {
+			t.Errorf("native/legacy identity drift: %s", p.ID)
 		}
 		if p.LegacyMetadata {
 			t.Errorf("missing JSON manifest: %s", p.ID)

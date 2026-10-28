@@ -2,8 +2,9 @@
 
 Status: implemented in the opt-in ATM 0.0.2 migration. Linux fixture tests cover
 execution and the terminal UI. Windows builds compile; Windows runtime and
-standard-user acceptance remain pending. No production application plugin has
-been ported in this delivery. The 16 existing plugins keep schema 1 / Bash API 1.
+standard-user acceptance remain pending. Node.js now provides a native Go Linux
+backend (human acceptance pending); the other application plugins retain their
+explicit Bash compatibility backends. Node's legacy entrypoint is retained separately.
 
 ## Manifest And Execution
 
@@ -49,7 +50,7 @@ the current user's environment is inherited. Request fields, not ambient
 `ATM_*` variables, are authoritative for the selected ATM home/apps/language.
 App-specific URLs, package selection and installation remain plugin-owned.
 
-Operations are `status`, `install`, `update`, `remove`, `uninstall`, `use`, and
+Operations are `menu`, `status`, `install`, `update`, `remove`, `uninstall`, `use`, and
 optional `integrate`.
 
 `integrate` owns application-specific user PATH/CLI/desktop integration. CORE
@@ -61,8 +62,38 @@ It must preserve unrelated user settings and avoid system-wide changes. Declarin
 this operation is optional and does not mean existing application ports are done.
 `remove` and `use` require one version argument; `status` and `uninstall` take
 none. Install/update accept up to 128 literal arguments within the request cap.
-`atm plugin ID` selects status when available, otherwise the first operation.
-Native plugins do not expose an interactive `menu` or read user prompts on stdin.
+`atm plugin ID` selects menu when declared, otherwise status or the first operation.
+Native plugins never read interactive user prompts on stdin: it contains one request.
+The optional `menu` operation accepts literal arguments for plugin-owned submenus.
+Interactive `atm plugin ID menu` opens the generic TUI at confirmation; noninteractive
+use requires `--yes` and displays choices (structured JSONL with `--json`).
+
+### Structured Menus
+
+A successful terminal result may include `choices`. These are displayed only after
+the process has exited successfully and its complete stream has been validated:
+
+```json
+{"protocol":1,"request_id":"0123456789abcdef0123456789abcdef","type":"result","status":"success","message":"Versions","choices":[{"id":"custom","label":"Custom version","operation":"install","arguments":["--version"],"prompt":"Version"}]}
+```
+
+At most 100 choices are allowed. IDs must be unique/nonempty (64 bytes maximum),
+labels nonblank (200 bytes), prompts optional (200 bytes), and arguments at most
+127 strings of 4096 bytes each, without control characters. The 64 KiB frame limit
+still applies. `prompt` collects one value, appended to the argument array. Each
+choice goes through normal declared-operation checks and default-Cancel confirmation;
+it cannot select a different plugin, run a shell command, or bypass dry-run. Backend
+arguments must still be validated independently. Choices are reliable terminal data,
+not droppable log/progress events. Failed/cancelled results cannot offer choices.
+
+CORE builds predating this extension reject manifests declaring `menu` rather than
+falling back to Bash. Install matching CORE/plugin packages together. Existing
+non-menu JSONL-v1 plugins remain compatible; no global protocol version changed.
+
+Node source checkouts require a local backend build; complete Linux ATM packages
+include it. The official source catalog does not compile code at runtime. A remote
+native plugin lacking its declared executable is rejected by download validation;
+do not treat a source-only catalog entry as an installable binary distribution.
 
 ## Request And Events
 

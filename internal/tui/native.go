@@ -7,9 +7,27 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"github.com/AtomyCloud/atm/internal/config"
+	"github.com/AtomyCloud/atm/internal/i18n"
+	"github.com/AtomyCloud/atm/internal/plugin"
 	"github.com/AtomyCloud/atm/internal/protocol"
 	"github.com/AtomyCloud/atm/internal/runner"
 )
+
+// NewPluginMenu starts at consent; opening the UI never executes a plugin.
+func NewPluginMenu(c config.Config, plugins []plugin.Plugin, words i18n.Catalog, id string, args []string) (Model, error) {
+	m := New(c, plugins, words, false)
+	p, err := plugin.Find(plugins, id)
+	if err == nil {
+		m.plan, err = runner.Plugin(c, p, "menu", args)
+	}
+	if err != nil {
+		m.Close()
+		return Model{}, err
+	}
+	m.selected = id
+	m.navigate("confirm")
+	return m, nil
+}
 
 type nativeSession struct {
 	events chan protocol.Event
@@ -103,6 +121,7 @@ func (m Model) startNative() (tea.Model, tea.Cmd) {
 	}
 	m.active = s
 	m.nativeLogs = nil
+	m.nativeChoices = nil
 	m.nativeProgress = 0
 	m.quitAfterNative = false
 	m.navigate("native")
@@ -160,6 +179,11 @@ func (m Model) receiveNative(msg nativeMessage) (tea.Model, tea.Cmd) {
 	}
 	if m.quitAfterNative {
 		return m, tea.Quit
+	}
+	if o.Status == "success" && len(o.Choices) > 0 {
+		m.nativeChoices = append([]protocol.Choice{}, o.Choices...)
+		m.choiceTitle = o.Message
+		m.navigate("native-menu")
 	}
 	return m, nil
 }

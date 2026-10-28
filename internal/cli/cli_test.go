@@ -159,7 +159,7 @@ func TestDryRunPlanAndPreferences(t *testing.T) {
 	home, dir := fixture(t)
 	t.Setenv("PATH", t.TempDir())
 	var out, errors bytes.Buffer
-	code := Run([]string{"--home", home, "--dry-run", "--json", "install", "node", "--version", "24.16.0"}, os.Stdin, &out, &errors)
+	code := Run([]string{"--home", home, "--dry-run", "--json", "install", "go", "--version", "1.26.0"}, os.Stdin, &out, &errors)
 	if code != 0 {
 		t.Fatal(code, &errors)
 	}

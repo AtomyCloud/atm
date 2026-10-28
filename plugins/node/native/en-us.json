@@ -1,0 +1,19 @@
+{
+  "title": "Node.js - official portable releases / installed versions",
+  "complete": "Node.js operation complete",
+  "custom": "Install exact version",
+  "version_prompt": "Node.js version",
+  "install_version": "Install Node.js %s",
+  "use_version": "Use Node.js %s",
+  "remove_version": "Remove Node.js %s",
+  "major": "Node.js %s: latest three",
+  "atm": "ATM portable (latest 24)",
+  "system": "System APT: install nodejs + npm and dependencies",
+  "locations": "Install location",
+  "status": "Installed locations and PATH",
+  "use": "Use installed version",
+  "remove": "Remove owned version",
+  "uninstall": "Uninstall unchanged ATM-owned versions",
+  "integrate": "Refresh portable PATH integration",
+  "empty": "No eligible installed versions"
+}

@@ -128,6 +128,15 @@ func TestNativeLiteralArgumentsAndNoShell(t *testing.T) {
 	}
 }
 
+func TestNativeChoicesRetainedWithoutEventCallback(t *testing.T) {
+	c, p := nativePlan(t, "choices")
+	t.Setenv("PATH", "")
+	o := RunNative(context.Background(), c, p, NativeOptions{})
+	if o.Err() != nil || len(o.Choices) != 1 || o.Choices[0].Arguments[0] != "--version" || len(o.Event().Choices) != 1 {
+		t.Fatalf("lost terminal menu choices: %+v", o)
+	}
+}
+
 func TestNativeCancellationTimeoutAndDescendants(t *testing.T) {
 	for _, mode := range []string{"cancel", "timeout", "tree", "tree-exit"} {
 		t.Run(mode, func(t *testing.T) {

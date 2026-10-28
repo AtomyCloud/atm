@@ -93,7 +93,7 @@ func TestDryRunConfirmationCannotStartProcess(t *testing.T) {
 		t.Skip("Linux plans")
 	}
 	m := model(t)
-	m.selected = "node"
+	m.selected = "go"
 	updated, _ := m.preparePlugin("install", nil)
 	m = updated.(Model)
 	if m.screen != "confirm" || m.cursor != 0 {

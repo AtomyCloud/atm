@@ -38,6 +38,9 @@ func main() {
 	if r.Operation == "update" {
 		mode = "hang"
 	}
+	if r.Operation == "menu" {
+		mode = "choices"
+	}
 	if len(r.Arguments) > 0 {
 		mode = r.Arguments[0]
 	}
@@ -104,6 +107,9 @@ func main() {
 	case "echo":
 		b, _ := json.Marshal(r)
 		emit(protocol.Event{Type: "log", Message: string(b)})
+	case "choices":
+		emit(protocol.Event{Type: "result", Status: "success", Message: "Choose a version", Choices: []protocol.Choice{{ID: "custom", Label: "Custom version", Operation: "install", Arguments: []string{"--version"}, Prompt: "Version"}}})
+		return
 	case "log-flood":
 		for i := 0; i < 1000; i++ {
 			emit(protocol.Event{Type: "log", Message: fmt.Sprintf("log %d", i)})

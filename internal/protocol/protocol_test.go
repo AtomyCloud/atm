@@ -57,3 +57,32 @@ func TestSafeTextAndRequest(t *testing.T) {
 		t.Fatal("oversized request accepted")
 	}
 }
+
+func TestChoicesValidation(t *testing.T) {
+	good := Choice{ID: "custom", Label: "Custom version", Operation: "install", Arguments: []string{"--version"}, Prompt: "Version"}
+	if err := ValidateChoices([]Choice{good}); err != nil {
+		t.Fatal(err)
+	}
+	for _, choices := range [][]Choice{
+		{good, good}, make([]Choice, 101),
+		{{ID: "a", Label: "x", Operation: "shell"}},
+		{{ID: "a", Label: "x\x1b[2J", Operation: "install"}},
+		{{ID: "a", Label: "x", Operation: "install", Arguments: []string{"v1\x00"}}},
+		{{ID: "a", Label: " ", Operation: "menu"}},
+	} {
+		if ValidateChoices(choices) == nil {
+			t.Fatalf("unsafe choices accepted: %+v", choices)
+		}
+	}
+	for _, kind := range []string{"started", "log", "result"} {
+		s := Stream{RequestID: "id", Started: true}
+		e := Event{Protocol: 1, RequestID: "id", Type: kind, Choices: []Choice{good}}
+		if kind == "result" {
+			e.Status = "error"
+		}
+		b, _ := json.Marshal(e)
+		if _, err := s.Accept(b); err == nil {
+			t.Fatal("choices accepted outside successful result")
+		}
+	}
+}

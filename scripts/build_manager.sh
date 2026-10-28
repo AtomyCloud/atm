@@ -7,6 +7,7 @@ ATM_BUILD_OUT="$ATM_BUILD_ROOT/binary"
 ATM_BUILD_FORMAT=binaries
 ATM_BUILD_TARGET=''
 ATM_BUILD_MENU=0
+ATM_BUILD_NODE_LOCAL=0
 ATM_BUILD_GO_PATH=''
 ATM_BUILD_HASH=''
 ATM_BUILD_TARGETS=(windows-amd64 linux-amd64 linux-arm64 darwin-amd64 darwin-arm64)
@@ -21,11 +22,16 @@ atm_build_help() {
         '                    darwin-amd64, darwin-arm64, or all' \
         '  --format FORMAT   binaries (default) or packages' \
         '  --out DIR         Output parent (default: <repository>/binary)' \
+        '  --node-local      Build Node executables into the source checkout;' \
+        '                    requires --target linux-amd64, linux-arm64, or all' \
         '  --menu            Open menu, optionally with --format/--out' \
         '  -h, --help        Show help without probing Go or creating files' \
         '' \
         'ATM_BUILD_GO selects a Go executable; otherwise use go from PATH.' \
         'Requires the Go version declared in go.mod. No automatic tool installation.' \
+        'Linux outputs include the native Node executable. Other Node backends are pending.' \
+        'Source/catalog checkouts need --node-local before native Node is available.' \
+        'Runtime never compiles Node or falls back to its legacy plugin.sh.' \
         'Binaries need --home <ATM runtime directory>; packages include that runtime.' \
         'macOS builds are Terminal executables, not Finder .app bundles.'
 }
@@ -67,7 +73,7 @@ atm_build_dependencies() {
     }
     printf '🔧 Required Go: %s\n' "$required"
     atm_build_go_host version || return 1
-    if [[ "$ATM_BUILD_FORMAT" == binaries ]]; then
+    if [[ "$ATM_BUILD_FORMAT" == binaries && "$ATM_BUILD_NODE_LOCAL" == 0 ]]; then
         if command -v sha256sum >/dev/null 2>&1; then ATM_BUILD_HASH=sha256sum
         elif command -v shasum >/dev/null 2>&1; then ATM_BUILD_HASH=shasum
         else atm_build_error 'Binary builds require sha256sum or shasum.'; return 1
@@ -106,10 +112,19 @@ atm_build_binary() {
         atm_build_error "Compiler did not produce a regular binary for $target"; return 1;
     }
     mv -- "$dir/.building" "$dir/$name" || return 1
+    if [[ "$os" == linux ]]; then
+        atm_build_go_host run ./tools/package -node-only -os "$os" -arch "$arch" -out "$dir" || return 1
+    fi
     (
         cd -- "$dir" || exit 1
         if [[ "$ATM_BUILD_HASH" == sha256sum ]]; then sha256sum "$name" > "$name.sha256"
         else shasum -a 256 "$name" > "$name.sha256"
+        fi
+        if [[ "$os" == linux ]]; then
+            local node="plugins/node/bin/$target/atm-node"
+            if [[ "$ATM_BUILD_HASH" == sha256sum ]]; then sha256sum "$node" > "$node.sha256"
+            else shasum -a 256 "$node" > "$node.sha256"
+            fi
         fi
     ) || return 1
     printf '✅ Built: %s\n' "$dir/$name"
@@ -122,6 +137,13 @@ atm_build_run() (
     if [[ "$selection" == all ]]; then targets=("${ATM_BUILD_TARGETS[@]}")
     else targets=("$selection")
     fi
+    if [[ "$ATM_BUILD_NODE_LOCAL" == 1 ]]; then
+        case "$selection" in
+            all) targets=(linux-amd64 linux-arm64) ;;
+            linux-amd64|linux-arm64) ;;
+            *) atm_build_error 'Native Node is currently Linux-only.'; return 1 ;;
+        esac
+    fi
     # Resolve the compiler before changing cwd, including relative ATM_BUILD_GO paths.
     ATM_BUILD_GO_PATH="$(command -v "${ATM_BUILD_GO:-go}")" || {
         atm_build_error 'Go not found. Set ATM_BUILD_GO or add Go to PATH.'; return 1;
@@ -130,6 +152,12 @@ atm_build_run() (
     export ATM_BUILD_GO="$ATM_BUILD_GO_PATH"
     cd -- "$ATM_BUILD_ROOT" || return 1
     atm_build_dependencies || return 1
+    if [[ "$ATM_BUILD_NODE_LOCAL" == 1 ]]; then
+        for target in "${targets[@]}"; do
+            atm_build_go_host run ./tools/package -node-only -os linux -arch "${target##*-}" -out "$ATM_BUILD_ROOT" || return 1
+        done
+        return 0
+    fi
     mkdir -p -- "$ATM_BUILD_OUT" || return 1
     run_dir="$(mktemp -d "$ATM_BUILD_OUT/atm-build-$(date -u +%Y%m%dT%H%M%SZ)-XXXXXX")" || return 1
     # This freshly allocated run owns these files; existing outputs are never touched.
@@ -186,12 +214,18 @@ while [[ $# -gt 0 ]]; do
             case "$1" in --target) ATM_BUILD_TARGET="$2" ;; --format) ATM_BUILD_FORMAT="$2" ;; --out) ATM_BUILD_OUT="$2" ;; esac
             shift 2 ;;
         --menu) ATM_BUILD_MENU=1; shift ;;
+        --node-local) ATM_BUILD_NODE_LOCAL=1; shift ;;
         -h|--help) atm_build_help; exit 0 ;;
         *) atm_build_error "Unknown argument: $1"; atm_build_help >&2; exit 2 ;;
     esac
 done
 case "$ATM_BUILD_FORMAT" in binaries|packages) ;; *) atm_build_error 'Format must be binaries or packages.'; exit 2 ;; esac
 [[ "$ATM_BUILD_MENU" == 0 || -z "$ATM_BUILD_TARGET" ]] || { atm_build_error '--menu and --target cannot be combined.'; exit 2; }
+if [[ "$ATM_BUILD_NODE_LOCAL" == 1 ]]; then
+    [[ -n "$ATM_BUILD_TARGET" && "$ATM_BUILD_MENU" == 0 && "$ATM_BUILD_FORMAT" == binaries && "$ATM_BUILD_OUT" == "$ATM_BUILD_ROOT/binary" ]] || {
+        atm_build_error '--node-local requires --target, without --menu, --format packages or --out.'; exit 2;
+    }
+fi
 case "$ATM_BUILD_OUT" in /*) ;; *) ATM_BUILD_OUT="$PWD/$ATM_BUILD_OUT" ;; esac
 if [[ -n "$ATM_BUILD_TARGET" ]]; then atm_build_run "$ATM_BUILD_TARGET"
 else atm_build_menu
