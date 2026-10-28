@@ -773,8 +773,13 @@ ATM locations, the user's `.local/bin` and bounded absolute PATH entries.
 Discovery only inspects filesystem metadata: it does not execute programs, read
 their configuration or establish their version. Found candidates are unverified,
 not adopted or made eligible for native removal. Missing candidates do not prove
-that an application is absent from the system. Native PATH registration and the
-remaining installer routes are still pending.
+that an application is absent from the system.
+
+Owned PicoClaw and Codex CLI previews support explicit native PATH integration,
+with separate removal of their exact owned profile blocks. Version selection
+keeps stable command links; installation does not enable PATH automatically.
+Existing external commands are not replaced. Remaining AI installer routes and
+real shell/provider acceptance are still pending; see the guide for isolated tests.
 
 ```text
 🧠 AI Tools Installer

@@ -317,6 +317,19 @@ func (b *backend) uninstall(ctx context.Context, id string) error {
 	if err = ctx.Err(); err != nil {
 		return err
 	}
+	if cliCommand(id) != "" {
+		if err = b.detachIntegration(ctx, id); err != nil {
+			return err
+		}
+		// Detach completed independently; refuse destructive work if state changed.
+		vs, current, err = b.inspect(ctx, id, true)
+		if err != nil {
+			return fmt.Errorf("PATH detached; uninstall not continued: %w", err)
+		}
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+	}
 	if current != "" {
 		if err = os.Remove(filepath.Join(b.root(id), "current")); err != nil {
 			return err

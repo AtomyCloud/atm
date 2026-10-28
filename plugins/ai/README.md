@@ -14,9 +14,9 @@ route supports Linux amd64 only:
 
 | Provider | Artifact | Native operations |
 | --- | --- | --- |
-| PicoClaw CLI | Official architecture-specific `tar.gz` | Install, update, change active version, remove inactive version, uninstall owned preview versions |
-| Hermes Desktop portable | Official architecture-specific AppImage | Same operations |
-| Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same operations |
+| PicoClaw CLI | Official architecture-specific `tar.gz` | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
+| Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
+| Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 
 For the portable archive providers, only the standalone executable is installed.
@@ -30,7 +30,8 @@ Pending before the entire AI plugin can switch to native Go:
 - Hermes Agent's supported package-management/bootstrap workflow.
 - Ollama installation, runtime and system-service behavior.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
-- Native PATH registration (bounded read-only existing-installation discovery is available).
+- PATH registration for providers other than the owned PicoClaw and standalone
+  Codex CLI previews, including external/legacy installations, is not implemented.
 - PicoClaw WebUI/launcher support if added to the native provider scope.
 - Real provider/runtime acceptance, Linux arm64 execution, other platforms and
   translations of the preview's English labels.
@@ -111,8 +112,10 @@ ai/codex/cli/native-v1/
 Each root holds `owner.json`, `versions/<X.Y.Z>/{tool,receipt.json}` and a
 `current` symlink to `versions/<X.Y.Z>/tool`. **`current` points directly to an
 executable**, not a directory. Invoke the exact path printed after selection.
-Portable operations do not execute a downloaded application, launch a browser, authenticate,
-edit PATH or shell profiles, install dependencies, or configure system services.
+Portable operations do not execute a downloaded application, launch a browser,
+authenticate, install dependencies, or configure system services. Install,
+update and version selection do not edit PATH or shell profiles. Only explicit
+CLI integration edits profiles; uninstall detaches an existing exact owned block.
 For AppImage execution, arrange any required FUSE/runtime dependencies separately.
 
 Existing Bash installations, manually installed binaries, application settings,
@@ -158,6 +161,82 @@ After a crash, a lock or private `.atm-ai-stage-*`, `.atm-ai-select-*`, or
 force unlock or cleanup of unknown remnants. Verify that no installer is active
 and inspect the relevant paths before manual recovery; do not recursively delete
 the provider's existing installation directory.
+
+## Explicit CLI PATH Integration
+
+Only the owned PicoClaw and standalone Codex CLI previews can be integrated:
+
+```text
+integrate [--provider picoclaw|codex-cli] [--remove-path]
+```
+
+Use `preview_atm plugin ai integrate ...` with the isolated runtime below.
+CORE confirmation or its explicit `--yes` authorizes this mutation; no download
+or system-package flags apply. `--version` is not accepted. Without a provider,
+the operation processes selected owned PicoClaw then Codex CLI previews. Missing
+previews are skipped, but unsafe/foreign stores are refused, never adopted.
+Each provider commits separately: if a later provider fails, earlier completed
+providers remain changed and the error lists them. There is no aggregate rollback.
+
+Integration creates `native-v1/bin/picoclaw -> ../current` or
+`native-v1/bin/codex -> ../current`, plus `native-v1/path.json` (0600). The bin
+directory is private (0700). The receipt binds the provider, root, default user
+HOME and exact enrolled profile blocks. It deliberately follows the selected
+`current` executable rather than pinning one version. Enabling verifies the
+selected executable's receipt/SHA-256 and rechecks them before publication.
+Later install/update/use operations change selection but do not edit profiles.
+
+Profiles are `$HOME/.profile`, `$HOME/.bashrc`, and **existing** `$HOME/.zshrc`.
+HOME comes from the normal user environment, not request `Home` (the ATM
+runtime). Each provider has separate exact markers, for example:
+
+```sh
+# >>> ATM native AI picoclaw PATH >>>
+export PATH='/absolute/apps/ai/picoclaw/native-v1/bin'${PATH:+":$PATH"}
+# <<< ATM native AI picoclaw PATH <<<
+```
+
+Paths use literal shell quoting, including embedded apostrophes. Empty/unset
+PATH does not gain a trailing colon/current-directory search entry. Prepending
+this directory **can shadow an existing external command**; external command
+files are not replaced. The current shell is not modified. Reload/new-shell
+behavior and actual provider execution require separate human acceptance.
+
+All three profile candidates are preflighted before any profile write. Links,
+special files, multiple hardlinks, foreign ownership, unsafe writable modes,
+special permission bits, files over 1 MiB and unsafe ancestors are refused.
+Exact receipt-owned blocks are required: missing, edited, duplicate, partial or
+unowned blocks are preserved and refused. Unrelated content and file modes are
+preserved. New `.profile`/`.bashrc` files use 0600 and remain as empty files after
+detach. A newline inserted after unterminated original text is removed only if
+that will not join remaining content to the original line. If another provider
+or later content needs it, that newline remains, possibly after the final detach.
+
+`--remove-path` detaches only exact owned blocks, the command link and receipt;
+it retains all provider versions and the empty bin directory. Uninstall performs
+that same guarded detach before deselecting or deleting versions, or refuses
+before destructive work. Failures after detach can leave PATH detached while
+versions remain; no whole-uninstall rollback is promised.
+
+The existing sibling `native-v1.lock/` and shared `$HOME/.atm-ai-path.lock/`
+(0700) are fail-fast locks. The HOME lock coordinates both CLI providers and
+distinct Apps roots using the same markers. A different Apps root cannot adopt
+an existing block. This lock does not coordinate profile writers in other plugins
+or external tools. Per-file staging uses `.atm-ai-path-write-*/entry` beneath
+the target's parent (HOME, native-v1, or native-v1/bin). Before/after file bytes,
+modes, existence and link targets are backed up in
+`$HOME/.atm-ai-path.lock/journal.json` (0600) before publication.
+
+Failure/cancellation attempts restoration only while published state still
+matches. Intervening content, mode or inode changes are preserved; incomplete
+restoration retains the journal and shared lock with a recovery-path error.
+Successful restoration removes the journal. Interrupted processes can leave a
+lock, journal, staging or partially published state. These are inspection aids,
+**not automatic recovery**; editable journal paths never authorize cleanup.
+Only locally known staging entries are removed, not arbitrary saved directories.
+Journal data and staged files are synced, but directory entries are not: there
+is no power-loss durability guarantee or isolation from continuous hostile
+same-user mutation. No real profiles or applications were used in automated tests.
 
 ## Hermes Desktop System DEB
 
@@ -273,6 +352,10 @@ preview_atm plugin ai install --provider picoclaw --trust-download
 # Substitute a version actually installed in this preview.
 preview_atm plugin ai use --provider picoclaw --version X.Y.Z
 
+# Optional, separately confirmed PATH edits in this temporary HOME only.
+preview_atm plugin ai integrate --provider picoclaw
+preview_atm plugin ai integrate --provider picoclaw --remove-path
+
 # Removes only unchanged receipt-owned preview versions; preserves personal data.
 preview_atm plugin ai uninstall --provider picoclaw
 ```
@@ -326,12 +409,18 @@ claim of actual APT, GUI or arm64 runtime acceptance.
 ```bash
 go test ./plugins/ai/native -count=1
 go test -race ./plugins/ai/native -count=1
+go vet ./plugins/ai/native
 ```
 
 Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
 substitutes for system commands and temporary installation directories only.
 Discovery tests inject synthetic HOME/PATH/system roots, including broken/cyclic
 links, FIFOs, permissions, search bounds, cancellation and preview aliases.
+Integration tests use temporary profile fixtures, receipt/link corruption,
+cross-provider/cross-root locking, cancellation and intervening-edit recovery.
+Shell quoting is checked with the existing Go parser/expander without executing
+a shell. Foreign-owner creation is skipped when the test user is not root;
+tests never elevate to create that fixture.
 They never run provider code, real sudo/APT or change system packages. The
 separate opt-in public metadata test performs read-only official
 release lookups, not provider downloads or execution.

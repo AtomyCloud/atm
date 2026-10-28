@@ -91,7 +91,7 @@ func regular(path string, mode os.FileMode, limit int64) (*os.File, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !i.Mode().IsRegular() || i.Mode().Perm() != mode || i.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || owner(i) != uint32(os.Geteuid()) || i.Size() > limit {
+	if !i.Mode().IsRegular() || i.Mode().Perm() != mode || i.Mode()&(os.ModeSetuid|os.ModeSetgid|os.ModeSticky) != 0 || owner(i) != uint32(os.Geteuid()) || i.Size() > limit || !singleLink(i) {
 		return nil, fmt.Errorf("unsafe regular file: %s", path)
 	}
 	f, err := os.OpenFile(path, os.O_RDONLY|unix.O_NOFOLLOW|unix.O_NONBLOCK, 0)
@@ -189,12 +189,12 @@ func (b *backend) inspect(ctx context.Context, id string, verify bool) ([]string
 	if own != (ownership{1, "ai", id}) {
 		return nil, "", fmt.Errorf("foreign preview root; no adoption")
 	}
-	es, err := entries(root, 3)
+	es, err := entries(root, 5)
 	if err != nil {
 		return nil, "", err
 	}
 	for _, e := range es {
-		if e.Name() != "owner.json" && e.Name() != "versions" && e.Name() != "current" {
+		if e.Name() != "owner.json" && e.Name() != "versions" && e.Name() != "current" && !(cliCommand(id) != "" && (e.Name() == "bin" || e.Name() == "path.json")) {
 			return nil, "", fmt.Errorf("unknown preview entry preserved")
 		}
 	}
@@ -228,6 +228,9 @@ func (b *backend) inspect(ctx context.Context, id string, verify bool) ([]string
 		if !found {
 			return nil, "", fmt.Errorf("active version is missing")
 		}
+	}
+	if _, err := b.inspectIntegration(id, current); err != nil {
+		return nil, "", err
 	}
 	return vs, current, nil
 }

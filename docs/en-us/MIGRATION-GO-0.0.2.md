@@ -111,8 +111,12 @@ Read-only native discovery reports unverified external executable candidates in
 legacy ATM locations, `.local/bin` and bounded absolute PATH entries. It neither
 executes candidates nor reads their contents/configuration, assigns ownership,
 infers a version or enables removal. It is not exhaustive package detection.
-Hermes Agent, Ollama, Codex Desktop, native PATH registration and real provider
-acceptance remain Pending.
+Explicit native PATH registration is available for owned PicoClaw/Codex CLI
+previews, including the generic CORE integration route and exact owned-block
+removal. It does not adopt discovered candidates or run applications, and is not
+enabled automatically during installation/version changes. Modified integration
+blocks prevent destructive removal; uncertain recovery retains local evidence.
+Hermes Agent, Ollama, Codex Desktop and real shell/provider acceptance remain Pending.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,
 temporary repository configuration and retained restore recovery copies. It never

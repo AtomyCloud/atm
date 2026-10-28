@@ -71,6 +71,17 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 			out = append(out, choice{ID: "remove-" + v, Label: label("remove") + " " + v, Operation: "remove", Arguments: args})
 		}
 	}
+	if cliCommand(id) != "" && current != "" {
+		b.log(label("path_scope"))
+		out = append(out, choice{ID: "integrate", Label: label("path_integrate"), Operation: "integrate", Arguments: base})
+		rec, err := b.inspectIntegration(id, current)
+		if err != nil {
+			return nil, err
+		}
+		if rec != nil {
+			out = append(out, choice{ID: "remove-path", Label: label("path_detach"), Operation: "integrate", Arguments: []string{"--provider", id, "--remove-path"}})
+		}
+	}
 	out = append(out, choice{ID: "uninstall", Label: label("uninstall"), Operation: "uninstall", Arguments: base}, choice{ID: "back", Label: label("back"), Operation: "menu"})
 	return out, nil
 }
@@ -87,6 +98,17 @@ func (b *backend) status(ctx context.Context) error {
 		b.log(fmt.Sprintf("%s: recorded versions=%d; active=%s (not executed)", providers[id].name, len(vs), current))
 		if current != "" {
 			b.log("Run explicitly: " + filepath.Join(b.root(id), "current"))
+		}
+		if cliCommand(id) != "" && current != "" {
+			rec, err := b.inspectIntegration(id, current)
+			if err != nil {
+				return err
+			}
+			if rec != nil {
+				b.log(providers[id].name + ": " + label("path_recorded"))
+			} else {
+				b.log(providers[id].name + ": " + label("path_absent"))
+			}
 		}
 	}
 	if err := b.systemStatus(); err != nil {

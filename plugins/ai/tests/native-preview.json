@@ -10,7 +10,7 @@
  "platforms": ["linux"],
  "executor": "native",
  "protocol": "jsonl-v1",
- "operations": ["menu", "status", "install", "update", "use", "remove", "uninstall"],
+ "operations": ["menu", "status", "install", "update", "use", "remove", "uninstall", "integrate"],
  "executables": {
   "linux/amd64": "bin/linux-amd64/atm-ai",
   "linux/arm64": "bin/linux-arm64/atm-ai"

@@ -37,7 +37,15 @@
   "remove": "Remove inactive version",
   "uninstall": "Remove all owned preview versions (keep user data)",
   "back": "Back",
-  "trust": "Download consent trusts the named upstream executable and its GitHub release SHA-256 metadata. This is not an independent signature. ATM does not run it, install dependencies, change PATH or configure services.",
+  "path_integrate": "Enable owned CLI in user PATH",
+  "path_scope": "Explicit PATH integration prepends the owned command directory in .profile, .bashrc and existing .zshrc under the default user HOME. This can shadow existing external commands without replacing their files. CORE confirmation is required; reload the shell separately. Install, update and version selection do not edit profiles.",
+  "path_detach": "Remove owned CLI PATH integration",
+  "path_none": "No selected owned PicoClaw or Codex CLI previews; PATH unchanged.",
+  "path_enabled": "Owned CLI PATH integration enabled in user profiles. Reload the shell separately; no provider was executed.",
+  "path_removed": "Exact owned CLI PATH integration detached; unrelated profile content and provider versions retained.",
+  "path_recorded": "owned PATH integration recorded; current shell and runtime not tested",
+  "path_absent": "no owned PATH integration recorded",
+  "trust": "Download consent trusts the named upstream executable and its GitHub release SHA-256 metadata. This is not an independent signature. Portable downloads do not run the executable, install dependencies, edit profiles or configure services. PATH integration is a separate explicitly confirmed action.",
   "appimage": "AppImage runtime dependencies (including compatible FUSE when required) must be installed separately. ATM does not execute or extract the AppImage runtime.",
-  "preserved": "Manual and legacy installations, models, credentials, settings and profiles are not adopted or removed. Versions reported here come only from private preview receipts."
+  "preserved": "Manual and legacy installations, models, credentials and settings are not adopted or removed. Only exact owned PATH blocks are changed by explicit integration or detached during uninstall; unrelated profile content is preserved. Versions reported here come only from private preview receipts."
 }

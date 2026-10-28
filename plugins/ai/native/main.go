@@ -35,6 +35,7 @@ type options struct {
 	provider, version string
 	trust             bool
 	acceptSystem      bool
+	removePath        bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -67,7 +68,7 @@ func parseOptions(op string, args []string) (options, error) {
 		return o, nil
 	}
 	switch op {
-	case "install", "update", "use", "remove", "uninstall":
+	case "install", "update", "use", "remove", "uninstall", "integrate":
 	default:
 		return o, fmt.Errorf("unsupported AI operation")
 	}
@@ -79,6 +80,11 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 		seen[key] = true
 		switch key {
+		case "--remove-path":
+			if eq || op != "integrate" {
+				return o, fmt.Errorf("PATH removal is only applicable to integrate")
+			}
+			o.removePath = true
 		case "--trust-download":
 			if eq || (op != "install" && op != "update") {
 				return o, fmt.Errorf("download trust is not applicable")
@@ -105,6 +111,12 @@ func parseOptions(op string, args []string) (options, error) {
 		default:
 			return o, fmt.Errorf("unknown argument %s", key)
 		}
+	}
+	if op == "integrate" {
+		if seen["--version"] || (seen["--provider"] && cliCommand(o.provider) == "") {
+			return o, fmt.Errorf("integrate accepts only --provider picoclaw|codex-cli and --remove-path")
+		}
+		return o, nil
 	}
 	if _, ok := providers[o.provider]; !ok {
 		return o, fmt.Errorf("explicit supported --provider required")
@@ -140,6 +152,8 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		return b.menu(ctx, o.provider)
 	case "status":
 		return nil, b.status(ctx)
+	case "integrate":
+		return nil, b.integrate(ctx, o)
 	case "install", "update":
 		if !o.trust {
 			return nil, fmt.Errorf("official executable download requires --trust-download; review provider menu")

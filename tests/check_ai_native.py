@@ -22,7 +22,7 @@ def check(executable, backend):
     assert host_target() in manifest["executables"]
     tracer = shutil.which("strace")
     assert tracer, "strace required to verify no subprocess/network activity"
-    with tempfile.TemporaryDirectory(prefix="atm-ai CLI-") as directory:
+    with tempfile.TemporaryDirectory(prefix="atm-ai ' CLI-") as directory:
         root = Path(directory)
         runtime = root / "runtime"
         plugin = runtime / "plugins/ai"
@@ -64,7 +64,8 @@ def check(executable, backend):
         base = [str(executable), "--home", str(runtime), "--json"]
         count = 0
 
-        def run(*args, success=True, started=True, read_only=True):
+        def run(*args, success=True, started=True, read_only=True,
+                write_roots=("apps/ai/picoclaw/native-v1",)):
             nonlocal count
             before = snapshot(root)
             with tempfile.TemporaryDirectory(prefix="atm-ai-trace-") as trace_dir:
@@ -84,8 +85,8 @@ def check(executable, backend):
                 assert after == before, (args, "unexpected user-state change")
             else:
                 changed = {p for p in before.keys() | after.keys() if before.get(p) != after.get(p)}
-                owned = "apps/ai/picoclaw/native-v1"
-                assert all(p == owned or p.startswith(owned + "/") for p in changed), (args, changed)
+                assert all(any(p == allowed or p.startswith(allowed + "/")
+                               for allowed in write_roots) for p in changed), (args, changed)
             assert not marker.exists(), "provider executable ran"
             count += 1
             return result
@@ -175,6 +176,15 @@ def check(executable, backend):
             run("--yes", "plugin", "ai", "menu", pending, success=False)
             run("--yes", "plugin", "ai", "install", "--provider", pending,
                 "--trust-download", success=False)
+        for provider in ("picoclaw", "codex-cli"):
+            run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
+            run("plugin", "ai", "integrate", "--provider", provider, started=False, success=False)
+            for flags in (("--version", "0.1.0"), ("--trust-download",),
+                          ("--accept-system-packages",), ("--provider", provider)):
+                run("--yes", "plugin", "ai", "integrate", "--provider", provider,
+                    *flags, success=False)
+        for provider in ("hermes-desktop", system, "ollama", "hermes-agent", "codex-desktop"):
+            run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
         run("install", "ai", success=False, started=False)
         run("--yes", "plugin", "ai", "status", "--unexpected", success=False)
         run("--yes", "plugin", "ai", "menu", "unknown-view", success=False)
@@ -216,6 +226,24 @@ def check(executable, backend):
             })
         active = owned / "current"
         active.symlink_to("versions/0.1.0/tool")
+
+        codex_owned = root / "apps/ai/codex/cli/native-v1"
+        codex_owned.mkdir(mode=0o700)
+        codex_version = codex_owned / "versions/0.1.0"
+        codex_version.mkdir(mode=0o700, parents=True)
+        codex_version.parent.chmod(0o700)
+        state_file(codex_owned / "owner.json", {"Schema": 1, "Plugin": "ai", "Provider": "codex-cli"})
+        (codex_version / "tool").write_bytes(payload)
+        (codex_version / "tool").chmod(0o755)
+        codex_arch = "x86_64" if arch == "amd64" else "aarch64"
+        codex_entry = f"codex-{codex_arch}-unknown-linux-musl"
+        state_file(codex_version / "receipt.json", {
+            "Schema": 1, "Plugin": "ai", "BinarySHA256": digest, "BinarySize": len(payload),
+            "Artifact": {"Provider": "codex-cli", "Version": "0.1.0", "Arch": arch,
+                         "URL": f"https://github.com/openai/codex/releases/download/rust-v0.1.0/{codex_entry}.tar.gz",
+                         "SHA256": "a" * 64, "Format": "tar.gz", "Entry": codex_entry, "Size": 100},
+        })
+        (codex_owned / "current").symlink_to("versions/0.1.0/tool")
         run("status", "ai")
         alias = root / "user/.local/bin/picoclaw"
         saved_candidate = alias.read_bytes()
@@ -227,8 +255,70 @@ def check(executable, backend):
         alias.unlink()
         alias.write_bytes(saved_candidate)
         alias.chmod(0o700)
+
+        profile_modes = {".profile": 0o640, ".bashrc": 0o600, ".zshrc": 0o644}
+        originals = {}
+        for name, mode in profile_modes.items():
+            path = root / "user" / name
+            path.chmod(mode)
+            originals[name] = path.read_bytes()
+        path_writes = ("apps/ai/picoclaw/native-v1", "apps/ai/codex/cli/native-v1",
+                       "user/.profile", "user/.bashrc", "user/.zshrc")
+        zsh = root / "user/.zshrc"
+        external_profile = root / "external-profile"
+        external_profile.write_text("# Must not be read or changed\n")
+        external_profile.chmod(0o600)
+        opaque_paths.append(external_profile)
+        zsh.unlink()
+        zsh.symlink_to(external_profile)
+        run("--yes", "plugin", "ai", "integrate", "--provider", "picoclaw", success=False)
+        zsh.unlink()
+        zsh.write_bytes(originals[".zshrc"])
+        zsh.chmod(profile_modes[".zshrc"])
+        hardlink = root / "profile-hardlink"
+        os.link(root / "user/.profile", hardlink)
+        run("--yes", "plugin", "ai", "integrate", "--provider", "picoclaw", success=False)
+        hardlink.unlink()
+
+        # CORE's generic integration route calls the backend with no arguments.
+        core_plan = json.loads(run("--dry-run", "path", "apply", "--plugins", started=False).stdout)
+        assert core_plan["dry_run"] and core_plan["executor"] == "native-core"
+        run("--yes", "path", "apply", "--plugins", read_only=False, write_roots=path_writes)
+        for native, command in ((owned, "picoclaw"), (codex_owned, "codex")):
+            assert (native / "bin" / command).readlink().as_posix() == "../current"
+            assert (native / "path.json").stat().st_mode & 0o777 == 0o600
+        integrated = {}
+        for name, mode in profile_modes.items():
+            path = root / "user" / name
+            data = path.read_bytes()
+            integrated[name] = data
+            assert data.startswith(originals[name]), "unrelated profile content changed"
+            assert path.stat().st_mode & 0o777 == mode, "profile permissions changed"
+            for provider, native in (("picoclaw", owned), ("codex-cli", codex_owned)):
+                assert data.count(f"# >>> ATM native AI {provider} PATH >>>".encode()) == 1
+                quoted = "'" + str(native / "bin").replace("'", "'\"'\"'") + "'"
+                assert ("export PATH=" + quoted + '${PATH:+":$PATH"}').encode() in data
+        run("--yes", "plugin", "ai", "integrate")
+        run("status", "ai")
+
+        bash_profile = root / "user/.bashrc"
+        bash_profile.write_bytes(integrated[".bashrc"].replace(b"export PATH=", b"# manually edited PATH=", 1))
+        run("--yes", "plugin", "ai", "integrate", "--provider", "picoclaw", "--remove-path", success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "picoclaw", success=False)
+        assert active.exists(), "edited profile allowed destructive uninstall"
+        bash_profile.write_bytes(integrated[".bashrc"])
+        run("--yes", "plugin", "ai", "integrate", "--provider", "picoclaw", "--remove-path",
+            read_only=False, write_roots=path_writes)
+        assert not (owned / "bin/picoclaw").is_symlink()
+        assert not (owned / "path.json").exists()
+        assert (codex_owned / "bin/codex").exists()
+        run("--yes", "plugin", "ai", "integrate", "--provider", "picoclaw",
+            read_only=False, write_roots=path_writes)
+        before_switch = {name: (root / "user" / name).read_bytes() for name in profile_modes}
         run("--yes", "plugin", "ai", "use", "--provider", "picoclaw", "--version", "0.2.0", read_only=False)
         assert active.readlink().as_posix() == "versions/0.2.0/tool"
+        assert (owned / "bin/picoclaw").resolve() == (versions / "0.2.0/tool")
+        assert all((root / "user" / name).read_bytes() == data for name, data in before_switch.items())
         run("--yes", "plugin", "ai", "remove", "--provider", "picoclaw", "--version", "0.2.0", success=False)
         inactive = versions / "0.1.0/tool"
         inactive.write_bytes(payload[:-1] + bytes([payload[-1] ^ 1]))
@@ -241,8 +331,15 @@ def check(executable, backend):
         foreign.unlink()
         run("--yes", "plugin", "ai", "remove", "--provider", "picoclaw", "--version", "0.1.0", read_only=False)
         assert not (versions / "0.1.0").exists() and active.exists()
-        run("--yes", "plugin", "ai", "uninstall", "--provider", "picoclaw", read_only=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "picoclaw", read_only=False,
+            write_roots=path_writes)
         assert not active.is_symlink() and not list(versions.iterdir())
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "codex-cli", read_only=False,
+            write_roots=path_writes)
+        for name, mode in profile_modes.items():
+            path = root / "user" / name
+            assert path.read_bytes() == originals[name], "uninstall failed to preserve original profile"
+            assert path.stat().st_mode & 0o777 == mode
         run("status", "ai")
         print(f"PASS AI preview: {count} isolated CLI routes including owned selection/removal; no provider/shell/network execution")
 
