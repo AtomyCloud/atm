@@ -3,13 +3,15 @@
 Status: experimental internal services introduced in migration 0.0.2, Patch v27.2.
 These services are tested with temporary artifacts and are not a stable third-party
 SDK. This page documents `internal/install.Manager`, not every application's backend.
-The native Node.js, Go, Java, Trivy, Flutter and Android Studio backends use
+The native Node.js, Go, Java, Trivy, Flutter, Android Studio, Android SDK and VS Code backends use
 plugin-owned lifecycle policies to preserve
 their existing layouts; they do not silently adopt legacy roots into this Manager.
 See the [Node](../../plugins/node/README.md), [Go](../../plugins/go/README.md),
-[Java](../../plugins/java/README.md), [Trivy](../../plugins/trivy/README.md) and
-[Flutter](../../plugins/flutter/README.md) and
-[Android Studio](../../plugins/android_studio/README.md) guides.
+[Java](../../plugins/java/README.md), [Trivy](../../plugins/trivy/README.md),
+[Flutter](../../plugins/flutter/README.md),
+[Android Studio](../../plugins/android_studio/README.md),
+[Android SDK](../../plugins/android_sdk/README.md) and
+[VS Code](../../plugins/vscode/README.md) guides.
 
 ## Ownership And API
 
@@ -125,7 +127,7 @@ downloaded or installed. Linux results are local; Windows/macOS execution must b
 confirmed by the expanded GitHub Actions matrix and manual standard-user testing.
 
 Native Node.js is implemented and accepted on Linux; native Go, Java, Trivy,
-Flutter and Android Studio have automated Linux coverage. Remaining application
+Flutter, Android Studio, VS Code and Android SDK have automated Linux coverage. Remaining application
 ports proceed separately. The native catalog
 and signed CORE update/recovery services are already implemented; source catalog
 downloads do not compile missing application backends. Never interpret these generic

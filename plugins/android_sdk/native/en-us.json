@@ -1,0 +1,21 @@
+{
+ "title":"Android SDK - https://developer.android.com/tools/sdkmanager",
+ "complete":"Android SDK operation completed",
+ "stacks":"Install a stack (review licenses first)",
+ "custom":"Custom package stack",
+ "review_update":"Review updates for native-owned packages",
+ "status":"Installed packages and ownership",
+ "remove":"Remove an unchanged native package",
+ "uninstall":"Uninstall native packages, preserve other data",
+ "integrate":"Configure user Android environment and PATH",
+ "java":"Java prerequisite information",
+ "back":"Back",
+ "stack":"Review %s stack licenses and downloads",
+ "platform":"Platform, for example android-36 (or - to omit):",
+ "build_tools":"Build tools version, for example 36.0.0 (or -):",
+ "cmake":"CMake version, for example 3.31.6 (or -):",
+ "ndk":"NDK version, for example 29.0.14206865 (or -):",
+ "accept":"I reviewed ALL output terms and accept this exact %s plan",
+ "remove_package":"Remove %s",
+ "review_header":"Read the complete output before accepting. Java is not executed or required for native downloads. SDK tools still require Java when you run them."
+}

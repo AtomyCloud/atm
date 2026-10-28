@@ -25,6 +25,8 @@
   "ATM_TUI_DISABLED": "Disabled",
   "ATM_TUI_LEGACY": "Linux compatibility",
   "ATM_TUI_NATIVE": "Native executable",
+  "ATM_TUI_VIEW_OUTPUT": "View full output",
+  "ATM_TUI_NATIVE_OUTPUT": "Operation output",
   "ATM_TUI_NATIVE_TRUST": "Runs trusted native code with your user permissions. Cancellation is not rollback.",
   "ATM_TUI_UPDATE": "Update application",
   "ATM_TUI_RUNNING": "Operation running",

@@ -1,4 +1,5 @@
 """Verify local migration packages without executing foreign-platform binaries."""
+import ast
 import hashlib
 import json
 import os
@@ -6,6 +7,7 @@ from pathlib import Path, PurePosixPath
 import platform as host_platform
 import re
 import shutil
+import stat
 import struct
 import subprocess
 import sys
@@ -89,14 +91,74 @@ def isolated_environment(root):
                XDG_DATA_HOME=str(root / "data"), XDG_CACHE_HOME=str(root / "cache"),
                ATM_CONFIG_DIR=str(root / "config"), ATM_STATE_DIR=str(root / "state"),
                ATM_APPS_DIR=str(root / "apps"), ATM_LANG="en-us", PATH="",
-               ATM_NODE_SYSTEM_BINARY=str(root / "absent-system-node"))
+               ATM_NODE_SYSTEM_BINARY=str(root / "absent-system-node"),
+               JAVA_HOME=str(root / "absent-java"), ANDROID_HOME=str(root / "absent-sdk"),
+               ANDROID_SDK_ROOT=str(root / "absent-sdk"), ANDROID_USER_HOME=str(root / "android-user"))
     return env
 
 
 def snapshot(root):
-    return {str(path.relative_to(root)): (path.stat().st_mode,
-            hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None)
-            for path in root.rglob("*")}
+    entries = {}
+    for path in root.rglob("*"):
+        mode = path.lstat().st_mode
+        if stat.S_ISLNK(mode):
+            identity = os.readlink(path)
+        elif stat.S_ISREG(mode):
+            identity = hashlib.sha256(path.read_bytes()).hexdigest()
+        else:
+            identity = None
+        entries[str(path.relative_to(root))] = (mode, identity)
+    return entries
+
+
+def seed_user_state(root):
+    """Detect changes to existing user state as well as unexpected new files."""
+    user = root / "user"
+    user.mkdir()
+    for name in (".bashrc", ".zshrc", ".profile"):
+        path = user / name
+        path.write_text("# Existing user configuration\n", encoding="utf-8")
+        path.chmod(0o600)
+    saved = root / "apps" / "unrelated-application" / "data"
+    saved.mkdir(parents=True)
+    (saved / "settings.json").write_text('{"preserve": true}\n', encoding="utf-8")
+    (user / "unavailable-volume").symlink_to(root / "absent-volume", target_is_directory=True)
+
+
+def verify_read_only_trace(trace, executable, backend):
+    assert "connect(" not in trace, "read-only backend attempted a network connection"
+    assert "execveat(" not in trace, "unexpected descriptor-based execution"
+    executions = []
+    for line in trace.splitlines():
+        if "execve(" not in line:
+            continue
+        match = re.search(r'execve\(("(?:[^"\\]|\\.)*")', line)
+        assert match, f"unrecognized execution trace: {line}"
+        # strace uses C octal escapes for non-ASCII filesystem bytes, not JSON.
+        executions.append(os.fsdecode(ast.literal_eval("b" + match[1])))
+    assert executions == [str(executable), str(backend)], executions
+
+
+def read_only_runner(command, env, backend):
+    """Opt-in Linux syscall gate; trace output lives outside the observed runtime."""
+    trace_enabled = os.environ.get("ATM_TEST_NATIVE_TRACE") == "1"
+    tracer = shutil.which("strace") if trace_enabled else None
+    if trace_enabled and not tracer:
+        raise RuntimeError("ATM_TEST_NATIVE_TRACE=1 requires strace")
+
+    def run(*args):
+        with tempfile.TemporaryDirectory(prefix="atm-native-trace-") as directory:
+            trace = Path(directory) / "calls"
+            invocation = command + list(args)
+            if tracer:
+                invocation = [tracer, "-f", "-qq", "-s", "4096", "-e",
+                              "trace=execve,execveat,connect", "-o", str(trace), *invocation]
+            result = subprocess.run(invocation, env=env, text=True, capture_output=True,
+                                    check=True, timeout=20)
+            if tracer:
+                verify_read_only_trace(trace.read_text(), command[0], backend)
+            return result
+    return run
 
 
 def verify_read_only_backend(run, manifest, root):
@@ -140,6 +202,7 @@ def verify_native_source(executable, source, manifest):
         (plugin / "plugin.sh").write_text(f'#!/bin/sh\nprintf fallback > "{marker}"\nexit 99\n')
         (plugin / "plugin.sh").chmod(0o755)
         env = isolated_environment(root)
+        seed_user_state(root)
         command = [str(executable.resolve()), "--home", str(runtime), "--json"]
 
         def run(*args, check=True):
@@ -175,7 +238,7 @@ def verify_native_source(executable, source, manifest):
             assert plan["operation"] == operation and plan["dry_run"] is True
             assert plan["command"] == [str(binary)]
         assert snapshot(root) == before, "dry-run modified disk"
-        verify_read_only_backend(run, manifest, root)
+        verify_read_only_backend(read_only_runner(command, env, binary), manifest, root)
     print(f"PASS source {plugin_id}: native metadata, missing-binary refusal, no fallback, {len(manifest['operations'])} no-write routes")
 
 
@@ -248,6 +311,7 @@ def verify(directory, selected=()):
                     archive.extractall(temp, filter="data")
                 executable = Path(temp) / root / "atm"
                 env = isolated_environment(Path(temp))
+                seed_user_state(Path(temp))
                 result = subprocess.run([str(executable), "--version"], env=env, text=True, capture_output=True, check=True, timeout=20)
                 assert "atm 0.0.2" in result.stdout
                 result = subprocess.run([str(executable), "--json", "plugins", "list"], env=env, text=True, capture_output=True, check=True, timeout=20)
@@ -259,10 +323,8 @@ def verify(directory, selected=()):
                     if not item["available"]:
                         continue
 
-                    def run(*args):
-                        return subprocess.run([str(executable), "--json", *args], env=env,
-                                              text=True, capture_output=True, check=True, timeout=20)
-
+                    backend = Path(temp) / root / "plugins" / plugin_id / native["executables"][target]
+                    run = read_only_runner([str(executable), "--json"], env, backend)
                     verify_read_only_backend(run, native, Path(temp))
         print(f"PASS {platform}: archive checksum, payload hashes, runtime-only paths and executable architecture")
 

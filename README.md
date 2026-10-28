@@ -3,7 +3,7 @@
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Node.js, Go, Java/JDK, Flutter,
-> Android Studio and Trivy have native Linux
+> Android Studio, Android SDK, VS Code and Trivy have native Linux
 > backends; remaining plugins use an explicit compatibility backend while being
 > migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
@@ -77,7 +77,7 @@ to keep this exact snapshot. Preserve any existing installation before switching
 </div>
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
-Go toolchain, Java/JDK, Flutter, Android Studio and Trivy backends are written in Go.
+Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code and Trivy backends are written in Go.
 The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
@@ -103,9 +103,9 @@ Desktop apps: ~/.local/share/applications
 | [Java / JDK](plugins/java/README.md) | `java` | `0.0.1` | Install and switch Java/JDK versions from supported vendors or checksummed custom URLs. |
 | [Flutter SDK](plugins/flutter/README.md) | `flutter` | `0.0.1` | Latest-five/custom official releases, channel-aware updates, version switching and guarded removal. |
 | [Go](plugins/go/README.md) | `go` | `0.0.1` | Install, switch, remove, and uninstall Go versions while preserving the Go workspace. |
-| VS Code | `vscode` | `0.0.1` | Install VS Code versions, switch installed versions, configure CLI and desktop launchers. |
+| [VS Code](plugins/vscode/README.md) | `vscode` | `0.0.1` | Verified latest-seven/custom releases, portable data migration, explicit extensions and user integration. |
 | [Android Studio](plugins/android_studio/README.md) | `android_studio` | `0.0.1` | Verified pinned/custom IDE archives, version switching and owned user desktop integration. |
-| Android SDK | `android_sdk` | `0.0.1` | Install Android SDK command-line tools, platforms, build-tools, CMake, NDK, emulator, and platform-tools. |
+| [Android SDK](plugins/android_sdk/README.md) | `android_sdk` | `0.0.1` | Native package management, dependency resolution, explicit license review and ownership-preserving updates/removal. |
 | OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
 | [Docker](plugins/docker/README.md) | `docker` | `0.0.1` | Install Docker Engine, Compose, and Desktop; export and restore image archives. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
@@ -456,6 +456,20 @@ Use this submenu to install Go versions, switch current Go via CLI, list install
 
 ### VS Code
 
+The native Linux backend keeps versions in `~/Apps/vscode/code_<version>` and
+selects one through `current`. Open `atm plugin vscode` for the native menu;
+the release submenu fetches the latest seven stable versions, with custom version
+entry. Installations verify Microsoft's SHA-256 and build identity. Root menu and
+status are offline and never launch the editor.
+
+PATH, the user CLI link, desktop entries and extension installation are explicit
+actions. Portable `data` migration requires both editors closed, copies the source
+and retains the old destination in `preserved-data`. Removal preserves personal
+data and refuses changed or unowned application files. See the
+[VS Code guide](plugins/vscode/README.md) for native commands and limitations.
+
+The retained Bash menu below is the legacy workflow:
+
 ```text
 💻 VS Code Installer
 Current: <status>
@@ -478,7 +492,7 @@ q) Exit
 
 Use this submenu to install VS Code versions, switch to an already installed version, list installed versions, remove one version, or uninstall all VS Code versions managed by ATM.
 
-When switching versions, ATM regenerates:
+In that legacy workflow, switching versions regenerates:
 
 ```text
 ~/.local/share/applications/code.desktop
@@ -524,16 +538,36 @@ Use this submenu to install Android Studio, install from a custom URL, list inst
 
 ### Android SDK
 
+The native Linux amd64 backend resolves official Google package metadata and
+manages command-line tools, platforms, build-tools, CMake, NDK, emulator and
+platform-tools directly in Go. It does not execute Java or `sdkmanager` during
+installation. Java detection is read-only; running SDK tools still needs a compatible
+JDK. Root menu/status are offline.
+
+Open `atm plugin android_sdk`, select a stack and review its plan and licenses.
+**View full output** exposes the complete retained review text in the TUI.
+Installation requires explicit acceptance tied to the exact plan and license
+contents; changes require another review. The native plugin is excluded from
+automatic Full Setup because it cannot accept those terms implicitly.
+
+The SDK root remains `~/Apps/AndroidStudio/SDK`. Existing unmanaged SDKs are
+detected and preserved, not adopted. Native updates/removal protect changed or
+unknown files and preserve licenses, AVD/user data and retained package history.
+See the [Android SDK guide](plugins/android_sdk/README.md) for commands, checksum
+trust, compatibility and partial-operation limits.
+
+The retained Bash menu below describes the legacy workflow:
+
 ```text
 📦 Android SDK Installer
 Current: <status>
 SDK root: ~/Apps/AndroidStudio/SDK
 ------------------------------------------
 1) Latest Stable SDK Stack
-2) SDK Stack: api37
-3) SDK Stack: api36
-4) SDK Stack: api35
-5) SDK Stack: api35_legacy
+2) SDK Stack: api36
+3) SDK Stack: api35
+4) SDK Stack: api35_legacy
+5) SDK Stack: api34
 6) Choose specific SDK versions
 7) List installed SDK packages
 8) Remove SDK package

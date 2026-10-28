@@ -107,7 +107,10 @@ func main() {
 	case "echo":
 		b, _ := json.Marshal(r)
 		emit(protocol.Event{Type: "log", Message: string(b)})
-	case "choices":
+	case "choices", "review":
+		if mode == "review" {
+			emit(protocol.Event{Type: "log", Message: "REVIEW-BEGIN " + strings.Repeat("Complete terms remain readable. ", 100) + " REVIEW-END"})
+		}
 		emit(protocol.Event{Type: "result", Status: "success", Message: "Choose a version", Choices: []protocol.Choice{{ID: "custom", Label: "Custom version", Operation: "install", Arguments: []string{"--version"}, Prompt: "Version"}}})
 		return
 	case "log-flood":

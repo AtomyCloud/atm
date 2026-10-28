@@ -58,6 +58,7 @@ type Model struct {
 	controller        *nativeController
 	active            *nativeSession
 	nativeLogs        []string
+	outputReturn      string
 	nativeProgress    float64
 	nativeChoices     []protocol.Choice
 	choicePrompt      string
@@ -192,12 +193,25 @@ func (m Model) rows() []row {
 		for _, choice := range m.nativeChoices {
 			rows = append(rows, row{choice.ID, choice.Label, ""})
 		}
+		if len(m.nativeLogs) > 0 {
+			rows = append(rows, row{"native-output", m.words.T("ATM_TUI_VIEW_OUTPUT"), ""})
+		}
+	case "native-output":
+		rows = append(rows, row{"back", m.words.T("ATM_MENU_BACK"), ""})
+		for _, entry := range m.nativeLogs {
+			for _, line := range strings.Split(ansi.Hardwrap(clean(entry), max(1, m.width-2), true), "\n") {
+				rows = append(rows, row{"result", line, ""})
+			}
+		}
 	case "native":
 		label := m.words.T("ATM_TUI_CLOSE")
 		if m.active != nil {
 			label = m.words.T("ATM_TUI_NO")
 		}
 		rows = append(rows, row{"native-close", label, ""})
+		if m.active == nil && len(m.nativeLogs) > 0 {
+			rows = append(rows, row{"native-output", m.words.T("ATM_TUI_VIEW_OUTPUT"), ""})
+		}
 		for i := len(m.nativeLogs) - 1; i >= 0; i-- {
 			rows = append(rows, row{"result", m.nativeLogs[i], ""})
 		}
@@ -382,7 +396,9 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "q":
 			return m, tea.Quit
 		case "esc", "backspace":
-			if m.screen == "catalog-details" {
+			if m.screen == "native-output" {
+				m.navigate(m.outputReturn)
+			} else if m.screen == "catalog-details" {
 				query := m.input.Value()
 				m.navigate("catalog")
 				m.input.SetValue(query)
@@ -491,6 +507,12 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	key := rows[m.cursor].key
 	switch m.screen {
 	case "native-menu":
+		// The extra row is positional: a plugin may legitimately use this ID.
+		if m.cursor == len(m.nativeChoices) {
+			m.outputReturn = m.screen
+			m.navigate("native-output")
+			return m, nil
+		}
 		for _, choice := range m.nativeChoices {
 			if choice.ID != key {
 				continue
@@ -533,6 +555,13 @@ func (m Model) activate() (tea.Model, tea.Cmd) {
 	case "native":
 		if key == "native-close" {
 			m.navigate("plugins")
+		} else if key == "native-output" && m.active == nil {
+			m.outputReturn = m.screen
+			m.navigate("native-output")
+		}
+	case "native-output":
+		if m.cursor == 0 {
+			m.navigate(m.outputReturn)
 		}
 	case "plugins":
 		m.selected = key
@@ -781,6 +810,8 @@ func (m Model) render() (string, []hit) {
 		title = clean(m.choicePrompt) + ": " + m.input.View()
 	case "native-menu":
 		title = clean(m.choiceTitle)
+	case "native-output":
+		title = m.words.T("ATM_TUI_NATIVE_OUTPUT")
 	case "download":
 		title = "Plugin ID: " + m.input.View()
 	case "core-input":

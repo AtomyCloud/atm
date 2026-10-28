@@ -1,23 +1,27 @@
 {
-  "schema": 1,
-  "full_setup": true,
+  "schema": 2,
+  "full_setup": false,
   "id": "android_sdk",
   "name": "Android SDK",
   "version": "0.0.1",
   "description": "Install and manage Android SDK packages",
   "order": 6,
-  "min_core_api": 1,
+  "min_core_api": 2,
   "platforms": [
     "linux"
   ],
-  "executor": "legacy-bash",
-  "protocol": "tty-v1",
+  "executor": "native",
+  "protocol": "jsonl-v1",
   "operations": [
     "menu",
     "status",
     "install",
     "remove",
     "uninstall",
-    "use"
-  ]
+    "update",
+    "integrate"
+  ],
+  "executables": {
+    "linux/amd64": "bin/linux-amd64/atm-android-sdk"
+  }
 }

@@ -132,8 +132,8 @@ func applyProfiles(ctx context.Context, plans []profilePlan) (func() error, erro
 	rollback := func() error {
 		for i := len(applied) - 1; i >= 0; i-- {
 			p := applied[i]
-			now, _, exists, err := readProfile(p.path)
-			if err != nil || !exists || !bytes.Equal(now, p.after) {
+			now, mode, exists, err := readProfile(p.path)
+			if err != nil || !exists || mode != p.mode || !bytes.Equal(now, p.after) {
 				return fmt.Errorf("profile changed during rollback: %s", p.path)
 			}
 			if p.exists {

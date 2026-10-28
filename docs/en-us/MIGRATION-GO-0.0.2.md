@@ -69,7 +69,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Capability | Linux | Windows |
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
-| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio and Trivy; remaining plugins use Bash compatibility | Application backends pending |
+| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio, Android SDK, VS Code and Trivy; remaining plugins use Bash compatibility | Application backends pending |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
 | Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
@@ -83,6 +83,8 @@ remain separate. No installed copy is updated automatically. Use the
 | Native Java/JDK backend | Vendor/custom JDK lifecycle implemented; automated Linux checks passed, human acceptance pending | Pending |
 | Native Flutter backend | Official checksummed XZ SDK lifecycle and channel-aware updates; human acceptance pending | Pending |
 | Native Android Studio backend | Pinned/custom checksummed IDE lifecycle and owned desktop integration on amd64; human acceptance pending | Pending |
+| Native VS Code backend | Official stable releases, portable data preservation, explicit extensions and owned integration; human acceptance pending | Pending |
+| Native Android SDK backend | Native package/dependency management and plan-bound license acceptance on amd64; human acceptance pending | Pending |
 | Remaining application backends | Sequential migration in progress | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
@@ -259,8 +261,8 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
 1. Human acceptance of the native Linux Go toolchain backend. Native Node.js was
    accepted by the maintainer on 2026-10-28; Linux ARM64 runtime remains pending.
 2. Port remaining application plugins one at a time, simplest to most complex,
-   advancing after automated gates. Go, Trivy, Java/JDK, Flutter and Android Studio
-   are implemented; VS Code is next. Preserve
+   advancing after automated gates. Go, Trivy, Java/JDK, Flutter, Android Studio,
+   VS Code and Android SDK are implemented; spotatui is next. Preserve
    plugin-owned application behavior and the generic native menu/integration contracts.
    Legacy backup import remains separate from native plugin code backups.
 3. Implement/test Node.js on other hosts; Linux ARM64 runtime acceptance is pending.

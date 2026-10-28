@@ -41,7 +41,7 @@ func choiceModel(t *testing.T) Model {
 
 func TestNativeChoicePromptAndDryRunConfirmation(t *testing.T) {
 	m := choiceModel(t)
-	if m.screen != "native-menu" || len(m.rows()) != 2 {
+	if m.screen != "native-menu" || len(m.rows()) != 3 {
 		t.Fatal("missing choices")
 	}
 	u, _ := m.activate()

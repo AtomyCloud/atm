@@ -4,7 +4,7 @@ Status: implemented in the opt-in ATM 0.0.2 migration. Linux fixture tests cover
 execution and the terminal UI. Windows builds compile; Windows runtime and
 standard-user acceptance remain pending. Node.js provides a native Go Linux
 backend accepted by the maintainer; the Go toolchain, Java/JDK, Flutter, Android
-Studio and Trivy backends have passed
+Studio, VS Code, Android SDK and Trivy backends have passed
 automated Linux checks, with human acceptance pending. Remaining application plugins retain
 explicit Bash compatibility backends until individually migrated. The separate
 legacy entrypoint is retained.
@@ -152,6 +152,15 @@ and request ID; event-specific fields cannot be used on other event types.
   output it may drop intermediate logs/progress; the terminal outcome has a
   separate reliable channel. Logs are session-only, not durable audit records.
 
+After completion, **View full output** opens the retained log messages in
+chronological order with wrapping and scrolling, including when a result offers
+follow-up menu choices. Back/Escape returns without selecting or confirming an
+action. The normal row preview remains compact; the full-output view does not
+restore entries already dropped by the limits above. A plugin presenting terms
+for consent must bound the complete review below those limits and refuse an
+oversized review rather than returning acceptance choices for truncated terms.
+Control characters (including original line breaks) remain sanitized in both views.
+
 ATM withholds the terminal event until the process exits and the stream has been
 validated. A success result with nonzero exit is failure; exit zero without a
 result is also failure. Error with exit zero becomes exit 1; otherwise the plugin
@@ -218,3 +227,17 @@ ATM_TEST_NATIVE_FIXTURE=/tmp/atm-native-check/fixture python3 tests/test_go_tui.
 The fixture is not added to `plugins/` or shipped as an application plugin. CI
 runs Go tests on Linux and Windows; actual results must be checked separately.
 Cross-compilation is not evidence of Windows/ARM64 runtime acceptance.
+
+After building local backends, check all declared operations without execution,
+then run only each backend's root menu and status in an isolated HOME. The optional
+Linux syscall gate requires `strace` and permission to trace local child processes:
+
+```bash
+bash scripts/build_manager.sh --plugins-local --target linux-amd64
+ATM_TEST_NATIVE_TRACE=1 python3 -B tests/check_go_packages.py --source /tmp/atm-native-check/atm
+```
+
+The gate requires exactly the CORE and backend executables, no network connection
+attempts, and unchanged profiles, links and unrelated application data. It does
+not execute downloaded application binaries. The same environment flag also applies
+to host-target menu/status checks when a package directory is passed to the checker.
