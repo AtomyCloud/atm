@@ -37,6 +37,7 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 			out = append(out, choice{ID: p, Label: providers[p].name, Operation: "menu", Arguments: []string{p}})
 		}
 		out = append(out, choice{ID: hermesSystem, Label: providers[hermesSystem].name, Operation: "menu", Arguments: []string{hermesSystem}})
+		out = append(out, choice{ID: "ollama", Label: providers["ollama"].name, Operation: "menu", Arguments: []string{"ollama"}})
 		return append(out, choice{ID: "status", Label: label("status"), Operation: "status"}), nil
 	}
 	if err := b.logDiscovery(ctx, id); err != nil {
@@ -50,6 +51,9 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 	b.log("Private install root: " + b.root(id))
 	if id == "hermes-desktop" {
 		b.log(label("appimage"))
+	}
+	if id == "ollama" {
+		b.ollamaGuidance()
 	}
 	vs, current, err := b.inspect(ctx, id, false)
 	if err != nil {
@@ -112,6 +116,9 @@ func (b *backend) status(ctx context.Context) error {
 		}
 	}
 	if err := b.systemStatus(); err != nil {
+		return err
+	}
+	if err := b.ollamaStatus(ctx); err != nil {
 		return err
 	}
 	b.log(label("preserved"))

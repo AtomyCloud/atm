@@ -214,7 +214,7 @@ func (b *backend) discover(ctx context.Context) (discoveryReport, error) {
 		r.Evidence = append(r.Evidence, discoveryEvidence{Provider: id, Path: path, Source: source})
 	}
 	var nativeRoots []string
-	for _, id := range providerOrder {
+	for _, id := range append(append([]string{}, providerOrder...), "ollama") {
 		root := b.root(id)
 		nativeRoots = append(nativeRoots, root)
 		resolved, _, _, err := discoveryStat(ctx, root)
@@ -224,7 +224,11 @@ func (b *backend) discover(ctx context.Context) (discoveryReport, error) {
 		if resolved != "" {
 			nativeRoots = append(nativeRoots, resolved)
 		}
-		add(id, filepath.Join(root, "current"), "managed-preview")
+		active := filepath.Join(root, "current")
+		if id == "ollama" {
+			active = filepath.Join(active, "bin", "ollama")
+		}
+		add(id, active, "managed-preview")
 	}
 	add("picoclaw", filepath.Join(b.req.AppsDir, "ai/picoclaw/picoclaw"), "legacy-default")
 	add("hermes-desktop", filepath.Join(b.req.AppsDir, "hermes/hermes-desktop/current.AppImage"), "legacy-default")

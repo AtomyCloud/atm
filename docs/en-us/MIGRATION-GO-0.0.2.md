@@ -99,7 +99,7 @@ transactions and ARM64 runtime acceptance remain Pending. See the
 backends are native; AI, Docker and Backup & Restore remain to migrate.
 
 AI has a separate, opt-in native preview for portable PicoClaw, Hermes Desktop
-AppImage and Codex CLI, plus Hermes Desktop system DEB installation on Linux
+AppImage, Codex CLI and Ollama base bundles, plus Hermes Desktop system DEB installation on Linux
 amd64 with separate download and system-package consent. The production manifest remains legacy until the other
 AI routes have native parity; this preview does not increase the 13/16 count.
 See the [AI guide](../../plugins/ai/README.md). Portable routes do not run upstream
@@ -116,7 +116,14 @@ previews, including the generic CORE integration route and exact owned-block
 removal. It does not adopt discovered candidates or run applications, and is not
 enabled automatically during installation/version changes. Modified integration
 blocks prevent destructive removal; uncertain recovery retains local evidence.
-Hermes Agent, Ollama, Codex Desktop and real shell/provider acceptance remain Pending.
+Ollama portable installation preserves the official executable/library tree under
+`Apps/ai/ollama/native-v1` and supports explicit install/update/version selection
+and guarded removal. Native Zstandard decoding uses a pinned Go dependency;
+archives require exact release origins, size and SHA-256. Models, external
+installations and services are not adopted, stopped or removed. No provider
+execution, shell installer, profile edits or GPU add-on installation occurs.
+Hermes Agent, Ollama system/service workflows, Codex Desktop and real shell/provider
+acceptance remain Pending; source-level portability is not runtime acceptance.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,
 temporary repository configuration and retained restore recovery copies. It never

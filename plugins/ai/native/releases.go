@@ -23,6 +23,7 @@ var versionRE = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(
 type provider struct{ name, path, repo, tagPrefix, docs string }
 
 var providers = map[string]provider{
+	"ollama":         {"Ollama (portable bundle)", "ai/ollama", "ollama/ollama", "v", "https://docs.ollama.com/linux"},
 	"picoclaw":       {"PicoClaw CLI", "ai/picoclaw", "sipeed/picoclaw", "v", "https://docs.picoclaw.io/docs/installation/"},
 	"hermes-desktop": {"Hermes Desktop (AppImage)", "hermes/hermes-desktop", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
 	hermesSystem:     {"Hermes Desktop (system DEB)", "ai/hermes-desktop-system", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
@@ -42,6 +43,8 @@ func artifactNames(id, v, arch string) (name, entry, format string, error error)
 		return "", "", "", fmt.Errorf("invalid stable version")
 	}
 	switch id {
+	case "ollama":
+		return "ollama-linux-" + arch + ".tar.zst", "bin/ollama", "tar.zst", nil
 	case hermesSystem:
 		if arch != "amd64" {
 			return "", "", "", fmt.Errorf("Hermes Desktop system DEB preview supports Linux amd64 only; no architecture or AppImage fallback")
@@ -83,7 +86,11 @@ func (a artifact) validate() error {
 		return err
 	}
 	want := "https://github.com/" + p.repo + "/releases/download/" + p.tagPrefix + a.Version + "/" + name
-	if a.URL != want || a.Entry != entry || a.Format != format || !validSHA(a.SHA256) || a.Size <= 0 || a.Size > maxDownload {
+	limit := maxDownload
+	if a.Provider == "ollama" {
+		limit = ollamaMaxDownload
+	}
+	if a.URL != want || a.Entry != entry || a.Format != format || !validSHA(a.SHA256) || a.Size <= 0 || a.Size > limit {
 		return fmt.Errorf("invalid pinned artifact")
 	}
 	return nil
@@ -163,6 +170,9 @@ func (b *backend) fetch(ctx context.Context, id, raw string, dst io.Writer, max 
 	}
 	c := *b.client
 	c.Timeout = 5 * time.Minute
+	if id == "ollama" && u.Host == "github.com" {
+		c.Timeout = 10 * time.Minute
+	}
 	c.CheckRedirect = func(req *http.Request, via []*http.Request) error {
 		if len(via) >= 5 || u.Host != "github.com" || !storageHost(req.URL.Host) || req.URL.Scheme != "https" || req.URL.User != nil || req.URL.Fragment != "" {
 			return fmt.Errorf("release redirect rejected")
@@ -186,6 +196,9 @@ func (b *backend) fetch(ctx context.Context, id, raw string, dst io.Writer, max 
 	defer resp.Body.Close()
 	if resp.StatusCode != 200 || resp.ContentLength > max {
 		return fmt.Errorf("release response rejected: status=%d length=%d", resp.StatusCode, resp.ContentLength)
+	}
+	if id == "ollama" && u.Host == "github.com" && resp.ContentLength >= 0 && resp.ContentLength != max {
+		return fmt.Errorf("Ollama Content-Length differs from exact release size")
 	}
 	if ce := resp.Header.Get("Content-Encoding"); ce != "" && ce != "identity" {
 		return fmt.Errorf("encoded response rejected")

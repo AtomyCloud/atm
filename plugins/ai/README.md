@@ -18,8 +18,9 @@ route supports Linux amd64 only:
 | Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
+| Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 
-For the portable archive providers, only the standalone executable is installed.
+For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
 optional `picoclaw-launcher` WebUI, sample configuration and documentation are
 not copied into the installation. PicoClaw CLI does not require that launcher.
@@ -28,7 +29,8 @@ Codex CLI uses the standalone release binary, not npm in this preview.
 Pending before the entire AI plugin can switch to native Go:
 
 - Hermes Agent's supported package-management/bootstrap workflow.
-- Ollama installation, runtime and system-service behavior.
+- Ollama system installation, runtime/service acceptance and GPU add-on workflows;
+  portable base-bundle lifecycle is implemented separately below.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
 - PATH registration for providers other than the owned PicoClaw and standalone
   Codex CLI previews, including external/legacy installations, is not implemented.
@@ -62,12 +64,14 @@ The names `hermes-agent`, `hermes`, `ollama`, `picoclaw`, `hermes-desktop` and
 The native runner inherits HOME/PATH; request `Home` identifies the ATM runtime,
 not the user's home. Known paths are checked even with empty PATH. These are
 filename heuristics, not provider identification. An `/opt` directory alone is
-never evidence. Hermes Agent and Ollama evidence is visible in aggregate status
-without authorizing native lifecycle routes. Codex Desktop remains explicitly
+never evidence. Hermes Agent and Ollama external evidence is visible in aggregate
+status without authorizing ownership or lifecycle operations on those paths.
+Codex Desktop remains explicitly
 unknown because the legacy check queries a package database, which discovery
 does not do; `codex` is not treated as Codex Desktop evidence.
 
-The three portable `native-v1/current` paths are reported separately. Literal
+The three single-file `native-v1/current` paths and Ollama's
+`native-v1/current/bin/ollama` are reported separately. Literal
 duplicate candidates are removed; resolved aliases and hard links to a preview
 current executable are excluded from external evidence. Paths resolving inside
 a preview root are also excluded, without inferring ownership of that root.
@@ -101,7 +105,7 @@ not examined. Existing preview receipt/journal checks remain separate.
 
 ## Storage and Safety
 
-Each portable provider uses a new private directory beneath `ATM_APPS_DIR`:
+The single-file portable providers use new private directories beneath `ATM_APPS_DIR`:
 
 ```text
 ai/picoclaw/native-v1/
@@ -130,8 +134,8 @@ digest. Older custom versions without that digest fail closed. GitHub HTTPS
 metadata is the trust source; this is **not an independent signature**. No
 checksum-free fallback exists.
 
-Downloads and archive extraction are bounded. Archive extraction uses ATM's
-shared native installation library, rejecting traversal, links, duplicates and
+Downloads and archive extraction are bounded. These single-file archive routes
+use ATM's shared native installation library, rejecting traversal, links, duplicates and
 unsupported entries. The binary's ELF architecture/type is checked without
 execution; an AppImage must also carry the type-2 AppImage marker. Only a fully
 verified staged version is published. Selection changes atomically, so an error
@@ -161,6 +165,110 @@ After a crash, a lock or private `.atm-ai-stage-*`, `.atm-ai-select-*`, or
 force unlock or cleanup of unknown remnants. Verify that no installer is active
 and inspect the relevant paths before manual recovery; do not recursively delete
 the provider's existing installation directory.
+
+## Ollama Portable Bundle
+
+Provider ID: `ollama`. This isolated preview implements native portable lifecycle,
+not the upstream system installer or service setup. It preserves the complete
+official `bin/ollama` and `lib/ollama` base tree, including library links, helper
+executables and licenses. Keeping these paths adjacent matters: Ollama resolves
+its executable path to locate sibling libraries. No downloaded shell is executed.
+
+The [official Linux guide](https://docs.ollama.com/linux) documents `.tar.zst`
+base bundles for amd64 and arm64. ATM resolves stable `ollama/ollama` GitHub
+releases, selecting exactly `ollama-linux-amd64.tar.zst` or
+`ollama-linux-arm64.tar.zst` with the release asset's SHA-256 digest and exact
+size. `latest` and custom stable `X.Y.Z` are supported; prereleases, older release
+formats, missing digests and alternative URLs are refused. Separate ROCm,
+JetPack and MLX assets are not selected. GitHub metadata plus its fixed HTTPS
+download/storage origins is the trust boundary, not an independent signature.
+CORE confirmation and `--trust-download` are required before install/update.
+
+Storage beneath `ATM_APPS_DIR` is dedicated and never adopts external files:
+
+```text
+ai/ollama/native-v1/
+  owner.json
+  versions/<X.Y.Z>/receipt.json
+  versions/<X.Y.Z>/tree/bin/ollama
+  versions/<X.Y.Z>/tree/lib/ollama/...
+  current -> versions/<X.Y.Z>/tree
+```
+
+Unlike single-file previews, Ollama's `current` selects a **directory**.
+Receipts bind provider, stable version, host architecture, source URL, compressed
+size/digest and a complete tree inventory of file hashes, sizes, modes and raw
+symlink targets. Directories are private 0700; files normalize to 0600 or 0755
+when executable. ELF architecture/type validation applies to `bin/ollama` without
+execution; libraries/helpers are inventoried as data, not runtime-validated.
+
+Compressed downloads are bounded to **4 GiB**, and the entire decompressed tar
+stream (including headers/padding) to **12 GiB**, with at most 10,000 archive or
+inventory entries. Paths are at most 1024 bytes/32 separators. The dedicated
+extractor uses `github.com/klauspost/compress/zstd`, single concurrency, low-memory
+mode and a 128 MiB decoder window/memory limit. Exact response size and SHA-256
+must match before extraction; tar, zstd checksum and cancellation errors refuse
+publication. A single leading `./` and an optional root directory are accepted.
+Traversal, duplicate normalized names, hardlinks, sparse/special files, unsafe
+modes and entries outside the bin/lib layout are rejected. Library symlinks are
+created only after checking the full graph for escapes, dangling targets, cycles,
+ancestor-directory targets and links used as extraction parents.
+
+The download timeout is ten minutes, within CORE's existing fifteen-minute
+operation timeout. There is no download resume. Bounds are **per bundle**, not
+a total-operation I/O budget: mutations repeatedly rehash the store and selected
+tree at validation/commit boundaries. Ollama menu/status also hash every recorded
+tree, so a large store can be slow or time out. Their verified version/selection
+claims come from receipts and inventory only; runtime remains unknown. Network
+lookup, process/service probes and private model/configuration reads never occur
+in these views. Status performance with large real stores remains unaccepted.
+
+Installation stages privately and atomically publishes each version; selection
+atomically replaces the directory link after validating its exact staged identity
+and target. Update requires an owned active version and refuses downgrades.
+`use` requires an exact owned unchanged version. `remove` refuses the active
+version; `uninstall` validates all versions before deselection. Modified files,
+unknown entries, foreign ownership, unsafe ancestors, changed permissions or
+hardlinks fail closed. Removal detaches and re-verifies the tree, then removes
+only recorded entries in postorder; it never recursively sweeps unknown data.
+Failure may retain an incomplete detached remainder, or inactive versions after
+uninstall deselection. The error identifies retained staging for manual inspection.
+The owner marker and empty versions directory remain after successful uninstall.
+
+The sibling `native-v1.lock` serializes cooperating ATM operations. Interrupted
+operations can retain that lock and `.atm-ollama-stage-*`, `.atm-ollama-select-*`
+or `.atm-ollama-remove-*` siblings. No automatic recovery, complete rollback,
+power-loss durability or hostile same-user isolation is promised. Inspect the
+reported paths and confirm no installer is active before manual recovery.
+
+**Manually close/stop processes using this owned bundle before updating,
+switching or removing it.** ATM does not probe, start or stop Ollama processes or
+existing services. No model download, GPU setup, service/user creation, system
+package operation, profile edit or global PATH write occurs. Ollama `integrate`
+is intentionally unsupported; only PicoClaw and Codex CLI have reviewed PATH
+integration. Existing external/legacy installations, models, credentials and
+settings remain untouched. A separate explicit runtime invocation can change
+user data or conflict with an already running server; review upstream settings
+and existing servers yourself first.
+
+With the isolated `preview_atm` helper below, available commands are:
+
+```bash
+preview_atm plugin ai menu ollama
+preview_atm plugin ai install --provider ollama --trust-download
+preview_atm plugin ai install --provider ollama --version X.Y.Z --trust-download
+preview_atm plugin ai update --provider ollama --trust-download
+preview_atm plugin ai use --provider ollama --version X.Y.Z
+preview_atm plugin ai remove --provider ollama --version X.Y.Z
+preview_atm plugin ai uninstall --provider ollama
+```
+
+The menu/selection logs print shell-literal optional manual examples using the
+full `current/bin/ollama` path: `serve`, `run llama3` and `pull llama3`. ATM never
+runs these commands. `run`/`pull` may download models independently of the bundle
+installation. Real upstream bundle download/extraction and runtime acceptance,
+active-process handling, GPU behavior and Linux arm64 execution remain Pending;
+synthetic archives and public metadata checks do not establish those claims.
 
 ## Explicit CLI PATH Integration
 
@@ -360,7 +468,8 @@ preview_atm plugin ai integrate --provider picoclaw --remove-path
 preview_atm plugin ai uninstall --provider picoclaw
 ```
 
-Substitute `codex-cli` or `hermes-desktop` for other portable providers. Install
+Substitute `codex-cli`, `hermes-desktop` or `ollama` for other portable lifecycle
+providers, but do not use `integrate` for Hermes Desktop or Ollama. Install
 and update accept `--version latest` (default) or exact `X.Y.Z`; update refuses
 downgrades. `use` and `remove` require exact installed versions. `status` takes no
 arguments; `menu` takes no arguments or exactly one provider ID. Version status
@@ -414,6 +523,11 @@ go vet ./plugins/ai/native
 
 Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
 substitutes for system commands and temporary installation directories only.
+Ollama tests use tar.zst bin/lib fixtures, library/helper preservation, legitimate
+link chains, malformed trees, exact response/hash limits, decoder bounds,
+interrupted cleanup and a compiled test ELF read only as fixture data. Parent
+review tests independently cover modified libraries and staged selection-link
+substitution. Neither fixture binaries nor helpers are executed as providers.
 Discovery tests inject synthetic HOME/PATH/system roots, including broken/cyclic
 links, FIFOs, permissions, search bounds, cancellation and preview aliases.
 Integration tests use temporary profile fixtures, receipt/link corruption,
@@ -433,3 +547,5 @@ does not install or execute PicoClaw and is not a runtime acceptance test.
 - [Hermes Desktop releases](https://github.com/fathah/hermes-desktop/releases/)
 - [Codex CLI documentation](https://learn.chatgpt.com/docs/codex/cli)
 - [Codex standalone releases](https://github.com/openai/codex/releases/)
+- [Ollama Linux installation and base bundles](https://docs.ollama.com/linux)
+- [Ollama releases](https://github.com/ollama/ollama/releases/)

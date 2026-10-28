@@ -161,6 +161,9 @@ func entries(path string, max int) ([]os.DirEntry, error) {
 	return es, nil
 }
 func (b *backend) current(id string) (string, error) {
+	if id == "ollama" {
+		return b.ollamaCurrent()
+	}
 	p := filepath.Join(b.root(id), "current")
 	target, err := os.Readlink(p)
 	if os.IsNotExist(err) {
@@ -176,6 +179,9 @@ func (b *backend) current(id string) (string, error) {
 	return v, nil
 }
 func (b *backend) inspect(ctx context.Context, id string, verify bool) ([]string, string, error) {
+	if id == "ollama" {
+		return b.ollamaInspect(ctx)
+	}
 	root := b.root(id)
 	if err := dirs(root, false, true); os.IsNotExist(err) {
 		return nil, "", nil

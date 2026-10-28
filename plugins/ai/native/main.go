@@ -166,6 +166,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		return nil, b.installHermesSystem(ctx, o)
 	}
 	err = b.locked(ctx, o.provider, func() error {
+		if o.provider == "ollama" {
+			return b.ollamaExecute(ctx, o)
+		}
 		switch b.req.Operation {
 		case "install", "update":
 			return b.install(ctx, o)

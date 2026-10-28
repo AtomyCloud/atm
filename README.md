@@ -760,12 +760,12 @@ rules, recovery behavior and differences from the retained Bash implementation.
 
 AI migration is in progress. The normal menu still uses the existing legacy
 backend. A separate native preview covers portable PicoClaw, Hermes Desktop
-AppImage and Codex CLI, plus explicitly authorized Hermes Desktop system DEB
+AppImage, Codex CLI and Ollama base bundles, plus explicitly authorized Hermes Desktop system DEB
 installation on Linux amd64. It is not selected automatically or included as a
 production native backend. The DEB route changes the actual system and executes
 package maintainer scripts through APT; an isolated preview HOME is not a system
 sandbox. Custom APT preferences are refused in this preview. Hermes Agent,
-Ollama and Codex Desktop remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
+Ollama system/service workflows and Codex Desktop remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 
 The native preview also reports external executable candidates from known legacy
@@ -780,6 +780,14 @@ with separate removal of their exact owned profile blocks. Version selection
 keeps stable command links; installation does not enable PATH automatically.
 Existing external commands are not replaced. Remaining AI installer routes and
 real shell/provider acceptance are still pending; see the guide for isolated tests.
+
+Portable Ollama keeps the official `bin/ollama` and `lib/ollama` layout together
+under `~/Apps/ai/ollama/native-v1`, with explicit version selection and guarded
+removal. It downloads pinned stable base archives with SHA-256 verification and
+does not run the upstream installer or the application. It does not configure
+services, PATH, GPU drivers or models, and leaves existing installations untouched.
+Real runtime/GPU compatibility remains pending. The normal legacy menu below is
+unchanged.
 
 ```text
 🧠 AI Tools Installer

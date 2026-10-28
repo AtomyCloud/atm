@@ -139,7 +139,7 @@ def check(executable, backend):
 
         menu = run("--yes", "plugin", "ai")
         assert json.loads(menu.stdout.splitlines()[-1])["choices"], "preview menu empty"
-        for provider in ("picoclaw", "hermes-desktop", "codex-cli"):
+        for provider in ("picoclaw", "hermes-desktop", "codex-cli", "ollama"):
             submenu = run("--yes", "plugin", "ai", "menu", provider)
             choices = json.loads(submenu.stdout.splitlines()[-1])["choices"]
             assert {c["id"] for c in choices} >= {"install", "custom", "update", "uninstall"}
@@ -172,10 +172,16 @@ def check(executable, backend):
         plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", system,
                              "--trust-download", "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
-        for pending in ("hermes-agent", "ollama", "codex-desktop"):
+        for pending in ("hermes-agent", "codex-desktop"):
             run("--yes", "plugin", "ai", "menu", pending, success=False)
             run("--yes", "plugin", "ai", "install", "--provider", pending,
                 "--trust-download", success=False)
+        run("plugin", "ai", "install", "--provider", "ollama", "--trust-download",
+            success=False, started=False)
+        run("--yes", "plugin", "ai", "install", "--provider", "ollama",
+            "--trust-download", "--accept-system-packages", success=False)
+        run("--dry-run", "plugin", "ai", "install", "--provider", "ollama",
+            "--trust-download", started=False)
         for provider in ("picoclaw", "codex-cli"):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
             run("plugin", "ai", "integrate", "--provider", provider, started=False, success=False)
@@ -340,6 +346,80 @@ def check(executable, backend):
             path = root / "user" / name
             assert path.read_bytes() == originals[name], "uninstall failed to preserve original profile"
             assert path.stat().st_mode & 0o777 == mode
+
+        # Independent full-tree receipt fixtures exercise compiled Ollama
+        # selection/removal without downloading or running a provider.
+        ollama = root / "apps/ai/ollama/native-v1"
+        ollama.mkdir(parents=True, mode=0o700)
+        ollama.parent.chmod(0o700)
+        (ollama / "versions").mkdir(mode=0o700)
+        state_file(ollama / "owner.json", {"Schema": 1, "Plugin": "ai", "Provider": "ollama"})
+        library = b"synthetic shared library\n"
+        for version in ("0.1.0", "0.2.0"):
+            version_dir = ollama / "versions" / version
+            tree = version_dir / "tree"
+            for relative in ("bin", "lib/ollama"):
+                (tree / relative).mkdir(parents=True, mode=0o700)
+            for directory in (version_dir, tree, tree / "lib"):
+                directory.chmod(0o700)
+            (tree / "bin/ollama").write_bytes(payload)
+            (tree / "bin/ollama").chmod(0o755)
+            (tree / "lib/ollama/libfixture.so.1").write_bytes(library)
+            (tree / "lib/ollama/libfixture.so.1").chmod(0o600)
+            (tree / "lib/ollama/libfixture.so").symlink_to("libfixture.so.1")
+            state_file(version_dir / "receipt.json", {
+                "Schema": 1, "Plugin": "ai",
+                "Artifact": {"Provider": "ollama", "Version": version, "Arch": arch,
+                             "URL": f"https://github.com/ollama/ollama/releases/download/v{version}/ollama-linux-{arch}.tar.zst",
+                             "SHA256": "a" * 64, "Format": "tar.zst", "Entry": "bin/ollama", "Size": 100},
+                "Files": {
+                    "bin": {"mode": (1 << 31) | 0o700},
+                    "bin/ollama": {"mode": 0o755, "size": len(payload), "sha256": digest},
+                    "lib": {"mode": (1 << 31) | 0o700},
+                    "lib/ollama": {"mode": (1 << 31) | 0o700},
+                    "lib/ollama/libfixture.so.1": {"mode": 0o600, "size": len(library),
+                                                  "sha256": hashlib.sha256(library).hexdigest()},
+                    "lib/ollama/libfixture.so": {"mode": (1 << 27) | 0o777, "link": "libfixture.so.1"},
+                },
+            })
+        ollama_current = ollama / "current"
+        ollama_current.symlink_to("versions/0.1.0/tree")
+        run("status", "ai")
+        external_ollama = root / "user/.local/bin/ollama"
+        original_candidate = external_ollama.read_bytes()
+        external_ollama.unlink()
+        external_ollama.symlink_to(ollama_current / "bin/ollama")
+        lines = messages(run("status", "ai")).splitlines()
+        assert any(str(external_ollama) in line and "native-preview alias" in line for line in lines)
+        external_ollama.unlink()
+        external_ollama.write_bytes(original_candidate)
+        external_ollama.chmod(0o700)
+        submenu = run("--yes", "plugin", "ai", "menu", "ollama")
+        assert "use-0.2.0" in {c["id"] for c in json.loads(submenu.stdout.splitlines()[-1])["choices"]}
+        run("--yes", "plugin", "ai", "use", "--provider", "ollama", "--version", "0.2.0",
+            read_only=False, write_roots=("apps/ai/ollama/native-v1",))
+        assert ollama_current.readlink().as_posix() == "versions/0.2.0/tree"
+        run("--yes", "plugin", "ai", "remove", "--provider", "ollama", "--version", "0.2.0", success=False)
+        old_library = ollama / "versions/0.1.0/tree/lib/ollama/libfixture.so.1"
+        old_library.write_bytes(b"modified library")
+        run("--yes", "plugin", "ai", "use", "--provider", "ollama", "--version", "0.1.0", success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "ollama", success=False)
+        old_library.write_bytes(library)
+        unknown = ollama / "versions/0.1.0/tree/lib/ollama/personal-notes"
+        unknown.write_text("keep this unknown file\n")
+        unknown.chmod(0o600)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "ollama", success=False)
+        unknown.unlink()
+        run("--yes", "plugin", "ai", "remove", "--provider", "ollama", "--version", "0.1.0",
+            read_only=False, write_roots=("apps/ai/ollama/native-v1",))
+        assert not (ollama / "versions/0.1.0").exists()
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "ollama",
+            read_only=False, write_roots=("apps/ai/ollama/native-v1",))
+        assert not ollama_current.is_symlink()
+        assert not list((ollama / "versions").iterdir())
+        for name, mode in profile_modes.items():
+            path = root / "user" / name
+            assert path.read_bytes() == originals[name] and path.stat().st_mode & 0o777 == mode
         run("status", "ai")
         print(f"PASS AI preview: {count} isolated CLI routes including owned selection/removal; no provider/shell/network execution")
 

@@ -318,6 +318,8 @@ func TestDiscoveryStatusMenusAndNoLifecycleAuthorization(t *testing.T) {
 	f := newFixture(t, "amd64")
 	path := filepath.Join(f.b.discovery.home, ".local/bin/codex")
 	writeFixture(t, path, []byte("unverified executable"), 0755)
+	ollama := filepath.Join(f.b.discovery.home, ".local/bin/ollama")
+	writeFixture(t, ollama, []byte("unverified Ollama executable"), 0755)
 	var logs []string
 	f.b.log = func(s string) { logs = append(logs, s) }
 	mustRun(t, f, "status")
@@ -333,21 +335,27 @@ func TestDiscoveryStatusMenusAndNoLifecycleAuthorization(t *testing.T) {
 	if !strings.Contains(text, fmt.Sprintf("path=%q", path)) || strings.Contains(text, "ollama:") {
 		t.Fatalf("submenu did not filter discovery: %s", text)
 	}
-	for _, id := range []string{"hermes-agent", "ollama", "codex-desktop"} {
+	for _, id := range []string{"hermes-agent", "codex-desktop"} {
 		if _, err := parseOptions("menu", []string{id}); err == nil {
 			t.Fatalf("detection enabled menu route %s", id)
 		}
 	}
-	for _, op := range []string{"update", "use", "remove", "uninstall"} {
-		args := []string{"--provider", "codex-cli"}
-		if op == "update" {
-			args = append(args, "--trust-download")
-		} else if op != "uninstall" {
-			args = append(args, "--version", "1.2.3")
+	mustRun(t, f, "menu", "ollama")
+	for _, id := range []string{"codex-cli", "ollama"} {
+		for _, op := range []string{"update", "use", "remove", "uninstall"} {
+			args := []string{"--provider", id}
+			if op == "update" {
+				args = append(args, "--trust-download")
+			} else if op != "uninstall" {
+				args = append(args, "--version", "1.2.3")
+			}
+			if err := f.run(context.Background(), op, args...); err == nil {
+				t.Fatalf("external candidate authorized %s %s", id, op)
+			}
 		}
-		if err := f.run(context.Background(), op, args...); err == nil {
-			t.Fatalf("external candidate authorized %s", op)
-		}
+	}
+	if data, err := os.ReadFile(ollama); err != nil || string(data) != "unverified Ollama executable" {
+		t.Fatalf("external Ollama changed: %q %v", data, err)
 	}
 	if f.calls != 0 {
 		t.Fatal("discovery/lifecycle refusal accessed network")

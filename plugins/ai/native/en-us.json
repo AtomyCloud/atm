@@ -1,7 +1,12 @@
 {
   "title": "AI Tools - native preview",
   "complete": "AI preview operation complete",
-  "preview": "Preview only: portable PicoClaw, Hermes Desktop AppImage and Codex CLI, plus Hermes Desktop system DEB installation. Hermes Agent, Ollama and Codex Desktop remain Pending; the production AI plugin is unchanged.",
+  "preview": "Preview only: portable PicoClaw, Hermes Desktop AppImage, Codex CLI and Ollama bundles, plus Hermes Desktop system DEB installation. Hermes Agent, Ollama system/service workflows and Codex Desktop remain Pending; the production AI plugin is unchanged.",
+  "ollama_scope": "Portable Ollama base bundle only. No downloaded scripts, provider execution, models, GPU/ROCm/JetPack/MLX setup, system packages, services, profile edits or PATH integration. Manually close/stop processes using this owned bundle before updating, switching or removing versions; ATM neither probes nor stops them. Runtime and GPU compatibility are untested; existing services and external installations remain untouched.",
+  "ollama_usage": "Optional manual commands (not run by ATM): %s serve; in another terminal: %s run llama3; or download a model explicitly: %s pull llama3. Review existing servers and upstream configuration first; ATM does not inspect settings or probe servers. Run/pull may download models and change user data separately from ATM installation.",
+  "ollama_status": "Ollama portable: verified owned versions=%d; active=%s; runtime=unknown; service/GPU/model state not queried",
+  "ollama_selected": "Selected owned Ollama %s; complete bin/ollama and lib/ollama tree retained. No provider executed or profile changed.",
+  "ollama_removed": "Removed owned Ollama %s; external installs, models and settings retained.",
   "status": "Preview receipts, external candidates and system journal",
   "discovery_scope": "Read-only executable metadata discovery. External evidence is unverified, not an installed/owned or validated application; version=unknown; runtime=unknown. No lifecycle authorization, content reads, execution or package queries.",
   "discovery_evidence": "%s: %s path=%q; %s",
