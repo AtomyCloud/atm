@@ -36,12 +36,6 @@ func Plugin(c config.Config, p plugin.Plugin, action string, args []string) (Pla
 	if !plugin.IDPattern.MatchString(p.ID) || !slices.Contains(p.Operations, action) {
 		return Plan{}, fmt.Errorf("unsupported operation: %s %s", p.ID, action)
 	}
-	if (action == "remove" || action == "use") && len(args) != 1 {
-		return Plan{}, fmt.Errorf("%s requires one version", action)
-	}
-	if (action == "menu" && p.Executor != "native" || action == "status" || action == "uninstall") && len(args) != 0 {
-		return Plan{}, fmt.Errorf("%s takes no extra arguments", action)
-	}
 	if p.Executor == "native" {
 		if len(args) > 128 {
 			return Plan{}, fmt.Errorf("too many native arguments")
@@ -54,6 +48,13 @@ func Plugin(c config.Config, p plugin.Plugin, action string, args []string) (Pla
 			return Plan{}, err
 		}
 		return Plan{Schema: 2, Executor: "native", Protocol: "jsonl-v1", Command: []string{exe}, Directory: p.Directory, DryRun: c.DryRun, PluginID: p.ID, Operation: action, Arguments: args}, nil
+	}
+	// Native backends own argument semantics; these arities belong to the legacy bridge.
+	if (action == "remove" || action == "use") && len(args) != 1 {
+		return Plan{}, fmt.Errorf("%s requires one version", action)
+	}
+	if (action == "menu" || action == "status" || action == "uninstall") && len(args) != 0 {
+		return Plan{}, fmt.Errorf("%s takes no extra arguments", action)
 	}
 	if runtime.GOOS != "linux" {
 		return Plan{}, fmt.Errorf("Bash compatibility requires Linux")

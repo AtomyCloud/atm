@@ -1,0 +1,18 @@
+{
+  "title": "spotatui",
+  "complete": "spotatui operation complete",
+  "atm": "ATM installation",
+  "local": "User-local installation",
+  "install": "Install latest (trust dependency probes)",
+  "custom": "Install specific version (trust dependency probes)",
+  "update": "Update active installation (trust dependency probes)",
+  "versions": "Installed versions / locations",
+  "dependencies": "Playback dependencies",
+  "probe": "Trust and execute external dependency diagnostics",
+  "use": "Select version (trust dependency probes)",
+  "remove": "Remove inactive version",
+  "uninstall": "Uninstall native-owned versions",
+  "integrate": "Configure user PATH",
+  "usage": "Show usage",
+  "version_prompt": "Version (X.Y.Z)"
+}

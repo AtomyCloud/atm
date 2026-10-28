@@ -3,7 +3,7 @@
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Node.js, Go, Java/JDK, Flutter,
-> Android Studio, Android SDK, VS Code and Trivy have native Linux
+> Android Studio, Android SDK, VS Code, Trivy and spotatui have native Linux
 > backends; remaining plugins use an explicit compatibility backend while being
 > migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
@@ -77,7 +77,7 @@ to keep this exact snapshot. Preserve any existing installation before switching
 </div>
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
-Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code and Trivy backends are written in Go.
+Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy and spotatui backends are written in Go.
 The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
@@ -112,7 +112,7 @@ Desktop apps: ~/.local/share/applications
 | [Node.js](plugins/node/README.md) | `node` | `0.0.1` | Manage portable Node.js releases or install the system APT package; identify ATM, user-local and system versions. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
-| [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Portable music player with yt-dlp/EJS, FFmpeg and JavaScript runtime checks before installation. |
+| [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Native portable lifecycle, ATM/local destinations, explicit dependency diagnostics and native launchers. |
 | [REA: Reverse Engineer Anything](plugins/rea/README.md) | `rea` | `0.0.1` | Install, update and remove REA in an ATM/custom directory; check dependencies and ask before installing missing prerequisites. |
 
 ## Features
@@ -724,6 +724,37 @@ q) Exit
 `Install Hermes-Agent` runs the official installer: `curl -fsSL https://hermes-agent.nousresearch.com/install.sh | bash`. `Install Hermes-Desktop (System DEB)` downloads the latest GitHub release DEB and installs it with `apt install`. `Install Hermes-Desktop (Portable AppImage)` downloads the latest AppImage into `~/Apps/hermes/hermes-desktop` and updates `current.AppImage`. `Install Ollama` runs `curl -fsSL https://ollama.com/install.sh | sh` and prints run/pull usage examples after installation. `PicoClaw` downloads the official latest `.tar.gz` release for the detected OS/architecture and extracts it into `~/Apps/ai/picoclaw`. `--dry-run` prints commands without downloading or installing.
 
 ### spotatui
+
+The native Linux backend opens with ATM and user-local installation choices,
+installed versions, playback dependencies and usage. Each destination offers
+latest/custom installation, update, version selection, removal and explicit PATH
+integration. It uses Go for release metadata, SHA-256 verification, archives and
+launchers; no Bash/Python installer helper is run.
+
+```bash
+atm plugin spotatui
+atm status spotatui
+atm plugin spotatui menu dependencies
+atm install spotatui --location atm --trust-dependencies
+atm update spotatui --location local --trust-dependencies
+atm use spotatui 0.46.0 --location atm --trust-dependencies
+atm plugin spotatui integrate --location atm
+```
+
+Install/update/use require explicit consent to execute external dependency checks.
+The initial dependency menu only locates tools; its confirmation action runs the
+checks. No dependency is installed automatically, no media URL is supplied and
+local EJS detection is not a playback guarantee. Normal playback preserves the
+user's configuration; its runtime shim does not edit global yt-dlp settings.
+
+Native payloads are isolated beneath `~/Apps/spotatui/native-v1` or
+`~/.local/share/atm/spotatui/native-v1`. Native local installation refuses a foreign
+`~/.local/bin/spotatui` instead of replacing it. Legacy installations and private
+settings are preserved; status never executes an external player to read its
+version. See the [plugin guide](plugins/spotatui/README.md) for ownership and limits.
+Human playback and other-platform acceptance remain pending.
+
+**Legacy Bash menu:**
 
 ```text
 spotatui Installer

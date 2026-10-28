@@ -3,6 +3,7 @@ package tui
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"runtime"
 	"testing"
 
@@ -95,5 +96,43 @@ func TestNativeChoicesNeverDispatchUndeclaredOperation(t *testing.T) {
 	u, cmd := m.activate()
 	if cmd != nil || u.(Model).screen == "confirm" || u.(Model).active != nil {
 		t.Fatal("undeclared operation dispatched")
+	}
+}
+
+func TestNativeLocationChoicesKeepArgumentsAndConfirmation(t *testing.T) {
+	for _, op := range []string{"use", "remove", "uninstall"} {
+		m := choiceModel(t)
+		m.plugins[0].Operations = append(m.plugins[0].Operations, op)
+		args := []string{"--location", "local"}
+		if op == "use" {
+			args = append(args, "--trust-dependencies")
+		}
+		choice := protocol.Choice{ID: "selected", Label: "Selected action", Operation: op, Arguments: args}
+		if op != "uninstall" {
+			choice.Prompt = "Version"
+		}
+		m.nativeChoices = []protocol.Choice{choice}
+		u, cmd := m.activate()
+		m = u.(Model)
+		if m.active != nil {
+			t.Fatal("choice started process before confirmation")
+		}
+		want := append([]string{}, args...)
+		if choice.Prompt != "" {
+			if m.screen != "native-input" {
+				t.Fatal("version input missing")
+			}
+			m.input.SetValue("1.2.3")
+			u, cmd = m.Update(tea.KeyPressMsg{Code: tea.KeyEnter})
+			m = u.(Model)
+			want = append(want, "1.2.3")
+		}
+		if cmd != nil || m.screen != "confirm" || m.cursor != 0 || m.plan.Operation != op || !reflect.DeepEqual(m.plan.Arguments, want) {
+			t.Fatalf("choice arguments or confirmation lost: %+v", m.plan)
+		}
+		u, cmd = m.activate()
+		if cmd != nil || u.(Model).active != nil {
+			t.Fatal("default cancel started backend")
+		}
 	}
 }

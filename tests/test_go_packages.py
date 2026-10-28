@@ -111,6 +111,14 @@ class NativeSmokeTests(unittest.TestCase):
         trace = '1 execve("/tmp/atm", [], []) = 0\n2 execve("/tmp/caf\\303\\251/backend", [], []) = 0\n'
         verify_read_only_trace(trace, "/tmp/atm", "/tmp/caf\u00e9/backend")
 
+    def test_dry_run_trace_allows_core_only(self):
+        trace = '1 execve("/tmp/atm", [], []) = 0\n'
+        verify_read_only_trace(trace, "/tmp/atm", None)
+        for extra in ('2 execve("/tmp/backend", [], []) = 0\n',
+                      '2 connect(3, {}, 16) = -1\n'):
+            with self.subTest(extra=extra), self.assertRaises(AssertionError):
+                verify_read_only_trace(trace + extra, "/tmp/atm", None)
+
 
 if __name__ == "__main__":
     unittest.main()

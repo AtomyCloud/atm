@@ -4,7 +4,7 @@ Status: implemented in the opt-in ATM 0.0.2 migration. Linux fixture tests cover
 execution and the terminal UI. Windows builds compile; Windows runtime and
 standard-user acceptance remain pending. Node.js provides a native Go Linux
 backend accepted by the maintainer; the Go toolchain, Java/JDK, Flutter, Android
-Studio, VS Code, Android SDK and Trivy backends have passed
+Studio, VS Code, Android SDK, Trivy and spotatui backends have passed
 automated Linux checks, with human acceptance pending. Remaining application plugins retain
 explicit Bash compatibility backends until individually migrated. The separate
 legacy entrypoint is retained.
@@ -81,8 +81,10 @@ are reported as unavailable; there is no fallback to shell integration. A backen
 must report unsupported, failed or incomplete integration as a non-success result.
 It must preserve unrelated user settings and avoid system-wide changes. Declaring
 this operation is optional and does not mean existing application ports are done.
-`remove` and `use` require one version argument; `status` and `uninstall` take
-none. Install/update accept up to 128 literal arguments within the request cap.
+Each native operation accepts up to 128 literal arguments within the request cap.
+The backend validates required versions, locations and other option semantics;
+CORE does not impose the legacy bridge's positional argument counts on native
+operations. Declared-operation, protocol, confirmation and execution guards remain.
 `atm plugin ID` selects menu when declared, otherwise status or the first operation.
 Native plugins never read interactive user prompts on stdin: it contains one request.
 The optional `menu` operation accepts literal arguments for plugin-owned submenus.
@@ -237,7 +239,8 @@ bash scripts/build_manager.sh --plugins-local --target linux-amd64
 ATM_TEST_NATIVE_TRACE=1 python3 -B tests/check_go_packages.py --source /tmp/atm-native-check/atm
 ```
 
-The gate requires exactly the CORE and backend executables, no network connection
-attempts, and unchanged profiles, links and unrelated application data. It does
+For dry-run the gate permits only CORE execution; for root menu/status it requires
+exactly CORE and the backend. Both forbid network connection attempts and require
+unchanged profiles, links and unrelated application data. It does
 not execute downloaded application binaries. The same environment flag also applies
 to host-target menu/status checks when a package directory is passed to the checker.

@@ -136,7 +136,10 @@ def verify_read_only_trace(trace, executable, backend):
         assert match, f"unrecognized execution trace: {line}"
         # strace uses C octal escapes for non-ASCII filesystem bytes, not JSON.
         executions.append(os.fsdecode(ast.literal_eval("b" + match[1])))
-    assert executions == [str(executable), str(backend)], executions
+    expected = [str(executable)]
+    if backend is not None:
+        expected.append(str(backend))
+    assert executions == expected, executions
 
 
 def read_only_runner(command, env, backend):
@@ -232,8 +235,9 @@ def verify_native_source(executable, source, manifest):
         before = snapshot(root)
         discovered, = json.loads(run("plugins", "list").stdout)
         assert discovered["available"] and discovered["executor"] == "native"
+        dry_run = read_only_runner(command, env, None)
         for operation in manifest["operations"]:
-            plan = json.loads(run("--dry-run", "plugin", plugin_id, operation, *ROUTE_ARGS[operation]).stdout)
+            plan = json.loads(dry_run("--dry-run", "plugin", plugin_id, operation, *ROUTE_ARGS[operation]).stdout)
             assert plan["executor"] == "native" and plan["protocol"] == "jsonl-v1"
             assert plan["operation"] == operation and plan["dry_run"] is True
             assert plan["command"] == [str(binary)]
