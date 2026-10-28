@@ -69,7 +69,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Capability | Linux | Windows |
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
-| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui, REA and OS Packages; remaining plugins use Bash compatibility | Application backends pending |
+| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui, REA, OS Packages and Brave; remaining plugins use Bash compatibility | Application backends pending |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
 | Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
@@ -87,14 +87,22 @@ remain separate. No installed copy is updated automatically. Use the
 | Native Android SDK backend | Native package/dependency management and plan-bound license acceptance on amd64; human acceptance pending | Pending |
 | Native spotatui backend | ATM/local portable lifecycle, explicit dependency trust and native launchers; Linux version tested and accepted by maintainer | Pending |
 | Native REA backend | ATM/custom npm lifecycle, pinned Node launcher and offline manual detection; automated checks passed, human acceptance pending; separate prerequisite installation by design | Pending |
+| Native Brave backend | Reviewed APT/DNF system operations and bounded profile/bookmark archives; automated Linux checks passed, real elevated/profile acceptance pending | Pending |
 | Remaining application backends | Sequential migration in progress | Pending |
 
 OS Packages now uses native reviewed system-manager commands, separate sudo
 authentication and a private attempt journal, with optional temporary Ubuntu
 sources. Automated Linux checks use synthetic managers; real elevated package
 transactions and ARM64 runtime acceptance remain Pending. See the
-[OS Packages guide](../../plugins/os_packages/README.md). Eleven of sixteen
-backends are native; Brave, Zsh, AI, Docker and Backup & Restore remain to migrate.
+[OS Packages guide](../../plugins/os_packages/README.md). Twelve of sixteen
+backends are native; Zsh, AI, Docker and Backup & Restore remain to migrate.
+
+Brave uses explicit system-operation consent, pinned official signing-key bytes,
+temporary repository configuration and retained restore recovery copies. It never
+launches the browser during status. Linux process visibility restrictions may
+block backup/restore until the browser-closed check can establish a safe state;
+there is no force bypass. Real APT/DNF transactions, personal-profile interoperability
+and ARM64 runtime remain Pending. See the [Brave guide](../../plugins/brave/README.md).
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
 executables, native process-group execution and CI test jobs for both architectures.
@@ -271,7 +279,8 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
    accepted by the maintainer on 2026-10-28; Linux ARM64 runtime remains pending.
 2. Port remaining application plugins one at a time, simplest to most complex,
    advancing after automated gates. Go, Trivy, Java/JDK, Flutter, Android Studio,
-   VS Code, Android SDK, spotatui and REA have native backends; OS Packages is next.
+   VS Code, Android SDK, spotatui, REA, OS Packages and Brave have native backends;
+   Zsh is next.
    REA uses diagnostics and separate prerequisite installation by design;
    automatic repair is outside this stage. Preserve
    plugin-owned application behavior and the generic native menu/integration contracts.

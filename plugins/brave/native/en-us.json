@@ -1,0 +1,13 @@
+{
+ "title":"Brave Browser",
+ "complete":"Brave request completed",
+ "install":"Review system installation",
+ "remove":"Review system removal",
+ "commands":"Review package commands and signing policy",
+ "backups":"Profile backups and restore",
+ "backup-profile":"Create full profile backup (close Brave first)",
+ "backup-bookmarks":"Backup bookmarks (all profiles; close Brave first)",
+ "apply-install":"Install official stable Brave system package",
+ "apply-remove":"Remove system Brave package; preserve profiles and repositories",
+ "restore":"Restore profile; retain displaced tree as recovery copy"
+}

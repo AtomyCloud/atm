@@ -3,7 +3,7 @@
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Node.js, Go, Java/JDK, Flutter,
-> Android Studio, Android SDK, VS Code, Trivy, spotatui and REA have native Linux
+> Android Studio, Android SDK, VS Code, Trivy, spotatui, REA, OS Packages and Brave have native Linux
 > backends; remaining plugins use an explicit compatibility backend while being
 > migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
@@ -77,7 +77,8 @@ to keep this exact snapshot. Preserve any existing installation before switching
 </div>
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
-Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui, REA and OS Packages backends are written in Go.
+Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy,
+spotatui, REA, OS Packages and Brave backends are written in Go.
 The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
@@ -110,6 +111,7 @@ Desktop apps: ~/.local/share/applications
 | [Docker](plugins/docker/README.md) | `docker` | `0.0.1` | Install Docker Engine, Compose, and Desktop; export and restore image archives. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 | [Node.js](plugins/node/README.md) | `node` | `0.0.1` | Manage portable Node.js releases or install the system APT package; identify ATM, user-local and system versions. |
+| [Brave Browser](plugins/brave/README.md) | `brave` | `0.0.1` | Install/remove the system browser, back up complete profiles or all profile bookmarks, and restore profile archives. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
 | [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Native portable lifecycle, ATM/local destinations, explicit dependency diagnostics and native launchers. |
@@ -701,6 +703,33 @@ on Debian/Ubuntu/Zorin. The latter installs `nodejs` and `npm` from configured
 repositories after confirmation, requesting sudo when necessary. Its version is
 chosen by APT, not the portable v24/v25/v26 menu. User-local binaries and ATM's
 active link are not overwritten. See the [Node plugin guide](plugins/node/README.md).
+
+### Brave Browser
+
+The native Linux backend manages the stable system browser using APT or DNF.
+It also creates full-profile or all-profile bookmark archives in
+`~/Apps/backups/brave` by default. Status does not launch the browser.
+
+```bash
+atm plugin brave
+atm --yes plugin brave status
+atm --yes plugin brave menu backups
+atm --yes plugin brave menu backup-profile
+atm --yes plugin brave menu backup-bookmarks
+```
+
+Close Brave before backup or restore. Restore accepts a reviewed archive name
+and SHA-256, stages the replacement and retains the previous profile as a
+recovery copy. Bookmark-only archives are exports, not full-profile restore
+inputs. Archives contain sensitive personal data and are not encrypted.
+
+Installation/removal require separate system-operation acknowledgement and
+sudo authentication outside ATM. Existing repository files are preserved;
+unsupported or untrusted repository settings cause a refusal, not an automatic
+rewrite. No portable Brave binary or automatic package rollback is provided.
+See the [Brave guide](plugins/brave/README.md) for commands, trust boundaries,
+archive limits and platform acceptance status. The legacy Bash entrypoint is
+retained separately.
 
 ### AI Tools
 
