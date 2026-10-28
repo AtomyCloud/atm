@@ -283,10 +283,16 @@ func TestCompiledCoreRunnerCancelsProbeTreeAndCleansFailure(t *testing.T) {
 				t.Fatal("CORE did not promptly finish probe failure/cancellation")
 			}
 			for _, pid := range []int{child, parent} {
-				for i := 0; i < 100 && !stopped(pid); i++ {
+				confirmed := false
+				for i := 0; i < 100; i++ {
+					if stopped(pid) {
+						confirmed = true
+						break
+					}
 					time.Sleep(10 * time.Millisecond)
 				}
-				if !stopped(pid) {
+				// Reaping can race a second /proc read after a confirmed exit.
+				if !confirmed {
 					t.Fatal("CORE left fixture process running", pid)
 				}
 			}

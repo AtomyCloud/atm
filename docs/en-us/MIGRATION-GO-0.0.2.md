@@ -69,7 +69,7 @@ remain separate. No installed copy is updated automatically. Use the
 | Capability | Linux | Windows |
 | --- | --- | --- |
 | Native CLI/TUI, discovery, preferences and locale selection | Implemented | Compiles; real Windows validation pending |
-| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy and spotatui; remaining plugins use Bash compatibility | Application backends pending |
+| Application install/remove/version switching | Native Node.js, Go, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui and REA; remaining plugins use Bash compatibility | Application backends pending |
 | Native external plugin executor and JSONL events | Fixture tested | Compiles; runtime validation pending |
 | Official catalog search | Native Go | Native Go; real Windows validation pending |
 | Official plugin code download | Native Go | Cross-compiled; real Windows validation pending |
@@ -85,7 +85,8 @@ remain separate. No installed copy is updated automatically. Use the
 | Native Android Studio backend | Pinned/custom checksummed IDE lifecycle and owned desktop integration on amd64; human acceptance pending | Pending |
 | Native VS Code backend | Official stable releases, portable data preservation, explicit extensions and owned integration; human acceptance pending | Pending |
 | Native Android SDK backend | Native package/dependency management and plan-bound license acceptance on amd64; human acceptance pending | Pending |
-| Native spotatui backend | ATM/local portable lifecycle, explicit dependency trust and native launchers; playback/human acceptance pending | Pending |
+| Native spotatui backend | ATM/local portable lifecycle, explicit dependency trust and native launchers; Linux version tested and accepted by maintainer | Pending |
+| Native REA backend | ATM/custom npm lifecycle, pinned Node launcher and offline manual detection; automated checks passed, human acceptance pending; automatic dependency repair deferred | Pending |
 | Remaining application backends | Sequential migration in progress | Pending |
 
 macOS now has `darwin/amd64` (Intel) and `darwin/arm64` (Apple Silicon) Terminal
@@ -263,7 +264,9 @@ Windows terminal behavior, ARM64 execution or standard-user application installs
    accepted by the maintainer on 2026-10-28; Linux ARM64 runtime remains pending.
 2. Port remaining application plugins one at a time, simplest to most complex,
    advancing after automated gates. Go, Trivy, Java/JDK, Flutter, Android Studio,
-   VS Code, Android SDK and spotatui are implemented; REA is next. Preserve
+   VS Code, Android SDK, spotatui and REA have native backends; OS Packages is next.
+   REA automatic prerequisite repair is deferred; native diagnostics provide separate
+   installation guidance. Preserve
    plugin-owned application behavior and the generic native menu/integration contracts.
    Legacy backup import remains separate from native plugin code backups.
 3. Implement/test Node.js on other hosts; Linux ARM64 runtime acceptance is pending.

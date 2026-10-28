@@ -1,0 +1,35 @@
+package main
+
+import("archive/tar";"compress/gzip";"encoding/json";"fmt";"io";"os";"os/exec";"path/filepath";"strconv";"strings";"time")
+type control struct{Mode,Version string}
+func fail(s string){fmt.Fprintln(os.Stderr,s);os.Exit(9)}
+func main(){
+ self,_:=os.Executable();base:=filepath.Dir(self);var c control;data,_:=os.ReadFile(filepath.Join(base,"control.json"));json.Unmarshal(data,&c)
+ if len(os.Args)>1&&os.Args[1]=="fixture-child"{os.WriteFile(filepath.Join(base,"child.pid"),[]byte(strconv.Itoa(os.Getpid())),0600);for{time.Sleep(time.Second)}}
+ call,_:=json.Marshal(map[string]any{"args":os.Args[1:],"env":os.Environ()});f,_:=os.OpenFile(filepath.Join(base,"calls.jsonl"),os.O_CREATE|os.O_APPEND|os.O_WRONLY,0600);if f!=nil{f.Write(append(call,'\n'));f.Close()}
+ if filepath.Base(self)=="ps"{fmt.Printf("%s 1 S fixture\n",os.Args[2]);return}
+ if len(os.Args)==2&&os.Args[1]=="--version"{
+  switch c.Mode{case "hang","probe-error":
+   os.WriteFile(filepath.Join(base,"parent.pid"),[]byte(strconv.Itoa(os.Getpid())),0600);cmd:=exec.Command(self,"fixture-child");if e:=cmd.Start();e!=nil{fail(e.Error())};for i:=0;i<300;i++{if _,e:=os.Stat(filepath.Join(base,"child.pid"));e==nil{break};time.Sleep(10*time.Millisecond)}
+   if c.Mode=="probe-error"{os.Exit(7)};for{time.Sleep(time.Second)}
+  case "overflow":fmt.Print(strings.Repeat("x",70<<10));return}
+  if c.Version==""{c.Version="26.12.1"};fmt.Println("v"+c.Version);return
+ }
+ if len(os.Args)>2&&filepath.Base(os.Args[1])=="npm-cli.js"{
+  for _,e:=range os.Environ(){k,_,_:=strings.Cut(e,"=");if strings.HasPrefix(strings.ToLower(k),"npm_config_")||k=="NODE_OPTIONS"||k=="NODE_PATH"||k=="REA_PRIVATE_SECRET"{fail("inherited unsafe environment")}}
+  if os.Args[2]=="--version"{fmt.Println("11.19.1");return}
+  args:=os.Args[2:];joined:=strings.Join(args,"\n");for _,flag:=range []string{"--engine-strict=true","--force=false","--ignore-scripts=true","--audit=false","--fund=false","--registry=https://registry.npmjs.org"}{if !strings.Contains(joined,flag){fail("missing flag "+flag)}}
+  if c.Mode=="npm-hang"{os.WriteFile(filepath.Join(base,"parent.pid"),[]byte(strconv.Itoa(os.Getpid())),0600);cmd:=exec.Command(self,"fixture-child");if e:=cmd.Start();e!=nil{fail(e.Error())};for{time.Sleep(time.Second)}}
+  prefix:="";for i,a:=range args{if a=="--prefix"{prefix=args[i+1]};for _,key:=range []string{"--userconfig=","--globalconfig="}{if strings.HasPrefix(a,key){data,e:=os.ReadFile(strings.TrimPrefix(a,key));if e!=nil||len(data)!=0{fail("nonempty npm config")}}}}
+  if c.Mode=="npm-error"{os.WriteFile(filepath.Join(prefix,"partial"),[]byte("unfinished"),0600);os.Exit(8)}
+  f,e:=os.Open(args[len(args)-1]);if e!=nil{fail(e.Error())};gz,e:=gzip.NewReader(f);if e!=nil{fail(e.Error())};tr:=tar.NewReader(gz)
+  for{h,e:=tr.Next();if e==io.EOF{break};if e!=nil{fail(e.Error())};name:=filepath.Join(prefix,"lib/node_modules/rea-agents",strings.TrimPrefix(h.Name,"package/"));if h.Typeflag==tar.TypeDir{os.MkdirAll(name,0700);continue};os.MkdirAll(filepath.Dir(name),0700);data,_:=io.ReadAll(tr);os.WriteFile(name,data,os.FileMode(h.Mode))};gz.Close();f.Close()
+  os.MkdirAll(filepath.Join(prefix,"bin"),0700);for _,name:=range []string{"rea","rea-agents"}{os.Symlink("../lib/node_modules/rea-agents/scripts/rea.mjs",filepath.Join(prefix,"bin",name))}
+  if c.Mode=="bad-package"{os.WriteFile(filepath.Join(prefix,"lib/node_modules/rea-agents/package.json"),[]byte(`{"name":"wrong","version":"6.8.0"}`),0600)}
+  if c.Mode=="escape"{os.Symlink("/tmp",filepath.Join(prefix,"foreign"))}
+  if c.Mode=="activation-conflict"{root:=filepath.Dir(filepath.Dir(prefix));os.MkdirAll(filepath.Join(root,"bin"),0700);os.WriteFile(filepath.Join(root,"bin/rea"),[]byte("foreign"),0600)}
+  if c.Mode=="state-conflict"{var fields map[string]string;data,_:=os.ReadFile(filepath.Join(base,"state-target.json"));json.Unmarshal(data,&fields);os.WriteFile(fields["path"],[]byte("foreign"),0600)}
+  return
+ }
+ input,_:=io.ReadAll(os.Stdin);cwd,_:=os.Getwd();json.NewEncoder(os.Stdout).Encode(map[string]any{"args":os.Args[1:],"stdin":string(input),"path":os.Getenv("PATH"),"cwd":cwd,"marker":os.Getenv("REA_PRIVATE_SECRET")});fmt.Fprintln(os.Stderr,"synthetic stderr");os.Exit(37)
+}

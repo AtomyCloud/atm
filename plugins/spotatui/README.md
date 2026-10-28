@@ -189,7 +189,8 @@ Keep yt-dlp and its matching EJS package updated. Upstream contracts:
 
 ### Limitations
 
-Human playback acceptance and Linux ARM64 runtime acceptance remain pending.
+The maintainer confirmed the Linux version tested and functional on 2026-10-28.
+Separate audio-provider coverage was not reported; Linux ARM64 runtime remains pending.
 Windows/macOS backends are not implemented. Tests use synthetic native processes
 and temporary roots, never real player/media/accounts or system changes.
 Host dynamic-library/glibc/audio compatibility is not established by ELF checks.

@@ -1,0 +1,15 @@
+{
+ "title":"REA: Reverse Engineer Anything",
+ "complete":"REA operation complete",
+ "install":"Install REA (choose destination)",
+ "update":"Update REA (trust Node/npm/ps)",
+ "remove":"Remove native-owned REA; preserve agent state",
+ "dependencies":"Dependency requirements / explicit diagnostics",
+ "details":"Installation details / usage",
+ "integrate":"Integrate native REA into user PATH",
+ "trust":"Run trusted Node/npm/ps diagnostics (no repair)",
+ "default":"Use remembered/default destination",
+ "custom":"Custom destination base",
+ "latest":"Install latest stable (trust Node/npm/ps)",
+ "exact":"Exact stable version (trust Node/npm/ps)"
+}

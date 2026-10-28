@@ -3,7 +3,7 @@
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Node.js, Go, Java/JDK, Flutter,
-> Android Studio, Android SDK, VS Code, Trivy and spotatui have native Linux
+> Android Studio, Android SDK, VS Code, Trivy, spotatui and REA have native Linux
 > backends; remaining plugins use an explicit compatibility backend while being
 > migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
@@ -77,7 +77,7 @@ to keep this exact snapshot. Preserve any existing installation before switching
 </div>
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
-Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy and spotatui backends are written in Go.
+Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui and REA backends are written in Go.
 The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
@@ -113,7 +113,7 @@ Desktop apps: ~/.local/share/applications
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
 | [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Native portable lifecycle, ATM/local destinations, explicit dependency diagnostics and native launchers. |
-| [REA: Reverse Engineer Anything](plugins/rea/README.md) | `rea` | `0.0.1` | Install, update and remove REA in an ATM/custom directory; check dependencies and ask before installing missing prerequisites. |
+| [REA: Reverse Engineer Anything](plugins/rea/README.md) | `rea` | `0.0.1` | Native ATM/custom lifecycle, offline manual-install detection, explicit dependency diagnostics and guarded PATH integration. |
 
 ## Features
 
@@ -752,7 +752,8 @@ Native payloads are isolated beneath `~/Apps/spotatui/native-v1` or
 `~/.local/bin/spotatui` instead of replacing it. Legacy installations and private
 settings are preserved; status never executes an external player to read its
 version. See the [plugin guide](plugins/spotatui/README.md) for ownership and limits.
-Human playback and other-platform acceptance remain pending.
+The maintainer has tested and accepted the Linux version. Other-platform acceptance
+remains pending; separate audio-provider coverage was not reported.
 
 **Legacy Bash menu:**
 
@@ -785,6 +786,37 @@ Existing spotatui installations and profiles are preserved. See the
 [plugin guide](plugins/spotatui/README.md) for setup and limitations.
 
 ### REA: Reverse Engineer Anything
+
+#### Native Go Backend (Linux)
+
+The native backend manages the official `rea-agents` npm package under
+`~/Apps/rea/native-v1`, or `native-v1` beneath a dedicated custom base. It remembers
+that destination for updates/removal and detects manual installations even when
+`~/Apps/rea/bin/rea` is absent from PATH. Detection does not execute REA or grant
+ownership of an external installation.
+
+```bash
+atm plugin rea
+atm status rea
+atm plugin rea menu dependencies
+atm install rea --trust-dependencies
+atm install rea --path /absolute/dedicated/rea --version 6.8.0 --trust-dependencies
+atm update rea --trust-dependencies
+atm plugin rea integrate
+atm uninstall rea
+```
+
+Installation requires compatible Node/npm and Linux `ps`. Dependency execution
+requires explicit trust; missing prerequisites are diagnosed with separate
+installation guidance. There is no automatic system-package or Node repair in
+this native milestone. npm lifecycle scripts are disabled, which can leave
+optional native providers unavailable. Agent/MCP setup, skills, analysis engines
+and private captures remain outside ATM installation/removal.
+
+See the [REA plugin guide](plugins/rea/README.md) for supported runtimes, ownership,
+PATH integration and validation status.
+
+#### Legacy Bash Menu
 
 ```text
 1) Install REA (choose destination)
