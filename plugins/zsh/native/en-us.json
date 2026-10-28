@@ -1,0 +1,16 @@
+{
+ "title":"Zsh + Oh My Zsh",
+ "complete":"Zsh request completed",
+ "install":"Install Zsh + Oh My Zsh",
+ "update":"Update Zsh + Oh My Zsh",
+ "remove":"Remove native Zsh + Oh My Zsh",
+ "backup":"Create private backup",
+ "backups":"List backups / restore",
+ "shells":"Choose default shell",
+ "commit":"Official Oh My Zsh commit (40 lowercase hex characters)",
+ "latest":"Resolve latest official commit (network)",
+ "apply":"Accept official archive trust, system changes and snapshot",
+ "apply-remove":"Accept system removal and snapshot",
+ "snapshot":"Create snapshot; sessions are closed",
+ "restore":"Restore selected native snapshot; retain recovery copies"
+}

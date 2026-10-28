@@ -4,7 +4,7 @@ Status: implemented in the opt-in ATM 0.0.2 migration. Linux fixture tests cover
 execution and the terminal UI. Windows builds compile; Windows runtime and
 standard-user acceptance remain pending. Node.js provides a native Go Linux
 backend accepted by the maintainer, as does spotatui; the Go toolchain, Java/JDK, Flutter, Android
-Studio, VS Code, Android SDK, Trivy, REA, OS Packages and Brave backends have passed
+Studio, VS Code, Android SDK, Trivy, REA, OS Packages, Brave and Zsh backends have passed
 automated Linux checks, with human acceptance pending. Remaining application plugins retain
 explicit Bash compatibility backends until individually migrated. The separate
 legacy entrypoint is retained.

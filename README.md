@@ -3,7 +3,7 @@
 > **Native Go CORE v0.0.2 (Linux amd64 milestone complete):** an opt-in Bubble Tea interface and
 > platform-specific build tooling are available, along with a native plugin
 > executor supporting progress and cancellation. Node.js, Go, Java/JDK, Flutter,
-> Android Studio, Android SDK, VS Code, Trivy, spotatui, REA, OS Packages and Brave have native Linux
+> Android Studio, Android SDK, VS Code, Trivy, spotatui, REA, OS Packages, Brave and Zsh have native Linux
 > backends; remaining plugins use an explicit compatibility backend while being
 > migrated individually. Native Windows application installation remains
 > pending. Compiled CORE updates require signed packages and explicit consent. The original `bin/atm` is
@@ -78,7 +78,7 @@ to keep this exact snapshot. Preserve any existing installation before switching
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
 Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy,
-spotatui, REA, OS Packages and Brave backends are written in Go.
+spotatui, REA, OS Packages, Brave and Zsh backends are written in Go.
 The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
@@ -112,6 +112,7 @@ Desktop apps: ~/.local/share/applications
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 | [Node.js](plugins/node/README.md) | `node` | `0.0.1` | Manage portable Node.js releases or install the system APT package; identify ATM, user-local and system versions. |
 | [Brave Browser](plugins/brave/README.md) | `brave` | `0.0.1` | Install/remove the system browser, back up complete profiles or all profile bookmarks, and restore profile archives. |
+| [Zsh + Oh My Zsh](plugins/zsh/README.md) | `zsh` | `0.0.1` | Manage the system shell and framework, private configuration backups, guarded restore and explicit default-shell selection. |
 | [Trivy](plugins/trivy/README.md) | `trivy` | `0.0.1` | Choose a verified portable binary or the official Docker image, with dynamic stable-release lookup. |
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
 | [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Native portable lifecycle, ATM/local destinations, explicit dependency diagnostics and native launchers. |
@@ -730,6 +731,30 @@ rewrite. No portable Brave binary or automatic package rollback is provided.
 See the [Brave guide](plugins/brave/README.md) for commands, trust boundaries,
 archive limits and platform acceptance status. The legacy Bash entrypoint is
 retained separately.
+
+### Zsh + Oh My Zsh
+
+Open `atm plugin zsh` for framework/package installation, updates, removal,
+backup/restore and default-shell selection. Zsh remains an APT-managed system
+package; Oh My Zsh is user configuration, not a portable shell executable.
+
+```bash
+atm status zsh
+atm plugin zsh menu backup
+atm --yes plugin zsh menu backups
+atm plugin zsh menu shells
+```
+
+Backups default to `~/Apps/Backups` and contain private, unencrypted shell history
+and configuration. Native snapshots use a versioned `.json.gz` format; legacy
+`.tar.gz` backups remain preserved but require the legacy restore workflow.
+Close other Zsh sessions before changing or restoring files.
+Manual installations and modified framework files are not silently adopted or
+overwritten. Changing the default shell is a separate confirmed action:
+**You must log out and log back in for the new default shell to take effect.**
+
+See the [Zsh guide](plugins/zsh/README.md) for native commands, trust and ownership
+rules, recovery behavior and differences from the retained Bash implementation.
 
 ### AI Tools
 
