@@ -28,10 +28,12 @@ type backend struct {
 	log    func(string)
 	// Unit tests inject transaction faults, never through the process environment.
 	checkpoint func(string) error
+	system     *systemTools
 }
 type options struct {
 	provider, version string
 	trust             bool
+	acceptSystem      bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -81,6 +83,11 @@ func parseOptions(op string, args []string) (options, error) {
 				return o, fmt.Errorf("download trust is not applicable")
 			}
 			o.trust = true
+		case "--accept-system-packages":
+			if eq || op != "install" {
+				return o, fmt.Errorf("system package consent is only applicable to installation")
+			}
+			o.acceptSystem = true
 		case "--provider", "--version":
 			if !eq {
 				i++
@@ -100,6 +107,13 @@ func parseOptions(op string, args []string) (options, error) {
 	}
 	if _, ok := providers[o.provider]; !ok {
 		return o, fmt.Errorf("explicit supported --provider required")
+	}
+	if o.provider == hermesSystem {
+		if op != "install" {
+			return o, fmt.Errorf("Hermes Desktop system preview supports install only; use the system package manager for administration")
+		}
+	} else if o.acceptSystem {
+		return o, fmt.Errorf("system package consent is not applicable to this provider")
 	}
 	if o.version != "latest" && !versionRE.MatchString(o.version) {
 		return o, fmt.Errorf("expected stable X.Y.Z or latest")
@@ -129,6 +143,12 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		if !o.trust {
 			return nil, fmt.Errorf("official executable download requires --trust-download; review provider menu")
 		}
+	}
+	if o.provider == hermesSystem {
+		if !o.acceptSystem {
+			return nil, fmt.Errorf("system installation requires --trust-download and --accept-system-packages; review provider menu")
+		}
+		return nil, b.installHermesSystem(ctx, o)
 	}
 	err = b.locked(ctx, o.provider, func() error {
 		switch b.req.Operation {

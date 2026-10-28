@@ -96,7 +96,24 @@ def check(executable, backend):
             run("--yes", "plugin", "ai", "install", "--provider", provider,
                 "--provider", provider, "--trust-download", success=False)
             run("--yes", "plugin", "ai", "menu", provider, "--trust-download", success=False)
-        for pending in ("hermes-agent", "ollama", "hermes-desktop-system", "codex-desktop"):
+        system = "hermes-desktop-system"
+        submenu = run("--yes", "plugin", "ai", "menu", system)
+        assert json.loads(submenu.stdout.splitlines()[-1])["choices"], "system review menu empty"
+        for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
+            run("--yes", "plugin", "ai", "install", "--provider", system, *flags, success=False)
+        for operation in ("update", "use", "remove", "uninstall"):
+            run("--yes", "plugin", "ai", operation, "--provider", system, success=False)
+        for version in ("../../outside", "1.2.3;touch /tmp/not-allowed"):
+            run("--yes", "plugin", "ai", "install", "--provider", system,
+                "--trust-download", "--accept-system-packages", "--version", version, success=False)
+        run("--yes", "plugin", "ai", "install", "--provider", system,
+            "--trust-download", "--accept-system-packages", "--accept-system-packages", success=False)
+        run("--yes", "plugin", "ai", "install", "--provider", "picoclaw",
+            "--trust-download", "--accept-system-packages", success=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", system,
+                             "--trust-download", "--accept-system-packages", started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
+        for pending in ("hermes-agent", "ollama", "codex-desktop"):
             run("--yes", "plugin", "ai", "menu", pending, success=False)
             run("--yes", "plugin", "ai", "install", "--provider", pending,
                 "--trust-download", success=False)

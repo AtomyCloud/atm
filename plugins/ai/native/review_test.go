@@ -4,12 +4,81 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
+
+func TestSystemRunnerHelper(t *testing.T) {
+	if len(os.Args) < 3 || os.Args[len(os.Args)-2] != "atm-system-runner-fixture" {
+		return
+	}
+	switch os.Args[len(os.Args)-1] {
+	case "env":
+		dir, err := os.Getwd()
+		if err != nil {
+			os.Exit(2)
+		}
+		_ = json.NewEncoder(os.Stdout).Encode(append(os.Environ(), "CWD="+dir))
+	case "overflow":
+		fmt.Print(strings.Repeat("x", 70<<10))
+	case "stderr-overflow":
+		fmt.Fprint(os.Stderr, strings.Repeat("x", 70<<10))
+	case "wait":
+		time.Sleep(time.Minute)
+	default:
+		os.Exit(3)
+	}
+	os.Exit(0)
+}
+
+func TestSystemRunnerEnvironmentBoundsAndCancellation(t *testing.T) {
+	ex, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("APT_CONFIG", "/untrusted/apt.conf")
+	t.Setenv("LD_PRELOAD", "/untrusted/library.so")
+	t.Setenv("BASH_ENV", "/untrusted/shell")
+	t.Setenv("HOME", "/untrusted/home")
+	args := func(mode string) []string {
+		return []string{"-test.run=^TestSystemRunnerHelper$", "--", "atm-system-runner-fixture", mode}
+	}
+	out, err := runSystemCommand(context.Background(), ex, args("env"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var env []string
+	if err = json.Unmarshal([]byte(out), &env); err != nil {
+		t.Fatal(err)
+	}
+	want := map[string]bool{"PATH=/usr/sbin:/usr/bin:/sbin:/bin": true, "HOME=/": true, "LANG=C.UTF-8": true, "LC_ALL=C.UTF-8": true, "DEBIAN_FRONTEND=noninteractive": true, "TERM=dumb": true, "CWD=/": true}
+	for _, item := range env {
+		if !want[item] {
+			t.Fatalf("unexpected inherited environment: %q", item)
+		}
+		delete(want, item)
+	}
+	if len(want) != 0 {
+		t.Fatalf("missing expected environment: %v", want)
+	}
+	for _, mode := range []string{"overflow", "stderr-overflow"} {
+		if _, err = runSystemCommand(context.Background(), ex, args(mode)); err == nil {
+			t.Fatalf("unbounded command output accepted: %s", mode)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+	if _, err = runSystemCommand(ctx, ex, args("wait")); !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("cancellation not returned: %v", err)
+	}
+}
 
 func installedPair(t *testing.T) *fixture {
 	t.Helper()
@@ -124,5 +193,31 @@ func TestTarDownloadUsesDeclaredSizeLimit(t *testing.T) {
 	}
 	if err := f.b.extractBinary(context.Background(), a, stage, filepath.Join(stage, "tool")); err == nil {
 		t.Fatal("archive exceeding declared size was accepted")
+	}
+}
+
+func TestTarDownloadRejectsIncorrectExactSize(t *testing.T) {
+	for _, chunked := range []bool{false, true} {
+		for _, delta := range []int64{-1, 0, 1} {
+			f := newFixture(t, "amd64")
+			a := f.release(t, "picoclaw", "1.2.3", nil)
+			a.Size += delta
+			original := f.b.client.Transport
+			f.b.client.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+				resp, err := original.RoundTrip(r)
+				if err == nil && chunked {
+					resp.ContentLength = -1
+				}
+				return resp, err
+			})
+			stage := t.TempDir()
+			if err := os.Chmod(stage, 0700); err != nil {
+				t.Fatal(err)
+			}
+			err := f.b.extractBinary(context.Background(), a, stage, filepath.Join(stage, "tool"))
+			if (err == nil) != (delta == 0) {
+				t.Fatalf("chunked=%v delta=%d: unexpected result %v", chunked, delta, err)
+			}
+		}
 	}
 }

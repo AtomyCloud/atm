@@ -24,8 +24,11 @@ func TestOfficialReleaseMetadata(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Minute)
 	defer cancel()
-	for _, id := range []string{"picoclaw", "hermes-desktop", "codex-cli"} {
+	for _, id := range []string{"picoclaw", "hermes-desktop", "codex-cli", hermesSystem} {
 		for _, arch := range []string{"amd64", "arm64"} {
+			if id == hermesSystem && arch == "arm64" {
+				continue // System DEB preview is explicitly amd64-only.
+			}
 			t.Run(id+"/"+arch, func(t *testing.T) {
 				b.arch = arch
 				a, err := b.resolve(ctx, id, "latest")

@@ -25,6 +25,7 @@ type provider struct{ name, path, repo, tagPrefix, docs string }
 var providers = map[string]provider{
 	"picoclaw":       {"PicoClaw CLI", "ai/picoclaw", "sipeed/picoclaw", "v", "https://docs.picoclaw.io/docs/installation/"},
 	"hermes-desktop": {"Hermes Desktop (AppImage)", "hermes/hermes-desktop", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
+	hermesSystem:     {"Hermes Desktop (system DEB)", "ai/hermes-desktop-system", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
 	"codex-cli":      {"Codex CLI (standalone)", "ai/codex/cli", "openai/codex", "rust-v", "https://learn.chatgpt.com/docs/codex/cli"},
 }
 
@@ -41,6 +42,11 @@ func artifactNames(id, v, arch string) (name, entry, format string, error error)
 		return "", "", "", fmt.Errorf("invalid stable version")
 	}
 	switch id {
+	case hermesSystem:
+		if arch != "amd64" {
+			return "", "", "", fmt.Errorf("Hermes Desktop system DEB preview supports Linux amd64 only; no architecture or AppImage fallback")
+		}
+		return "hermes-desktop_" + v + "_amd64.deb", "hermes-desktop.deb", "deb", nil
 	case "picoclaw":
 		a := "x86_64"
 		if arch == "arm64" {

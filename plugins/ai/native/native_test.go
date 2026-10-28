@@ -513,7 +513,7 @@ func TestServeProtocolOffline(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 4 {
+	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 5 {
 		t.Fatalf("unexpected result %+v", stream.Result)
 	}
 	if _, err := os.Lstat(req.AppsDir); !os.IsNotExist(err) {

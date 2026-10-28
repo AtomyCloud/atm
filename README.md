@@ -760,9 +760,12 @@ rules, recovery behavior and differences from the retained Bash implementation.
 
 AI migration is in progress. The normal menu still uses the existing legacy
 backend. A separate native preview covers portable PicoClaw, Hermes Desktop
-AppImage and Codex CLI; it is not selected automatically or included as a
-production native backend. Hermes Agent, Ollama and system Desktop management
-remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
+AppImage and Codex CLI, plus explicitly authorized Hermes Desktop system DEB
+installation on Linux amd64. It is not selected automatically or included as a
+production native backend. The DEB route changes the actual system and executes
+package maintainer scripts through APT; an isolated preview HOME is not a system
+sandbox. Custom APT preferences are refused in this preview. Hermes Agent,
+Ollama and Codex Desktop remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 
 ```text

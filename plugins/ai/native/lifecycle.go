@@ -111,8 +111,10 @@ func (b *backend) install(ctx context.Context, o options) error {
 	return b.activate(ctx, o.provider, a.Version)
 }
 func (b *backend) extractBinary(ctx context.Context, a artifact, stage, tool string) error {
+	client := *b.client
+	client.Transport = exactSizeTransport{base: client.Transport, size: a.Size}
 	manager := install.Manager{
-		Root: filepath.Join(stage, "archive-store"), PluginID: "ai", Client: b.client,
+		Root: filepath.Join(stage, "archive-store"), PluginID: "ai", Client: &client,
 		Limits: install.Limits{DownloadBytes: a.Size, ExpandedBytes: 1 << 30, FileBytes: maxBinary, Entries: 10000},
 	}
 	spec := install.Spec{Version: a.Version, URL: a.URL, SHA256: a.SHA256, Format: "tar.gz", Origins: []string{"https://github.com", "https://release-assets.githubusercontent.com", "https://objects.githubusercontent.com", "https://github-releases.githubusercontent.com"}}

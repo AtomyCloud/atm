@@ -36,7 +36,11 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 		for _, p := range providerOrder {
 			out = append(out, choice{ID: p, Label: providers[p].name, Operation: "menu", Arguments: []string{p}})
 		}
+		out = append(out, choice{ID: hermesSystem, Label: providers[hermesSystem].name, Operation: "menu", Arguments: []string{hermesSystem}})
 		return append(out, choice{ID: "status", Label: label("status"), Operation: "status"}), nil
+	}
+	if id == hermesSystem {
+		return b.systemMenu(ctx)
 	}
 	b.log(providers[id].docs)
 	b.log(label("trust"))
@@ -78,6 +82,9 @@ func (b *backend) status(ctx context.Context) error {
 		if current != "" {
 			b.log("Run explicitly: " + filepath.Join(b.root(id), "current"))
 		}
+	}
+	if err := b.systemStatus(); err != nil {
+		return err
 	}
 	b.log(label("preserved"))
 	return ctx.Err()

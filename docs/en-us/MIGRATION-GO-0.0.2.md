@@ -99,12 +99,15 @@ transactions and ARM64 runtime acceptance remain Pending. See the
 backends are native; AI, Docker and Backup & Restore remain to migrate.
 
 AI has a separate, opt-in native preview for portable PicoClaw, Hermes Desktop
-AppImage and Codex CLI. The production manifest remains legacy until the other
+AppImage and Codex CLI, plus Hermes Desktop system DEB installation on Linux
+amd64 with separate download and system-package consent. The production manifest remains legacy until the other
 AI routes have native parity; this preview does not increase the 13/16 count.
-See the [AI guide](../../plugins/ai/README.md). The preview does not run upstream
-installer scripts or AI applications, download models, access credentials or
-change services.
-Hermes Agent, Ollama, system Desktop management and real provider acceptance
+See the [AI guide](../../plugins/ai/README.md). Portable routes do not run upstream
+installer scripts or AI applications. The system DEB route invokes APT and runs
+the package's maintainer scripts, affecting the actual host even with an isolated
+preview HOME. Custom APT preferences are refused rather than bypassed. Automated
+system-route tests use injected commands; real elevated acceptance remains Pending.
+Hermes Agent, Ollama, Codex Desktop and real provider acceptance
 remain Pending.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,

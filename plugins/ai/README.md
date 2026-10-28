@@ -9,15 +9,18 @@ activate the preview described below.
 
 ## Native Preview
 
-Implemented for Linux amd64 and arm64:
+Portable providers are implemented for Linux amd64 and arm64; the system DEB
+route supports Linux amd64 only:
 
 | Provider | Artifact | Native operations |
 | --- | --- | --- |
 | PicoClaw CLI | Official architecture-specific `tar.gz` | Install, update, change active version, remove inactive version, uninstall owned preview versions |
 | Hermes Desktop portable | Official architecture-specific AppImage | Same operations |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same operations |
+| Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 
-Only the standalone executable is installed from each archive. PicoClaw's
+For the portable archive providers, only the standalone executable is installed.
+PicoClaw's
 optional `picoclaw-launcher` WebUI, sample configuration and documentation are
 not copied into the installation. PicoClaw CLI does not require that launcher.
 Codex CLI uses the standalone release binary, not npm in this preview.
@@ -26,7 +29,6 @@ Pending before the entire AI plugin can switch to native Go:
 
 - Hermes Agent's supported package-management/bootstrap workflow.
 - Ollama installation, runtime and system-service behavior.
-- Hermes Desktop system DEB installation.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
 - Native PATH registration and detection of existing legacy/manual installations.
 - PicoClaw WebUI/launcher support if added to the native provider scope.
@@ -38,7 +40,7 @@ of these pending operations. Unsupported providers fail explicitly.
 
 ## Storage and Safety
 
-Each provider uses a new private directory beneath `ATM_APPS_DIR`:
+Each portable provider uses a new private directory beneath `ATM_APPS_DIR`:
 
 ```text
 ai/picoclaw/native-v1/
@@ -49,7 +51,7 @@ ai/codex/cli/native-v1/
 Each root holds `owner.json`, `versions/<X.Y.Z>/{tool,receipt.json}` and a
 `current` symlink to `versions/<X.Y.Z>/tool`. **`current` points directly to an
 executable**, not a directory. Invoke the exact path printed after selection.
-ATM does not execute a downloaded application, launch a browser, authenticate,
+Portable operations do not execute a downloaded application, launch a browser, authenticate,
 edit PATH or shell profiles, install dependencies, or configure system services.
 For AppImage execution, arrange any required FUSE/runtime dependencies separately.
 
@@ -96,6 +98,66 @@ After a crash, a lock or private `.atm-ai-stage-*`, `.atm-ai-select-*`, or
 force unlock or cleanup of unknown remnants. Verify that no installer is active
 and inspect the relevant paths before manual recovery; do not recursively delete
 the provider's existing installation directory.
+
+## Hermes Desktop System DEB
+
+Provider ID: `hermes-desktop-system`. Only `install` is supported, with optional
+`--version latest` (default) or `--version X.Y.Z`. The fixed upstream is
+`fathah/hermes-desktop`; release metadata must identify exactly
+`hermes-desktop_<version>_amd64.deb` and provide its SHA-256 digest and size.
+No arm64 DEB or AppImage fallback is attempted. Normal CORE confirmation plus
+**both** `--trust-download` and `--accept-system-packages` are required before
+network access, writes or command execution.
+
+The provider submenu and aggregate status are offline, read only, and never
+query APT/dpkg or execute installed apps. System status reports ATM's operation
+journal, **not current installed-package status**. Release resolution and system
+checks happen only during a consented install; the menu does not present a
+pre-resolved review plan. An existing exact version is a no-op; a newer existing
+version is preserved. Installation may upgrade an older system package, but
+never records ownership of that package. `update`, `use`, `remove`, and
+`uninstall` are intentionally unsupported for this provider.
+
+The download goes to private user staging and must match both digest and exact
+size. Trusted `dpkg-deb` inspects package name, exact version and architecture,
+without running package scripts. Trusted root commands create a private
+`/run/atm-ai-hermes-*` directory and copy the DEB there. Its hash and metadata are
+checked again on the root-owned copy **before APT uses that copy**. Commands use
+absolute root-trusted paths and literal arguments, never a shell. Non-root use
+requires `sudo -n`; ATM never prompts for or reads a password. Authentication, if
+needed and permitted by policy, is a separate action in the user's terminal.
+
+APT retains administrator configuration, sources and package policy; ATM does
+not rewrite repositories, refresh indexes or force installation. **A local DEB
+can bypass package pins**, so this preview conservatively refuses any nonempty
+APT preferences (comments/blank lines are allowed) or redirected preference
+paths. This includes unrelated pins until complete policy evaluation is
+implemented. The command environment is allowlisted and does not inherit
+`APT_CONFIG`. APT is passed explicit no-removal, no-downgrade, no-held-change and
+authenticated-repository guards. The installed package record is checked before
+and after APT; held, incomplete, foreign-architecture or unsupported version
+records cause refusal. Do not change package policy concurrently.
+
+**APT executes package maintainer scripts and triggers as root**, and may install
+or upgrade dependencies. Their effects can include services and desktop
+integration. These are not portable operations and are not transactional. ATM
+does not launch Hermes Desktop itself or directly edit user settings, models,
+credentials or portable installations; upstream package-script behavior remains
+part of the explicit system-package trust decision.
+
+Operation state is private under
+`ATM_APPS_DIR/ai/hermes-desktop-system/native-v1/`, with `owner.json` and
+`journal.json`, plus a sibling lock. This is an **operation journal, not an
+ownership receipt for system files**. Failures retain input staging for manual
+inspection. Once any privileged command is attempted, an error or cancellation
+retains the lock and an unknown/incomplete journal, plus any remaining root
+staging. Privileged descendants may still be running; there is no automatic
+rollback, force unlock or recovery. Even a successful APT installation followed
+by failed cleanup/journaling is not reported as a completed ATM operation.
+Inspect processes, package state and staging before a manual recovery. Saved
+journal paths never authorize automatic privileged deletion. Successful cleanup
+only deletes this transaction's verified temporary file and then its empty
+directory, never recursively removes an installation.
 
 ## Isolated Preview Test
 
@@ -161,6 +223,43 @@ arguments; `menu` takes no arguments or exactly one provider ID. Version status
 comes from local receipts, not from executing installed applications, and does
 not claim that their dependencies or interactive runtime have been validated.
 
+### System DEB Human Test: Disposable VM Only
+
+**A temporary HOME, XDG or Apps directory does not sandbox APT.** Running this
+route changes the VM/host's real package database and system files. Do not use
+the system installation example on a workstation as an "isolated" preview test.
+Use a disposable Linux amd64 Debian/Ubuntu-family VM with a snapshot, working
+APT sources, compatible dependencies and no custom preference rules. Build the
+isolated runtime above inside that VM. First inspect the offline menu:
+
+```bash
+preview_atm plugin ai menu hermes-desktop-system
+```
+
+Only after accepting the VM's system changes, authenticate separately when
+required by sudo policy, and invoke installation without `--yes` so CORE asks
+for confirmation:
+
+```bash
+# Human action in the disposable VM, not performed by ATM.
+sudo -v
+preview_atm plugin ai install --provider hermes-desktop-system \
+  --trust-download --accept-system-packages
+
+# Exact release, as a separate optional test:
+preview_atm plugin ai install --provider hermes-desktop-system \
+  --version 0.7.7 --trust-download --accept-system-packages
+
+# This reports the operation journal only; it performs no package query.
+preview_atm status ai
+```
+
+The sudo policy must permit each literal staging/checksum/package-manager and
+cleanup command; cached authentication alone does not guarantee permission.
+Manually verify the package in the VM and launch the application separately if
+desired. Restore the VM snapshot after testing. This documentation is not a
+claim of actual APT, GUI or arm64 runtime acceptance.
+
 ## Tests and Sources
 
 ```bash
@@ -168,9 +267,10 @@ go test ./plugins/ai/native -count=1
 go test -race ./plugins/ai/native -count=1
 ```
 
-Normal tests use synthetic ELF files, in-memory HTTP fixtures and temporary
-installation directories only. They never run provider code or change system
-packages. The separate opt-in public metadata test performs read-only official
+Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
+substitutes for system commands and temporary installation directories only.
+They never run provider code, real sudo/APT or change system packages. The
+separate opt-in public metadata test performs read-only official
 release lookups, not provider downloads or execution.
 The separate `ATM_TEST_AI_PUBLIC_ARCHIVE=1` opt-in test downloads and parses a
 real PicoClaw archive in private temporary storage to check compatibility. It
