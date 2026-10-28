@@ -1,0 +1,10 @@
+{
+ "title": "OS Packages",
+ "complete": "OS Packages operation complete",
+ "install": "Review installation using configured repositories",
+ "remove": "Review removal of listed system packages",
+ "commands": "Show package list and commands",
+ "ubuntu": "Review installation using temporary official Ubuntu sources",
+ "apply_install": "Install listed system packages (system changes)",
+ "apply_remove": "Remove listed packages, including existing tools (destructive)"
+}

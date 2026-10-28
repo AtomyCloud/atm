@@ -167,9 +167,9 @@ func RunNative(parent context.Context, c config.Config, plan Plan, opts NativeOp
 
 func interrupted(id string, err error) Outcome {
 	if errors.Is(err, context.DeadlineExceeded) {
-		return Outcome{RequestID: id, Status: "error", Code: "timeout", Message: "Native operation timed out; process tree terminated", ExitCode: 124}
+		return Outcome{RequestID: id, Status: "error", Code: "timeout", Message: "Native operation timed out; backend stopped. Privileged or detached work and partial changes may remain", ExitCode: 124}
 	}
-	return Outcome{RequestID: id, Status: "cancelled", Code: "cancelled", Message: "Native operation cancelled; process tree terminated", ExitCode: 130}
+	return Outcome{RequestID: id, Status: "cancelled", Code: "cancelled", Message: "Native operation cancelled; backend stopped. Privileged or detached work and partial changes may remain", ExitCode: 130}
 }
 
 func validateNativePlan(c config.Config, p Plan) (string, error) {

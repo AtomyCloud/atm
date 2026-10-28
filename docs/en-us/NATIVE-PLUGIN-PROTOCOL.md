@@ -4,7 +4,7 @@ Status: implemented in the opt-in ATM 0.0.2 migration. Linux fixture tests cover
 execution and the terminal UI. Windows builds compile; Windows runtime and
 standard-user acceptance remain pending. Node.js provides a native Go Linux
 backend accepted by the maintainer, as does spotatui; the Go toolchain, Java/JDK, Flutter, Android
-Studio, VS Code, Android SDK, Trivy and REA backends have passed
+Studio, VS Code, Android SDK, Trivy, REA and OS Packages backends have passed
 automated Linux checks, with human acceptance pending. Remaining application plugins retain
 explicit Bash compatibility backends until individually migrated. The separate
 legacy entrypoint is retained.
@@ -196,9 +196,13 @@ assigns it to a kill-on-close Job Object, then resumes its initial thread. Job
 assignment failure aborts before plugin code runs. See Microsoft's
 [process creation flags](https://learn.microsoft.com/en-us/windows/win32/procthread/process-creation-flags)
 and [Job Object assignment](https://learn.microsoft.com/en-us/windows/win32/api/jobapi2/nf-jobapi2-assignprocesstojobobject).
-Cancellation/timeout forcibly terminates the group/job and waits for the root
-process. Remaining descendants are terminated even after normal root exit;
-inherited output pipes may add up to one second of cleanup time. Plugins must
+Cancellation/timeout attempts to terminate the group/job and waits for the backend
+process. Cleanup also targets remaining descendants after normal backend exit;
+inherited output pipes may add up to one second of cleanup time. Privileged
+children may not be signalable by ATM, and sudo or other tools can create a new
+session. Cancellation does not prove that privileged/detached work stopped or
+that system changes rolled back. Inspect the package manager before retrying an
+interrupted system operation. Plugins must
 not leave background services or detach children from the process group/job.
 
 **This is trusted-code execution, not a sandbox or an installation transaction.**

@@ -555,12 +555,16 @@ func TestCompiledLauncherLiteralStreamsAndPinnedRuntime(t *testing.T) {
 			}
 		}
 	}
-	f, e := os.OpenFile(filepath.Join(tools, "node"), os.O_APPEND|os.O_WRONLY, 0)
+	node := filepath.Join(tools, "node")
+	data, e := os.ReadFile(node)
 	if e != nil {
 		t.Fatal(e)
 	}
-	f.Write([]byte("changed"))
-	f.Close()
+	// Replace the fixture atomically; a recently exited executable can still be mapped.
+	write(t, node+".replacement", append(data, []byte("changed")...), 0700)
+	if e = os.Rename(node+".replacement", node); e != nil {
+		t.Fatal(e)
+	}
 	output, e := exec.Command(alias).CombinedOutput()
 	if e == nil || !strings.Contains(string(output), "pinned Node changed") {
 		t.Fatal(e, string(output))

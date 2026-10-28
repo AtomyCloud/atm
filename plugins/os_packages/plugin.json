@@ -1,22 +1,26 @@
 {
-  "schema": 1,
+  "schema": 2,
+  "full_setup": false,
   "id": "os_packages",
   "name": "OS Packages",
   "version": "0.0.1",
   "description": "Install and remove common operating system packages",
   "order": 7,
-  "min_core_api": 1,
+  "min_core_api": 2,
   "platforms": [
     "linux"
   ],
-  "executor": "legacy-bash",
-  "protocol": "tty-v1",
+  "executor": "native",
+  "protocol": "jsonl-v1",
   "operations": [
     "menu",
     "status",
     "install",
     "remove",
-    "uninstall",
-    "use"
-  ]
+    "uninstall"
+  ],
+  "executables": {
+    "linux/amd64": "bin/linux-amd64/atm-os-packages",
+    "linux/arm64": "bin/linux-arm64/atm-os-packages"
+  }
 }

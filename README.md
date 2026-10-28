@@ -77,7 +77,7 @@ to keep this exact snapshot. Preserve any existing installation before switching
 </div>
 
 ATM is a modular, portable-first tool manager. The v0.0.2 CORE and Linux Node.js,
-Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui and REA backends are written in Go.
+Go toolchain, Java/JDK, Flutter, Android Studio, Android SDK, VS Code, Trivy, spotatui, REA and OS Packages backends are written in Go.
 The v0.0.1 legacy entrypoint and other application
 plugins retain their explicit Linux Bash compatibility backends.
 Application plugins install and manage developer tools in user space, keep multiple
@@ -106,7 +106,7 @@ Desktop apps: ~/.local/share/applications
 | [VS Code](plugins/vscode/README.md) | `vscode` | `0.0.1` | Verified latest-seven/custom releases, portable data migration, explicit extensions and user integration. |
 | [Android Studio](plugins/android_studio/README.md) | `android_studio` | `0.0.1` | Verified pinned/custom IDE archives, version switching and owned user desktop integration. |
 | [Android SDK](plugins/android_sdk/README.md) | `android_sdk` | `0.0.1` | Native package management, dependency resolution, explicit license review and ownership-preserving updates/removal. |
-| OS Packages | `os_packages` | `0.0.1` | Install and remove common operating system packages using the detected Linux package manager. |
+| [OS Packages](plugins/os_packages/README.md) | `os_packages` | `0.0.1` | Explicitly reviewed native system-package operations with detected Linux managers and guarded attempt journals. |
 | [Docker](plugins/docker/README.md) | `docker` | `0.0.1` | Install Docker Engine, Compose, and Desktop; export and restore image archives. |
 | AI Tools | `ai` | `0.0.1` | Install Hermes, Ollama, and PicoClaw AI tools. |
 | [Node.js](plugins/node/README.md) | `node` | `0.0.1` | Manage portable Node.js releases or install the system APT package; identify ATM, user-local and system versions. |
@@ -581,6 +581,22 @@ Use this submenu to install Android SDK command-line tools and package stacks, c
 ATM status prefers stable numeric Android APIs over codenames/previews when both exist.
 
 ### OS Packages
+
+The compiled Linux ATM uses a native Go backend for APT, DNF, YUM, Pacman and APK.
+Open `atm plugin os_packages` to review the package list and commands before
+confirming installation or removal. `packages.txt` remains editable data. These
+are system packages, not portable apps; removal can affect tools installed before ATM.
+
+Configured repositories are preserved. Ubuntu/Zorin optionally use a temporary
+official source list for reviewed `jammy`/`noble` bases, without editing `/etc/apt`.
+Native sudo is noninteractive: authenticate separately with `sudo -v` if needed.
+Cancellation cannot guarantee privileged processes have stopped; incomplete
+attempts require inspection, not an automatic retry. The plugin is excluded from
+Full Setup. Real system-package and ARM64 runtime acceptance remain pending.
+See the [OS Packages guide](plugins/os_packages/README.md) for consent flags,
+package-name restrictions, privilege boundaries and recovery instructions.
+
+Legacy Bash submenu (`bin/atm`):
 
 ```text
 🧰 OS Packages
