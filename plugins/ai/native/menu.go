@@ -39,6 +39,9 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 		out = append(out, choice{ID: hermesSystem, Label: providers[hermesSystem].name, Operation: "menu", Arguments: []string{hermesSystem}})
 		return append(out, choice{ID: "status", Label: label("status"), Operation: "status"}), nil
 	}
+	if err := b.logDiscovery(ctx, id); err != nil {
+		return nil, err
+	}
 	if id == hermesSystem {
 		return b.systemMenu(ctx)
 	}
@@ -73,6 +76,9 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 }
 func (b *backend) status(ctx context.Context) error {
 	b.log(label("preview"))
+	if err := b.logDiscovery(ctx, ""); err != nil {
+		return err
+	}
 	for _, id := range providerOrder {
 		vs, current, err := b.inspect(ctx, id, false)
 		if err != nil {

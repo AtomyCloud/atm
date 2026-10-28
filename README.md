@@ -768,6 +768,14 @@ sandbox. Custom APT preferences are refused in this preview. Hermes Agent,
 Ollama and Codex Desktop remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 
+The native preview also reports external executable candidates from known legacy
+ATM locations, the user's `.local/bin` and bounded absolute PATH entries.
+Discovery only inspects filesystem metadata: it does not execute programs, read
+their configuration or establish their version. Found candidates are unverified,
+not adopted or made eligible for native removal. Missing candidates do not prove
+that an application is absent from the system. Native PATH registration and the
+remaining installer routes are still pending.
+
 ```text
 🧠 AI Tools Installer
 Current: <status>

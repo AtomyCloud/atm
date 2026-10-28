@@ -1,6 +1,7 @@
 """Opt-in AI preview checks through CORE; never execute legacy or provider code."""
 import json
 import hashlib
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -40,7 +41,8 @@ def check(executable, backend):
                 env.pop(key)
         marker = root / "unexpected-provider-execution"
         payload = f'#!/bin/sh\nprintf unexpected > "{marker}"\n'
-        for relative in ("user/.local/bin/hermes", "user/.local/bin/ollama",
+        opaque_paths = []
+        for relative in ("user/.local/bin/hermes", "user/.local/bin/hermes-agent", "user/.local/bin/ollama",
                          "user/.local/bin/codex", "user/.local/bin/picoclaw",
                          "apps/ai/picoclaw/picoclaw", "apps/ai/codex/cli/bin/codex",
                          "apps/hermes/hermes-desktop/current.AppImage"):
@@ -48,12 +50,14 @@ def check(executable, backend):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(payload)
             path.chmod(0o700)
+            opaque_paths.append(path)
         for relative in ("user/.codex/auth.json", "user/.hermes/config.yaml",
                          "user/.picoclaw/config.json", "user/.ollama/models/sentinel"):
             path = root / relative
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text("synthetic private data\n")
             path.chmod(0o600)
+            opaque_paths.append(path)
         for path in root.rglob("*"):
             if path.is_dir():
                 path.chmod(0o700)
@@ -67,10 +71,14 @@ def check(executable, backend):
                 trace = Path(trace_dir) / "trace"
                 result = subprocess.run(
                     [tracer, "-f", "-qq", "-s", "4096", "-e",
-                     "trace=execve,execveat,connect", "-o", str(trace), *base, *args],
+                     "trace=execve,execveat,connect,openat,openat2", "-o", str(trace), *base, *args],
                     env=env, input="", capture_output=True, text=True, timeout=20)
                 assert (result.returncode == 0) == success, (args, result.stdout, result.stderr)
-                verify_read_only_trace(trace.read_text(), executable, target if started else None)
+                traced = trace.read_text()
+                verify_read_only_trace(traced, executable, target if started else None)
+                for line in traced.splitlines():
+                    if "openat(" in line or "openat2(" in line:
+                        assert not any(json.dumps(str(p)) in line for p in opaque_paths), (args, "opened external executable/private data", line)
             after = snapshot(root)
             if read_only:
                 assert after == before, (args, "unexpected user-state change")
@@ -82,7 +90,52 @@ def check(executable, backend):
             count += 1
             return result
 
-        run("status", "ai")
+        def messages(result):
+            return "\n".join(json.loads(line).get("message", "") for line in result.stdout.splitlines())
+
+        initial = messages(run("status", "ai"))
+        for relative in ("user/.local/bin/hermes", "user/.local/bin/ollama",
+                         "user/.local/bin/codex", "user/.local/bin/picoclaw",
+                         "apps/ai/picoclaw/picoclaw", "apps/ai/codex/cli/bin/codex",
+                         "apps/hermes/hermes-desktop/current.AppImage"):
+            assert str(root / relative) in initial, ("missing external candidate outside PATH", relative, initial)
+        assert "unverified" in initial.lower(), "external evidence must not claim a verified installation"
+
+        # Discovery must ignore cwd/relative PATH entries and inspect absolute
+        # entries without running or opening their executable content.
+        cwd_candidate = plugin / "codex"
+        cwd_candidate.write_text(payload)
+        cwd_candidate.chmod(0o700)
+        opaque_paths.append(cwd_candidate)
+        outside = root / "external-bin"
+        outside.mkdir(mode=0o700)
+        external = outside / "ollama"
+        external.write_text(payload)
+        external.chmod(0o700)
+        opaque_paths.append(external)
+        env["PATH"] = f".:relative::{outside}:{outside}"
+        discovered = messages(run("status", "ai"))
+        assert str(external) in discovered, "absolute PATH candidate not reported"
+        assert str(cwd_candidate) not in discovered, "cwd executable was considered installed"
+        assert discovered.count(str(external)) == 1, "duplicate PATH candidate reported"
+        env["PATH"] = ""
+
+        # Special files and broken links must not hang discovery or get adopted.
+        unusual = root / "user/.local/bin/hermes-desktop"
+        os.mkfifo(unusual, 0o600)
+        opaque_paths.append(unusual)
+        special = messages(run("status", "ai"))
+        assert str(unusual) in special, "special-file diagnostic missing"
+        unusual.unlink()
+        unusual.symlink_to("missing-hermes-desktop")
+        broken = messages(run("status", "ai"))
+        assert str(unusual) in broken, "broken-link diagnostic missing"
+        unusual.unlink()
+        unusual.symlink_to(unusual.name)
+        cyclic = messages(run("status", "ai"))
+        assert str(unusual) in cyclic, "cyclic-link diagnostic missing"
+        unusual.unlink()
+
         menu = run("--yes", "plugin", "ai")
         assert json.loads(menu.stdout.splitlines()[-1])["choices"], "preview menu empty"
         for provider in ("picoclaw", "hermes-desktop", "codex-cli"):
@@ -91,6 +144,11 @@ def check(executable, backend):
             assert {c["id"] for c in choices} >= {"install", "custom", "update", "uninstall"}
             for action in ("install", "update"):
                 run("--yes", "plugin", "ai", action, "--provider", provider, success=False)
+            run("--yes", "plugin", "ai", "use", "--provider", provider,
+                "--version", "0.1.0", success=False)
+            run("--yes", "plugin", "ai", "remove", "--provider", provider,
+                "--version", "0.1.0", success=False)
+            run("--yes", "plugin", "ai", "uninstall", "--provider", provider, success=False)
             run("--yes", "plugin", "ai", "install", "--provider", provider,
                 "--version", "../../escape", "--trust-download", success=False)
             run("--yes", "plugin", "ai", "install", "--provider", provider,
@@ -159,6 +217,16 @@ def check(executable, backend):
         active = owned / "current"
         active.symlink_to("versions/0.1.0/tool")
         run("status", "ai")
+        alias = root / "user/.local/bin/picoclaw"
+        saved_candidate = alias.read_bytes()
+        alias.unlink()
+        alias.symlink_to(active)
+        aliased = messages(run("status", "ai"))
+        alias_lines = [line for line in aliased.splitlines() if str(alias) in line]
+        assert len(alias_lines) == 1 and "native-preview alias" in alias_lines[0], alias_lines
+        alias.unlink()
+        alias.write_bytes(saved_candidate)
+        alias.chmod(0o700)
         run("--yes", "plugin", "ai", "use", "--provider", "picoclaw", "--version", "0.2.0", read_only=False)
         assert active.readlink().as_posix() == "versions/0.2.0/tool"
         run("--yes", "plugin", "ai", "remove", "--provider", "picoclaw", "--version", "0.2.0", success=False)

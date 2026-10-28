@@ -30,13 +30,73 @@ Pending before the entire AI plugin can switch to native Go:
 - Hermes Agent's supported package-management/bootstrap workflow.
 - Ollama installation, runtime and system-service behavior.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
-- Native PATH registration and detection of existing legacy/manual installations.
+- Native PATH registration (bounded read-only existing-installation discovery is available).
 - PicoClaw WebUI/launcher support if added to the native provider scope.
 - Real provider/runtime acceptance, Linux arm64 execution, other platforms and
   translations of the preview's English labels.
 
 The preview does not fall back to Bash or an upstream installer script for any
 of these pending operations. Unsupported providers fail explicitly.
+
+## Existing Installation Discovery
+
+Aggregate `status` and matching provider submenus report bounded, read-only
+filesystem evidence separately from preview receipts. A regular file with an
+executable permission bit is an **unverified external executable candidate**,
+not a validated installation: version and runtime remain unknown. Scripts and
+symlinks may be candidates; their contents, interpreter, architecture,
+dependencies, package provenance and usability are not checked. Discovery grants
+no ownership, update/removal permission, adoption or new provider menu routes.
+
+Known legacy default candidates are relative to the request's selected Apps
+directory, not a hardcoded `~/Apps`:
+
+- `ai/picoclaw/picoclaw`
+- `hermes/hermes-desktop/current.AppImage`
+- `ai/codex/cli/bin/codex` (legacy npm prefix; package metadata is not read)
+
+The names `hermes-agent`, `hermes`, `ollama`, `picoclaw`, `hermes-desktop` and
+`codex` are also checked in the current environment's `HOME/.local/bin`, fixed
+`/usr/local/bin`, `/usr/bin`, `/bin`, and bounded absolute PATH directories.
+The native runner inherits HOME/PATH; request `Home` identifies the ATM runtime,
+not the user's home. Known paths are checked even with empty PATH. These are
+filename heuristics, not provider identification. An `/opt` directory alone is
+never evidence. Hermes Agent and Ollama evidence is visible in aggregate status
+without authorizing native lifecycle routes. Codex Desktop remains explicitly
+unknown because the legacy check queries a package database, which discovery
+does not do; `codex` is not treated as Codex Desktop evidence.
+
+The three portable `native-v1/current` paths are reported separately. Literal
+duplicate candidates are removed; resolved aliases and hard links to a preview
+current executable are excluded from external evidence. Paths resolving inside
+a preview root are also excluded, without inferring ownership of that root.
+Other inode aliases are identified as duplicates; distinct candidate files are
+all reported rather than stopping at the first PATH match. Unrecognized files
+with multiple hard links are reported as `ambiguous-hardlink`, with unknown
+ownership, rather than external candidates: an inactive preview version could
+share that inode. No wider ownership scan is performed.
+
+Missing paths, inaccessible metadata, broken links, cyclic/excessive links,
+non-executable files and directories/special files have distinct evidence states.
+Paths are quoted/escaped for display. Empty, relative, unclean, unsafe-control
+PATH entries and current-directory entries/aliases are skipped; unsafe symlink
+targets are refused, and symlink target trailing slashes/dots retain their
+directory requirements. Search is limited to the first 32 KiB of PATH, at most
+64 PATH entries, 8 fixed-system directories and 448 total candidates. Individual
+paths are at most 2000 bytes, with at most 40 symlinks and 512 resolution steps.
+Truncated or skipped searches are disclosed; missing candidates never prove
+that the application is absent from all locations.
+
+Discovery uses only file attributes and symlink metadata: no executable/content
+reads, directory walks, shell sourcing, package scans, commands, network or
+writes. Cancellation is checked between metadata operations; a blocked kernel
+filesystem call cannot itself be interrupted. Results are snapshots, not a
+guarantee against concurrent filesystem changes. Ordinary user-owned/manual
+paths do not need root ownership to be reported as unverified evidence.
+Legacy `plugin.conf` and `ATM_AI_*` path overrides are not sourced or imported;
+custom locations are visible only when their command is in an eligible PATH
+directory or one of the known locations. Credentials, models and settings are
+not examined. Existing preview receipt/journal checks remain separate.
 
 ## Storage and Safety
 
@@ -111,7 +171,8 @@ network access, writes or command execution.
 
 The provider submenu and aggregate status are offline, read only, and never
 query APT/dpkg or execute installed apps. System status reports ATM's operation
-journal, **not current installed-package status**. Release resolution and system
+journal and separate unverified executable candidates, **not current
+installed-package status**. Release resolution and system
 checks happen only during a consented install; the menu does not present a
 pre-resolved review plan. An existing exact version is a no-op; a newer existing
 version is preserved. Installation may upgrade an older system package, but
@@ -202,7 +263,7 @@ the subshell; it does not change your terminal's existing `umask`.
 Explicit CLI examples, using that isolated runtime:
 
 ```bash
-# Read-only provider menu; no release lookup or executable probing.
+# Read-only provider menu; metadata only, no release lookup or app execution.
 preview_atm plugin ai menu picoclaw
 
 # Optional human installation test: downloads trusted upstream executable code.
@@ -250,7 +311,7 @@ preview_atm plugin ai install --provider hermes-desktop-system \
 preview_atm plugin ai install --provider hermes-desktop-system \
   --version 0.7.7 --trust-download --accept-system-packages
 
-# This reports the operation journal only; it performs no package query.
+# This reports the journal and unverified candidates; no package query.
 preview_atm status ai
 ```
 
@@ -269,6 +330,8 @@ go test -race ./plugins/ai/native -count=1
 
 Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
 substitutes for system commands and temporary installation directories only.
+Discovery tests inject synthetic HOME/PATH/system roots, including broken/cyclic
+links, FIFOs, permissions, search bounds, cancellation and preview aliases.
 They never run provider code, real sudo/APT or change system packages. The
 separate opt-in public metadata test performs read-only official
 release lookups, not provider downloads or execution.

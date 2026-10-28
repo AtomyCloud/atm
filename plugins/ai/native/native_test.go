@@ -83,6 +83,9 @@ func newFixture(t *testing.T, arch string) *fixture {
 	}
 	f := &fixture{responses: map[string][]byte{}}
 	f.b = &backend{req: protocol.Request{PluginID: "ai", Home: filepath.Join(root, "atm"), AppsDir: filepath.Join(root, "Apps")}, arch: arch, log: func(string) {}}
+	f.b.discovery = &discoveryConfig{home: filepath.Join(root, "user"), cwd: filepath.Join(root, "cwd")}
+	t.Setenv("HOME", f.b.discovery.home)
+	t.Setenv("PATH", "")
 	f.b.client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		f.calls++
 		if err := r.Context().Err(); err != nil {

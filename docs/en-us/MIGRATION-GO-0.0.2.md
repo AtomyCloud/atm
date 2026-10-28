@@ -107,8 +107,12 @@ installer scripts or AI applications. The system DEB route invokes APT and runs
 the package's maintainer scripts, affecting the actual host even with an isolated
 preview HOME. Custom APT preferences are refused rather than bypassed. Automated
 system-route tests use injected commands; real elevated acceptance remains Pending.
-Hermes Agent, Ollama, Codex Desktop and real provider acceptance
-remain Pending.
+Read-only native discovery reports unverified external executable candidates in
+legacy ATM locations, `.local/bin` and bounded absolute PATH entries. It neither
+executes candidates nor reads their contents/configuration, assigns ownership,
+infers a version or enables removal. It is not exhaustive package detection.
+Hermes Agent, Ollama, Codex Desktop, native PATH registration and real provider
+acceptance remain Pending.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,
 temporary repository configuration and retained restore recovery copies. It never

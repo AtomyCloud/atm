@@ -29,6 +29,7 @@ type backend struct {
 	// Unit tests inject transaction faults, never through the process environment.
 	checkpoint func(string) error
 	system     *systemTools
+	discovery  *discoveryConfig
 }
 type options struct {
 	provider, version string
