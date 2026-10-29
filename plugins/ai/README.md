@@ -19,7 +19,7 @@ supports amd64; the separate ChatGPT Desktop DEB/RPM routes support amd64 and ar
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation, explicit update and separately consented nonpurge removal of a configured system package; no downgrade or repair |
-| Codex Desktop RPM (ChatGPT Desktop) | Official latest x86_64/aarch64 `chatgpt` RPM | Initial installation/update and separate removal; optional install/update with new dependencies, extra consent and mandatory local signature checks |
+| Codex Desktop RPM (ChatGPT Desktop) | Official latest x86_64/aarch64 `chatgpt` RPM | Initial installation/update and separate removal; optional new dependencies and separately consented same-name/architecture dependency upgrades, with mandatory local signature checks |
 | Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration and separately consented user-service management |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
@@ -37,7 +37,7 @@ Pending before the entire AI plugin can switch to native Go:
 - Ollama real user-service/runtime/GPU acceptance, drivers and non-ROCm add-on
   workflows. The selected service mode is the portable user service described
   below; root/system installation is outside this chosen scope.
-- Codex Desktop RPM dependency upgrades/replacements, DNF4 and Arch package management; the Arch
+- Codex Desktop DNF4 and Arch package management; the Arch
   shell bootstrap is not ported. Initial APT installation, explicit DEB updates and guarded removal
   are described below.
 - PATH registration for providers other than the owned PicoClaw, standalone
@@ -1031,6 +1031,44 @@ diagnostics retain the uncertain journal/lock. Schema4 records initial installat
 schema5 records dependency-enabled update and its original target baseline.
 Both record dependency count and plan hash; schemas1/2/3/4 remain readable.
 
+### Installation And Update With Dependency Upgrades
+
+Two additional menu actions add `--accept-dependency-upgrades` alongside
+`--accept-dependencies`, download/system consent and CORE confirmation. The older
+dependency-only actions remain new-installs-only. The broader mode allows at most
+64 dependency names in total: new Install records or distinct, same-name,
+same-architecture Upgrade/Replaced pairs. The trusted DNF solver supplies upgrade
+ordering. Outgoing dependencies must come from `@System` without payload paths;
+incoming records retain the wrapped-repository and unique staged-file requirements.
+Downgrade, reinstall, obsoletes, removals, unpaired records and cross-name or
+cross-architecture replacements are unsupported.
+
+Original dependency identities come from the stored plan and must match exactly
+one installed record after store and immediately before replay. This is not a
+pre-resolution system snapshot. Incoming identities must match after replay;
+concurrent changes or ambiguous queries retain failure evidence, never select a
+new baseline. These dependencies may be shared with other applications, and their
+upgrades or privileged package scripts can affect those applications and services.
+There is no automatic rollback or exclusion against other package frontends.
+
+Schema6 records install/update, total dependency count and upgrade count, retaining
+schemas1..5 read compatibility. An identical target update still stops before
+elevation with zero dependency counts: it does not repair dependencies. All
+signature prerequisites and retained-artifact checks below remain mandatory.
+
+Review-only example (the preview setup is described below):
+
+```bash
+preview_atm --dry-run plugin ai update --provider codex-desktop-rpm \
+  --trust-download --accept-system-packages --accept-dependencies \
+  --accept-dependency-upgrades
+```
+
+Actual acceptance remains Pending on a disposable Fedora VM. Removing `--dry-run`
+requests a system operation and requires confirmation; automated tests use fixtures
+only. See [DNF5 upgrade](https://dnf5.readthedocs.io/en/latest/commands/upgrade.8.html)
+and [stored replay](https://dnf5.readthedocs.io/en/latest/commands/replay.8.html).
+
 **Signature prerequisite:** stored repositories are reconstructed as command-line
 repositories, not with their original source policy. Therefore this mode requires
 `localpkg_gpgcheck=true` (or `1`) already enabled by the administrator and signing
@@ -1114,7 +1152,8 @@ preview_atm plugin ai uninstall --provider codex-desktop-rpm \
   --accept-system-packages
 ```
 
-Dependency upgrades/replacements, DNF4 and Arch remain Pending.
+DNF4 and Arch remain Pending. Dependency upgrades require the additional consent
+described above; cross-name/cross-architecture replacements remain unsupported.
 Automated validation uses synthetic packages and mocked tools, never real RPM
 transactions. Actual Fedora/GUI/ARM64 acceptance remains Pending. This preview
 does not change the production AI manifest or native plugin count.

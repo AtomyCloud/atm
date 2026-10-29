@@ -222,7 +222,17 @@ metadata-key imports and downloads may occur during store before plan validation
 No automatic signature bypass or package-key provisioning is performed.
 Dependency plans require wrapped stored-repository IDs; older raw-ID DNF5 plans
 are refused because replay can reuse a different configured signature policy.
-Dependency upgrades/replacements, DNF4, Arch and real Fedora/package/GUI/arm64
+Additional `--accept-dependency-upgrades` consent permits same-name/architecture
+dependency Upgrade/Replaced pairs alongside new installs, bounded to 64 dependency
+names total. Original identities from the stored plan must match installed records
+after store and immediately before replay; incoming identities must match afterwards.
+This is not a pre-resolution system snapshot. Schema6 records total/upgrade counts
+with schemas1..5 read compatibility. The older consent remains new-installs-only;
+identical-target updates do not repair dependencies. Signature policy, wrapped
+repositories, file checks and failure retention remain mandatory. No rollback or
+cross-frontend exclusion is claimed. Downgrades, removals, obsoletes, cross-name or
+cross-architecture dependency replacements remain unsupported.
+DNF4, Arch and real Fedora/package/GUI/arm64
 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 

@@ -57,7 +57,7 @@ func TestCodexRPMRemovalLifecycle(t *testing.T) {
 			calls := len(r.calls)
 			r.f.b.codexRPMStatus()
 			choices, err := r.f.b.codexRPMMenu(context.Background())
-			if err != nil || len(choices) != 6 || len(r.calls) != calls {
+			if err != nil || len(choices) != 8 || len(r.calls) != calls {
 				t.Fatal("removal status/menu executed package commands", err)
 			}
 			if err = r.run(); err == nil || r.replays != 1 {

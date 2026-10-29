@@ -218,6 +218,11 @@ def check(executable, backend):
         assert len(update_dependency_choices) == 1
         assert update_dependency_choices[0]["operation"] == "update"
         assert update_dependency_choices[0]["arguments"] == dependency_choices[0]["arguments"]
+        for operation in ("install", "update"):
+            upgrade_choices = [c for c in rpm_choices if c["id"] == operation + "-dependency-upgrades"]
+            assert len(upgrade_choices) == 1
+            assert upgrade_choices[0]["operation"] == operation
+            assert upgrade_choices[0]["arguments"] == dependency_choices[0]["arguments"] + ["--accept-dependency-upgrades"]
         for choice in rpm_choices:
             assert choice["operation"] in ("menu", "install", "update", "uninstall", "status")
             if choice["operation"] in ("install", "update"):
@@ -243,6 +248,23 @@ def check(executable, backend):
         assert plan["dry_run"] and plan["executor"] == "native"
         # Dependency mode never executes live: test only refusals and CORE dry-run.
         dep_flags = ["--trust-download", "--accept-system-packages", "--accept-dependencies"]
+        upgrade_flags = dep_flags + ["--accept-dependency-upgrades"]
+        # Full consent is used ONLY behind CORE dry-run or without CORE confirmation.
+        for operation in ("install", "update"):
+            run("plugin", "ai", operation, "--provider", rpm, *upgrade_flags, success=False, started=False)
+            plan = json.loads(run("--dry-run", "plugin", "ai", operation, "--provider", rpm,
+                                 *upgrade_flags, started=False).stdout)
+            assert plan["dry_run"] and plan["executor"] == "native"
+            for missing in dep_flags:
+                run("--yes", "plugin", "ai", operation, "--provider", rpm,
+                    *(f for f in upgrade_flags if f != missing), success=False)
+            for invalid in ("--accept-dependency-upgrades", "--accept-dependency-upgrades=true", "--version=1.2.3"):
+                run("--yes", "plugin", "ai", operation, "--provider", rpm,
+                    *upgrade_flags, invalid, success=False)
+            for provider in ("codex-cli", "codex-desktop-system", "hermes-agent", "ollama", "picoclaw"):
+                run("--yes", "plugin", "ai", operation, "--provider", provider, *upgrade_flags, success=False)
+        for operation in ("uninstall", "remove", "use", "integrate"):
+            run("--yes", "plugin", "ai", operation, "--provider", rpm, *upgrade_flags, success=False)
         run("plugin", "ai", "install", "--provider", rpm, *dep_flags, success=False, started=False)
         plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", rpm,
                              *dep_flags, started=False).stdout)

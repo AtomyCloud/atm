@@ -26,6 +26,7 @@ type codexRPMJournal struct {
 	Operation                                                      string
 	Baseline                                                       codexRPMMetadata
 	DependencyCount                                                int
+	DependencyUpgradeCount                                         int
 }
 
 type codexRPMPlan struct {
@@ -191,14 +192,17 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 		return nil, err
 	}
 	u, err := codexRPMURL(b.arch)
-	if err != nil || (r.Schema != 1 && r.Schema != 2 && r.Schema != 3 && r.Schema != 4 && r.Schema != 5) || r.Plugin != "ai" || r.Provider != codexDesktopRPM {
+	if err != nil || (r.Schema != 1 && r.Schema != 2 && r.Schema != 3 && r.Schema != 4 && r.Schema != 5 && r.Schema != 6) || r.Plugin != "ai" || r.Provider != codexDesktopRPM {
 		return nil, fmt.Errorf("invalid RPM journal")
 	}
-	if r.DependencyCount < 0 || r.DependencyCount > 64 || (r.Schema != 4 && r.Schema != 5) && r.DependencyCount != 0 {
+	if r.DependencyCount < 0 || r.DependencyCount > 64 || (r.Schema != 4 && r.Schema != 5 && r.Schema != 6) && r.DependencyCount != 0 {
 		return nil, fmt.Errorf("invalid RPM dependency count")
 	}
-	if r.Schema == 4 || r.Schema == 5 {
-		if r.Schema == 4 && (r.Operation != "install" || r.Phase == "unchanged" || r.Baseline != (codexRPMMetadata{})) || r.Schema == 5 && r.Operation != "update" {
+	if r.DependencyUpgradeCount < 0 || r.DependencyUpgradeCount > r.DependencyCount || r.Schema != 6 && r.DependencyUpgradeCount != 0 {
+		return nil, fmt.Errorf("invalid RPM dependency upgrade count")
+	}
+	if r.Schema == 4 || r.Schema == 5 || r.Schema == 6 {
+		if r.Schema == 4 && (r.Operation != "install" || r.Phase == "unchanged" || r.Baseline != (codexRPMMetadata{})) || r.Schema == 5 && r.Operation != "update" || r.Schema == 6 && r.Operation != "install" && r.Operation != "update" {
 			return nil, fmt.Errorf("dependency RPM journal operation/schema mismatch")
 		}
 		switch r.Phase {
@@ -262,7 +266,7 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 	switch r.Phase {
 	case "prepared", "downloaded", "metadata-verified", "root-staged", "plan-verified", "replaying", "complete", "failed", "unknown":
 	case "unchanged":
-		if (r.Schema != 2 && r.Schema != 5) || r.Operation != "update" || r.Package != r.Baseline || r.Size == 0 || r.Input == "" || r.Stage != "" || r.PlanSHA256 != "" || r.DependencyCount != 0 {
+		if (r.Schema != 2 && r.Schema != 5 && r.Schema != 6) || r.Operation != "update" || r.Package != r.Baseline || r.Size == 0 || r.Input == "" || r.Stage != "" || r.PlanSHA256 != "" || r.DependencyCount != 0 {
 			return nil, fmt.Errorf("invalid unchanged RPM evidence")
 		}
 	default:
@@ -348,8 +352,10 @@ func (b *backend) codexRPMMenu(ctx context.Context) ([]choice, error) {
 	return []choice{
 		{ID: "install", Label: label("codex_rpm_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
 		{ID: "install-dependencies", Label: label("codex_rpm_install_dependencies"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies"}},
+		{ID: "install-dependency-upgrades", Label: label("codex_rpm_install_dependency_upgrades"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies", "--accept-dependency-upgrades"}},
 		{ID: "update", Label: label("codex_rpm_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
 		{ID: "update-dependencies", Label: label("codex_rpm_update_dependencies"), Operation: "update", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies"}},
+		{ID: "update-dependency-upgrades", Label: label("codex_rpm_update_dependency_upgrades"), Operation: "update", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies", "--accept-dependency-upgrades"}},
 		{ID: "uninstall", Label: label("codex_rpm_uninstall"), Operation: "uninstall", Arguments: []string{"--provider", codexDesktopRPM, "--accept-system-packages"}},
 		back,
 	}, ctx.Err()
@@ -387,6 +393,9 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	op := b.req.Operation
 	updating := op == "update"
 	removing := op == "uninstall"
+	if o.acceptDependencyUpgrades && (!o.acceptDependencies || (op != "install" && !updating)) {
+		return fmt.Errorf("RPM dependency upgrades require separate dependency consent for install/update")
+	}
 	if o.acceptDependencies && op != "install" && !updating {
 		return fmt.Errorf("RPM dependency consent requires installation or update")
 	}
@@ -396,6 +405,9 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	b.log(label("codex_rpm_scope"))
 	if o.acceptDependencies {
 		b.log(label("codex_rpm_dependencies_scope"))
+	}
+	if o.acceptDependencyUpgrades {
+		b.log(label("codex_rpm_dependency_upgrades_scope"))
 	}
 	s := b.rpmTools()
 	url, err := codexRPMURL(b.arch)
@@ -546,6 +558,9 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	}
 	if removing {
 		r.Schema = 3
+	}
+	if o.acceptDependencyUpgrades {
+		r.Schema = 6
 	}
 	retain = true
 	privileged := false
@@ -781,7 +796,17 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 		return err
 	}
 	var dependencies []codexRPMDependency
-	if o.acceptDependencies && updating {
+	dependencyBaselines := map[string]codexRPMMetadata{}
+	if o.acceptDependencyUpgrades {
+		var changes []codexRPMDependencyChange
+		changes, err = validateCodexRPMDependencyUpgradePlan(plan, r.Package, baseline, updating)
+		for _, change := range changes {
+			dependencies = append(dependencies, change.codexRPMDependency)
+			if change.Baseline != (codexRPMMetadata{}) {
+				dependencyBaselines[change.Package.Name] = change.Baseline
+			}
+		}
+	} else if o.acceptDependencies && updating {
 		dependencies, err = validateCodexRPMUpdateDependencyPlan(plan, r.Package, baseline)
 	} else if o.acceptDependencies {
 		dependencies, err = validateCodexRPMDependencyPlan(plan, r.Package)
@@ -797,6 +822,7 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	}
 	r.PlanSHA256 = fmt.Sprintf("%x", sha256.Sum256(plan))
 	r.DependencyCount = len(dependencies)
+	r.DependencyUpgradeCount = len(dependencyBaselines)
 	checkDependencies := func(installed bool) error {
 		for _, dep := range dependencies {
 			if err := ctx.Err(); err != nil {
@@ -816,6 +842,10 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 			if installed {
 				if e := parseRPMDependencyMetadata(out, dep.Package); e != nil {
 					return e
+				}
+			} else if original, upgrading := dependencyBaselines[dep.Package.Name]; upgrading {
+				if e := parseRPMDependencyMetadata(out, original); e != nil {
+					return fmt.Errorf("RPM dependency original installed state changed or unknown: %w", e)
 				}
 			} else if out != "" {
 				return fmt.Errorf("RPM dependency %s already installed or changed; no replacement permitted", dep.Package.Name)

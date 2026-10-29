@@ -30,7 +30,7 @@ func TestCodexRPMDependenciesLifecycle(t *testing.T) {
 		t.Run(arch, func(t *testing.T) {
 			r := newRPMDependenciesFixture(t, arch)
 			choices, err := r.f.b.codexRPMMenu(context.Background())
-			if err != nil || len(choices) != 6 || len(r.calls) != 0 {
+			if err != nil || len(choices) != 8 || len(r.calls) != 0 {
 				t.Fatal(choices, err, r.calls)
 			}
 			if err = r.run(); err != nil {

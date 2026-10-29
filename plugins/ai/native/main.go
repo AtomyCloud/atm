@@ -38,17 +38,18 @@ type backend struct {
 	ollamaLifecycleLock os.FileInfo
 }
 type options struct {
-	provider, version  string
-	trust              bool
-	acceptSystem       bool
-	acceptDependencies bool
-	removePath         bool
-	refreshLauncher    bool
-	keepPreparation    bool
-	acceptPM           bool
-	rocm               bool
-	serviceAction      string
-	acceptService      bool
+	provider, version        string
+	trust                    bool
+	acceptSystem             bool
+	acceptDependencies       bool
+	acceptDependencyUpgrades bool
+	removePath               bool
+	refreshLauncher          bool
+	keepPreparation          bool
+	acceptPM                 bool
+	rocm                     bool
+	serviceAction            string
+	acceptService            bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -150,6 +151,11 @@ func parseOptions(op string, args []string) (options, error) {
 				return o, fmt.Errorf("dependency package consent is a bare install/update-only flag")
 			}
 			o.acceptDependencies = true
+		case "--accept-dependency-upgrades":
+			if eq || (op != "install" && op != "update") {
+				return o, fmt.Errorf("dependency upgrade consent is a bare install/update-only flag")
+			}
+			o.acceptDependencyUpgrades = true
 		case "--provider", "--version":
 			if !eq {
 				i++
@@ -208,6 +214,9 @@ func parseOptions(op string, args []string) (options, error) {
 	if o.acceptDependencies && o.provider != codexDesktopRPM {
 		return o, fmt.Errorf("dependency package consent applies only to Codex RPM install/update")
 	}
+	if o.acceptDependencyUpgrades && (o.provider != codexDesktopRPM || !o.acceptDependencies) {
+		return o, fmt.Errorf("RPM dependency upgrades require --accept-dependencies and explicit --provider codex-desktop-rpm")
+	}
 	if o.acceptPM && o.provider != hermesAgent {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
 	}
@@ -239,7 +248,7 @@ func parseOptions(op string, args []string) (options, error) {
 			return o, fmt.Errorf("RPM install/update requires latest, --trust-download and --accept-system-packages")
 		}
 		for key := range seen {
-			if key != "--provider" && key != "--version" && key != "--trust-download" && key != "--accept-system-packages" && key != "--accept-dependencies" {
+			if key != "--provider" && key != "--version" && key != "--trust-download" && key != "--accept-system-packages" && key != "--accept-dependencies" && key != "--accept-dependency-upgrades" {
 				return o, fmt.Errorf("inapplicable RPM option")
 			}
 		}

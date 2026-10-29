@@ -28,9 +28,12 @@ type rpmFixture struct {
 	updating              bool
 	removing              bool
 	dependencyMode        bool
+	dependencyUpgrades    bool
+	dependencyBaselines   map[string]codexRPMMetadata
 	dependencies          []codexRPMDependency
 	installedDependencies map[string]string
 	replays               int
+	elevations            int
 	stages                int
 	calls                 []string
 	fault                 func(string, []string) error
@@ -56,6 +59,7 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 		}
 		name := filepath.Base(path)
 		if name == "sudo" {
+			r.elevations++
 			prefix := append([]string{"-n", "--", "/fixture/env", "-i"}, codexSystemEnvironment()...)
 			if len(args) <= len(prefix) || !reflect.DeepEqual(args[:len(prefix)], prefix) {
 				t.Fatalf("bad elevation %q", args)
@@ -155,7 +159,9 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 			case "replay":
 				r.replays++
 				if r.dependencyMode {
-					r.installedDependencies = map[string]string{}
+					if r.installedDependencies == nil {
+						r.installedDependencies = map[string]string{}
+					}
 					for _, dep := range r.dependencies {
 						m := dep.Package
 						r.installedDependencies[m.Name] = strings.Join([]string{m.Name, m.Epoch, m.Version, m.Release, m.Arch}, "\t") + "\n"
@@ -273,7 +279,16 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 		if m.Epoch != "0" {
 			version = m.Epoch + ":" + version
 		}
-		p["rpms"] = append(p["rpms"].([]any), map[string]string{"nevra": m.Name + "-" + version + "-" + m.Release + "." + m.Arch, "action": "Install", "reason": "Dependency", "repo_id": dep.Repo, "package_path": dep.Path})
+		action := "Install"
+		if original, upgrading := r.dependencyBaselines[m.Name]; upgrading {
+			action = "Upgrade"
+			originalVersion := original.Version
+			if original.Epoch != "0" {
+				originalVersion = original.Epoch + ":" + originalVersion
+			}
+			p["rpms"] = append(p["rpms"].([]any), map[string]string{"nevra": original.Name + "-" + originalVersion + "-" + original.Release + "." + original.Arch, "action": "Replaced", "reason": "Dependency", "repo_id": "@System"})
+		}
+		p["rpms"] = append(p["rpms"].([]any), map[string]string{"nevra": m.Name + "-" + version + "-" + m.Release + "." + m.Arch, "action": action, "reason": "Dependency", "repo_id": dep.Repo, "package_path": dep.Path})
 	}
 	if r.removing {
 		m, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
@@ -317,6 +332,9 @@ func (r *rpmFixture) run() error {
 		op = "update"
 	}
 	if r.dependencyMode {
+		if r.dependencyUpgrades {
+			return r.f.run(context.Background(), op, "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies", "--accept-dependency-upgrades")
+		}
 		return r.f.run(context.Background(), op, "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies")
 	}
 	return r.f.run(context.Background(), op, "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages")

@@ -803,7 +803,12 @@ It requires administrator-enabled local RPM signature checks and already trusted
 keys; unsigned or untrusted RPMs (including `chatgpt`) are refused. Stored files
 and every dependency's installed state are verified. Update binds the original
 installed target; an identical candidate does not reinstall or repair dependencies.
-Dependency upgrades/replacements, DNF4, Arch and real Fedora acceptance remain
+An additional `--accept-dependency-upgrades` option permits same-name/architecture
+dependency upgrades, with exact original and final identity checks and at most 64
+dependency names total. The older option remains new-installs-only. No downgrades,
+cross-name/architecture replacements or dependency removals are allowed; existing
+signature requirements still apply. No automatic rollback is provided.
+DNF4, Arch and real Fedora acceptance remain
 Pending. Ollama uses a separately consented user service for the
 portable bundle, not the root-based upstream service. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
