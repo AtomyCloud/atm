@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 )
 
-var integrationProviders = []string{"picoclaw", "codex-cli"}
+var integrationProviders = []string{"picoclaw", "codex-cli", "ollama"}
 var profileNames = []string{".profile", ".bashrc", ".zshrc"}
 
 type pathProfile struct {
@@ -31,8 +32,26 @@ func cliCommand(id string) string {
 		return "picoclaw"
 	case "codex-cli":
 		return "codex"
+	case "ollama":
+		return "ollama"
 	}
 	return ""
+}
+
+func cliLink(id string) string {
+	if id == "ollama" {
+		return "../current/bin/ollama"
+	}
+	return "../current"
+}
+
+// Pin the provider's complete receipt and payload without inspecting PATH state.
+// Ollama owns a full bin/lib tree, not the single executable of the other CLIs.
+func (b *backend) integrationVersion(ctx context.Context, id, v string) (any, error) {
+	if id == "ollama" {
+		return b.ollamaVerify(ctx, v, b.ollamaVersion(v))
+	}
+	return b.verifyVersion(ctx, id, v, true)
 }
 func integrationHome() (string, error) {
 	home, err := os.UserHomeDir()
@@ -144,7 +163,7 @@ func (b *backend) inspectIntegration(id, current string) (*pathReceipt, error) {
 	if err != nil {
 		return nil, err
 	}
-	if !s.Exists || s.Link != "../current" {
+	if !s.Exists || s.Link != cliLink(id) {
 		return nil, fmt.Errorf("changed AI command link preserved")
 	}
 	return rec, nil
@@ -222,7 +241,7 @@ func (b *backend) integrationChanges(id, home string, rec *pathReceipt, remove b
 	}
 	linkAfter := pathState{}
 	if !remove {
-		linkAfter = pathState{Exists: true, Mode: os.ModeSymlink | 0777, Link: "../current"}
+		linkAfter = pathState{Exists: true, Mode: os.ModeSymlink | 0777, Link: cliLink(id)}
 	}
 	link := pathChange{Path: linkPath, Before: linkBefore, After: linkAfter, AllowLink: true}
 	if remove {
@@ -320,9 +339,9 @@ func (b *backend) changeIntegration(ctx context.Context, id string, remove bool)
 	}
 	// Pin the selected receipt and payload, then recheck after staging and the
 	// fault boundary immediately before publication. No provider is executed.
-	var selected receipt
+	var selected any
 	if !remove {
-		selected, err = b.verifyVersion(ctx, id, current, true)
+		selected, err = b.integrationVersion(ctx, id, current)
 		if err != nil {
 			return err
 		}
@@ -339,11 +358,11 @@ func (b *backend) changeIntegration(ctx context.Context, id string, remove bool)
 			return fmt.Errorf("selection changed before PATH publication")
 		}
 		if !remove {
-			r, e := b.verifyVersion(ctx, id, current, true)
+			r, e := b.integrationVersion(ctx, id, current)
 			if e != nil {
 				return e
 			}
-			if r != selected {
+			if !reflect.DeepEqual(r, selected) {
 				return fmt.Errorf("selected receipt changed before PATH publication")
 			}
 		}

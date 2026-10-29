@@ -18,7 +18,7 @@ route supports Linux amd64 only:
 | Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
-| Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
+| Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -32,8 +32,8 @@ Pending before the entire AI plugin can switch to native Go:
 - Ollama system installation, runtime/service acceptance and GPU add-on workflows;
   portable base-bundle lifecycle is implemented separately below.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
-- PATH registration for providers other than the owned PicoClaw and standalone
-  Codex CLI previews, including external/legacy installations, is not implemented.
+- PATH registration for providers other than the owned PicoClaw, standalone
+  Codex CLI and Ollama previews, including external/legacy installations, is not implemented.
 - PicoClaw WebUI/launcher support if added to the native provider scope.
 - Real provider/runtime acceptance, Linux arm64 execution, other platforms and
   translations of the preview's English labels.
@@ -244,9 +244,10 @@ reported paths and confirm no installer is active before manual recovery.
 **Manually close/stop processes using this owned bundle before updating,
 switching or removing it.** ATM does not probe, start or stop Ollama processes or
 existing services. No model download, GPU setup, service/user creation, system
-package operation, profile edit or global PATH write occurs. Ollama `integrate`
-is intentionally unsupported; only PicoClaw and Codex CLI have reviewed PATH
-integration. Existing external/legacy installations, models, credentials and
+package operation or global PATH write occurs. Install, update and use never edit
+profiles. Explicit `integrate` enables only the owned preview command in user
+profiles; uninstall detaches that exact integration before removing versions.
+Existing external/legacy installations, models, credentials and
 settings remain untouched. A separate explicit runtime invocation can change
 user data or conflict with an already running server; review upstream settings
 and existing servers yourself first.
@@ -260,6 +261,8 @@ preview_atm plugin ai install --provider ollama --version X.Y.Z --trust-download
 preview_atm plugin ai update --provider ollama --trust-download
 preview_atm plugin ai use --provider ollama --version X.Y.Z
 preview_atm plugin ai remove --provider ollama --version X.Y.Z
+preview_atm plugin ai integrate --provider ollama
+preview_atm plugin ai integrate --provider ollama --remove-path
 preview_atm plugin ai uninstall --provider ollama
 ```
 
@@ -272,26 +275,32 @@ synthetic archives and public metadata checks do not establish those claims.
 
 ## Explicit CLI PATH Integration
 
-Only the owned PicoClaw and standalone Codex CLI previews can be integrated:
+Only the owned PicoClaw, standalone Codex CLI and Ollama previews can be integrated:
 
 ```text
-integrate [--provider picoclaw|codex-cli] [--remove-path]
+integrate [--provider picoclaw|codex-cli|ollama] [--remove-path]
 ```
 
 Use `preview_atm plugin ai integrate ...` with the isolated runtime below.
 CORE confirmation or its explicit `--yes` authorizes this mutation; no download
 or system-package flags apply. `--version` is not accepted. Without a provider,
-the operation processes selected owned PicoClaw then Codex CLI previews. Missing
+the operation processes selected owned PicoClaw, Codex CLI, then Ollama previews.
+The generic `preview_atm path apply --plugins` route also includes these owned
+previews through provider-less integration. Missing
 previews are skipped, but unsafe/foreign stores are refused, never adopted.
 Each provider commits separately: if a later provider fails, earlier completed
 providers remain changed and the error lists them. There is no aggregate rollback.
 
-Integration creates `native-v1/bin/picoclaw -> ../current` or
-`native-v1/bin/codex -> ../current`, plus `native-v1/path.json` (0600). The bin
+Integration creates `native-v1/bin/picoclaw -> ../current`,
+`native-v1/bin/codex -> ../current`, or
+`native-v1/bin/ollama -> ../current/bin/ollama`, plus `native-v1/path.json` (0600). The bin
 directory is private (0700). The receipt binds the provider, root, default user
 HOME and exact enrolled profile blocks. It deliberately follows the selected
 `current` executable rather than pinning one version. Enabling verifies the
-selected executable's receipt/SHA-256 and rechecks them before publication.
+selected executable's receipt/SHA-256 and rechecks them before publication and
+completion. Ollama verifies and pins its complete bin/lib inventory and receipt,
+not just the command. Its `current -> versions/X.Y.Z/tree` directory link and
+adjacent libraries are preserved; the stable command follows version switches.
 Later install/update/use operations change selection but do not edit profiles.
 
 Profiles are `$HOME/.profile`, `$HOME/.bashrc`, and **existing** `$HOME/.zshrc`.
@@ -327,7 +336,7 @@ before destructive work. Failures after detach can leave PATH detached while
 versions remain; no whole-uninstall rollback is promised.
 
 The existing sibling `native-v1.lock/` and shared `$HOME/.atm-ai-path.lock/`
-(0700) are fail-fast locks. The HOME lock coordinates both CLI providers and
+(0700) are fail-fast locks. The HOME lock coordinates all three CLI providers and
 distinct Apps roots using the same markers. A different Apps root cannot adopt
 an existing block. This lock does not coordinate profile writers in other plugins
 or external tools. Per-file staging uses `.atm-ai-path-write-*/entry` beneath
@@ -469,7 +478,7 @@ preview_atm plugin ai uninstall --provider picoclaw
 ```
 
 Substitute `codex-cli`, `hermes-desktop` or `ollama` for other portable lifecycle
-providers, but do not use `integrate` for Hermes Desktop or Ollama. Install
+providers, but do not use `integrate` for Hermes Desktop. Install
 and update accept `--version latest` (default) or exact `X.Y.Z`; update refuses
 downgrades. `use` and `remove` require exact installed versions. `status` takes no
 arguments; `menu` takes no arguments or exactly one provider ID. Version status

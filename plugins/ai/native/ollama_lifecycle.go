@@ -43,6 +43,17 @@ func (b *backend) ollamaStatus(ctx context.Context) error {
 		return err
 	}
 	b.log(fmt.Sprintf(label("ollama_status"), len(vs), current))
+	if current != "" {
+		rec, err := b.inspectIntegration("ollama", current)
+		if err != nil {
+			return err
+		}
+		if rec != nil {
+			b.log(providers["ollama"].name + ": " + label("path_recorded"))
+		} else {
+			b.log(providers["ollama"].name + ": " + label("path_absent"))
+		}
+	}
 	b.ollamaGuidance()
 	return ctx.Err()
 }
@@ -374,6 +385,11 @@ func (b *backend) ollamaUninstall(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
+	if err = b.detachIntegration(ctx, "ollama"); err != nil {
+		return err
+	}
+	// PATH detach commits separately. Subsequent failure retains the bundle;
+	// never remove a selection still referenced by owned profile integration.
 	if err = b.boundary("ollama-before-uninstall-deselect"); err != nil {
 		return err
 	}
@@ -383,6 +399,11 @@ func (b *backend) ollamaUninstall(ctx context.Context) error {
 	}
 	if selected != current || !reflect.DeepEqual(vs, now) {
 		return fmt.Errorf("Ollama installation changed before uninstall")
+	}
+	if rec, err := b.inspectIntegration("ollama", selected); err != nil {
+		return err
+	} else if rec != nil {
+		return fmt.Errorf("Ollama PATH integration changed before uninstall")
 	}
 	if err = ctx.Err(); err != nil {
 		return err

@@ -300,12 +300,12 @@ func (b *backend) ollamaInspect(ctx context.Context) ([]string, string, error) {
 	if own != (ownership{1, "ai", "ollama"}) {
 		return nil, "", fmt.Errorf("foreign Ollama store; no adoption")
 	}
-	es, err := entries(root, 3)
+	es, err := entries(root, 5)
 	if err != nil {
 		return nil, "", err
 	}
 	for _, e := range es {
-		if e.Name() != "owner.json" && e.Name() != "versions" && e.Name() != "current" {
+		if e.Name() != "owner.json" && e.Name() != "versions" && e.Name() != "current" && e.Name() != "bin" && e.Name() != "path.json" {
 			return nil, "", fmt.Errorf("unknown Ollama store entry preserved")
 		}
 	}
@@ -336,6 +336,9 @@ func (b *backend) ollamaInspect(ctx context.Context) ([]string, string, error) {
 		if !found {
 			return nil, "", fmt.Errorf("Ollama active version missing")
 		}
+	}
+	if _, err := b.inspectIntegration("ollama", current); err != nil {
+		return nil, "", err
 	}
 	return vs, current, ctx.Err()
 }

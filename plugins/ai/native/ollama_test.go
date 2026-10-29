@@ -103,11 +103,20 @@ func TestOllamaLifecycleBundleBothArchitectures(t *testing.T) {
 			if err = protocol.ValidateChoices(choices); err != nil {
 				t.Fatal(err)
 			}
+			integrationOffered := false
 			for _, c := range choices {
-				if c.Operation == "integrate" {
-					t.Fatal("Ollama PATH offered")
+				if c.ID == "integrate" && c.Operation == "integrate" {
+					integrationOffered = true
+				}
+				if c.ID == "remove-path" {
+					t.Fatal("PATH removal offered without explicit integration")
 				}
 			}
+			if !integrationOffered {
+				t.Fatal("explicit Ollama PATH action missing")
+			}
+			integrationMissing(t, filepath.Join(root, "path.json"))
+			integrationMissing(t, filepath.Join(root, "bin", "ollama"))
 			if calls != f.calls {
 				t.Fatal("offline menu/status fetched")
 			}

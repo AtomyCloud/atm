@@ -775,7 +775,7 @@ their configuration or establish their version. Found candidates are unverified,
 not adopted or made eligible for native removal. Missing candidates do not prove
 that an application is absent from the system.
 
-Owned PicoClaw and Codex CLI previews support explicit native PATH integration,
+Owned PicoClaw, Codex CLI and Ollama previews support explicit native PATH integration,
 with separate removal of their exact owned profile blocks. Version selection
 keeps stable command links; installation does not enable PATH automatically.
 Existing external commands are not replaced. Remaining AI installer routes and
@@ -785,7 +785,9 @@ Portable Ollama keeps the official `bin/ollama` and `lib/ollama` layout together
 under `~/Apps/ai/ollama/native-v1`, with explicit version selection and guarded
 removal. It downloads pinned stable base archives with SHA-256 verification and
 does not run the upstream installer or the application. It does not configure
-services, PATH, GPU drivers or models, and leaves existing installations untouched.
+services, GPU drivers or models, and leaves existing installations untouched.
+PATH registration is a separate explicit action; its stable command link retains
+the executable's location within the selected bundle and its sibling libraries.
 Real runtime/GPU compatibility remains pending. The normal legacy menu below is
 unchanged.
 

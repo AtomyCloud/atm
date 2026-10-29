@@ -25,10 +25,18 @@ func integrationFixture(t *testing.T, ids ...string) *fixture {
 	writeFixture(t, filepath.Join(home, ".profile"), []byte("# original without newline"), 0640)
 	writeFixture(t, filepath.Join(home, ".bashrc"), []byte("# original bash\n"), 0600)
 	for _, id := range ids {
-		f.release(t, id, "1.2.3", nil)
+		integrationRelease(t, f, id, "1.2.3")
 		mustRun(t, f, "install", "--provider", id, "--trust-download")
 	}
 	return f
+}
+func integrationRelease(t *testing.T, f *fixture, id, version string) {
+	t.Helper()
+	if id == "ollama" {
+		ollamaFixtureRelease(t, f, version)
+	} else {
+		f.release(t, id, version, nil)
+	}
 }
 func integrationRead(t *testing.T, path string) []byte {
 	t.Helper()
@@ -46,13 +54,13 @@ func integrationMissing(t *testing.T, path string) {
 }
 
 func TestIntegrationOptions(t *testing.T) {
-	for _, args := range [][]string{nil, {"--remove-path"}, {"--provider", "picoclaw"}, {"--provider=codex-cli", "--remove-path"}} {
+	for _, args := range [][]string{nil, {"--remove-path"}, {"--provider", "picoclaw"}, {"--provider=codex-cli", "--remove-path"}, {"--provider", "ollama"}, {"--provider=ollama", "--remove-path"}} {
 		if _, err := parseOptions("integrate", args); err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
 	}
 	for _, args := range [][]string{
-		{"--provider", "hermes-desktop"}, {"--provider", hermesSystem}, {"--provider", "ollama"}, {"--provider="},
+		{"--provider", "hermes-desktop"}, {"--provider", hermesSystem}, {"--provider="},
 		{"--version", "latest"}, {"--version", "1.2.3"}, {"--trust-download"}, {"--accept-system-packages"},
 		{"--remove-path=true"}, {"--remove-path", "--remove-path"}, {"--provider", "picoclaw", "--provider=picoclaw"},
 		{"--provider"}, {"picoclaw"}, {"--yes"},
@@ -90,7 +98,11 @@ func TestIntegrationLifecycleAndProfiles(t *testing.T) {
 			integrationMissing(t, filepath.Join(home, ".zshrc"))
 			integrationMissing(t, f.b.req.Home)
 			link := filepath.Join(f.b.root(id), "bin", cliCommand(id))
-			if target, err := os.Readlink(link); err != nil || target != "../current" {
+			wantLink := "../current"
+			if id == "ollama" {
+				wantLink = "../current/bin/ollama"
+			}
+			if target, err := os.Readlink(link); err != nil || target != wantLink {
 				t.Fatal(target, err)
 			}
 			if data := integrationRead(t, link); !bytes.Equal(data, fakeELF("amd64", "1.2.3", false)) {
@@ -104,7 +116,7 @@ func TestIntegrationLifecycleAndProfiles(t *testing.T) {
 			if f.calls != calls || !bytes.Equal(first, integrationRead(t, profile)) {
 				t.Fatal("menu/status mutated state or used network")
 			}
-			f.release(t, id, "1.2.4", nil)
+			integrationRelease(t, f, id, "1.2.4")
 			mustRun(t, f, "update", "--provider", id, "--trust-download")
 			if !bytes.Equal(integrationRead(t, link), fakeELF("amd64", "1.2.4", false)) {
 				t.Fatal("stable command did not follow update")
@@ -135,7 +147,7 @@ func TestIntegrationLifecycleAndProfiles(t *testing.T) {
 }
 
 func TestIntegrationProviderSeparation(t *testing.T) {
-	f := integrationFixture(t, "picoclaw", "codex-cli", "hermes-desktop")
+	f := integrationFixture(t, "picoclaw", "codex-cli", "hermes-desktop", "ollama")
 	home := os.Getenv("HOME")
 	writeFixture(t, filepath.Join(home, ".zshrc"), []byte("# zsh\n"), 0644)
 	mustRun(t, f, "integrate")
@@ -148,6 +160,12 @@ func TestIntegrationProviderSeparation(t *testing.T) {
 		}
 	}
 	integrationMissing(t, filepath.Join(f.b.root("hermes-desktop"), "bin"))
+	mustRun(t, f, "integrate", "--provider", "ollama", "--remove-path")
+	for _, id := range []string{"picoclaw", "codex-cli"} {
+		if _, _, err := f.b.inspect(context.Background(), id, true); err != nil {
+			t.Fatal("Ollama detach changed another provider", id, err)
+		}
+	}
 	mustRun(t, f, "integrate", "--provider", "picoclaw", "--remove-path")
 	if _, _, err := f.b.inspect(context.Background(), "codex-cli", true); err != nil {
 		t.Fatal("removing first block corrupted second", err)

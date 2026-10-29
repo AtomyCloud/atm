@@ -114,7 +114,7 @@ func parseOptions(op string, args []string) (options, error) {
 	}
 	if op == "integrate" {
 		if seen["--version"] || (seen["--provider"] && cliCommand(o.provider) == "") {
-			return o, fmt.Errorf("integrate accepts only --provider picoclaw|codex-cli and --remove-path")
+			return o, fmt.Errorf("integrate accepts only --provider picoclaw|codex-cli|ollama and --remove-path")
 		}
 		return o, nil
 	}

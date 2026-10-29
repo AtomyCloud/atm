@@ -182,14 +182,14 @@ def check(executable, backend):
             "--trust-download", "--accept-system-packages", success=False)
         run("--dry-run", "plugin", "ai", "install", "--provider", "ollama",
             "--trust-download", started=False)
-        for provider in ("picoclaw", "codex-cli"):
+        for provider in ("picoclaw", "codex-cli", "ollama"):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
             run("plugin", "ai", "integrate", "--provider", provider, started=False, success=False)
             for flags in (("--version", "0.1.0"), ("--trust-download",),
                           ("--accept-system-packages",), ("--provider", provider)):
                 run("--yes", "plugin", "ai", "integrate", "--provider", provider,
                     *flags, success=False)
-        for provider in ("hermes-desktop", system, "ollama", "hermes-agent", "codex-desktop"):
+        for provider in ("hermes-desktop", system, "hermes-agent", "codex-desktop"):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
         run("install", "ai", success=False, started=False)
         run("--yes", "plugin", "ai", "status", "--unexpected", success=False)
@@ -396,9 +396,49 @@ def check(executable, backend):
         external_ollama.chmod(0o700)
         submenu = run("--yes", "plugin", "ai", "menu", "ollama")
         assert "use-0.2.0" in {c["id"] for c in json.loads(submenu.stdout.splitlines()[-1])["choices"]}
+        ollama_writes = ("apps/ai/ollama/native-v1", "user/.profile", "user/.bashrc", "user/.zshrc")
+        run("--dry-run", "plugin", "ai", "integrate", "--provider", "ollama", started=False)
+        run("--yes", "path", "apply", "--plugins", read_only=False, write_roots=ollama_writes)
+        command = ollama / "bin/ollama"
+        assert command.readlink().as_posix() == "../current/bin/ollama"
+        assert command.resolve() == ollama / "versions/0.1.0/tree/bin/ollama"
+        assert (ollama / "path.json").stat().st_mode & 0o777 == 0o600
+        ollama_profiles = {}
+        for name, mode in profile_modes.items():
+            path = root / "user" / name
+            data = path.read_bytes()
+            ollama_profiles[name] = data
+            assert data.startswith(originals[name]) and path.stat().st_mode & 0o777 == mode
+            assert data.count(b"# >>> ATM native AI ollama PATH >>>") == 1
+            quoted = "'" + str(ollama / "bin").replace("'", "'\"'\"'") + "'"
+            assert ("export PATH=" + quoted + '${PATH:+":$PATH"}').encode() in data
+        run("--yes", "plugin", "ai", "integrate", "--provider", "ollama")
+        run("status", "ai")
+        submenu = run("--yes", "plugin", "ai", "menu", "ollama")
+        assert {"integrate", "remove-path"} <= {c["id"] for c in json.loads(submenu.stdout.splitlines()[-1])["choices"]}
+        bash_profile.write_bytes(ollama_profiles[".bashrc"].replace(b"export PATH=", b"# edited PATH=", 1))
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "ollama", success=False)
+        run("--yes", "plugin", "ai", "integrate", "--provider", "ollama", "--remove-path", success=False)
+        assert ollama_current.readlink().as_posix() == "versions/0.1.0/tree"
+        bash_profile.write_bytes(ollama_profiles[".bashrc"])
+        command.unlink()
+        command.symlink_to("../current")
+        run("--yes", "plugin", "ai", "uninstall", "--provider", "ollama", success=False)
+        command.unlink()
+        command.symlink_to("../current/bin/ollama")
+        run("--yes", "plugin", "ai", "integrate", "--provider", "ollama", "--remove-path",
+            read_only=False, write_roots=ollama_writes)
+        assert not command.is_symlink() and not (ollama / "path.json").exists()
+        assert ollama_current.exists(), "detach removed the owned Ollama bundle"
+        for name in profile_modes:
+            assert (root / "user" / name).read_bytes() == originals[name]
+        run("--yes", "plugin", "ai", "integrate", "--provider", "ollama",
+            read_only=False, write_roots=ollama_writes)
         run("--yes", "plugin", "ai", "use", "--provider", "ollama", "--version", "0.2.0",
             read_only=False, write_roots=("apps/ai/ollama/native-v1",))
         assert ollama_current.readlink().as_posix() == "versions/0.2.0/tree"
+        assert command.resolve() == ollama / "versions/0.2.0/tree/bin/ollama"
+        assert all((root / "user" / name).read_bytes() == data for name, data in ollama_profiles.items())
         run("--yes", "plugin", "ai", "remove", "--provider", "ollama", "--version", "0.2.0", success=False)
         old_library = ollama / "versions/0.1.0/tree/lib/ollama/libfixture.so.1"
         old_library.write_bytes(b"modified library")
@@ -414,7 +454,8 @@ def check(executable, backend):
             read_only=False, write_roots=("apps/ai/ollama/native-v1",))
         assert not (ollama / "versions/0.1.0").exists()
         run("--yes", "plugin", "ai", "uninstall", "--provider", "ollama",
-            read_only=False, write_roots=("apps/ai/ollama/native-v1",))
+            read_only=False, write_roots=ollama_writes)
+        assert not command.is_symlink() and not (ollama / "path.json").exists()
         assert not ollama_current.is_symlink()
         assert not list((ollama / "versions").iterdir())
         for name, mode in profile_modes.items():

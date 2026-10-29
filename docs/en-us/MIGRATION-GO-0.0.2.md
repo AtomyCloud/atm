@@ -111,7 +111,7 @@ Read-only native discovery reports unverified external executable candidates in
 legacy ATM locations, `.local/bin` and bounded absolute PATH entries. It neither
 executes candidates nor reads their contents/configuration, assigns ownership,
 infers a version or enables removal. It is not exhaustive package detection.
-Explicit native PATH registration is available for owned PicoClaw/Codex CLI
+Explicit native PATH registration is available for owned PicoClaw/Codex CLI/Ollama
 previews, including the generic CORE integration route and exact owned-block
 removal. It does not adopt discovered candidates or run applications, and is not
 enabled automatically during installation/version changes. Modified integration
@@ -121,7 +121,11 @@ Ollama portable installation preserves the official executable/library tree unde
 and guarded removal. Native Zstandard decoding uses a pinned Go dependency;
 archives require exact release origins, size and SHA-256. Models, external
 installations and services are not adopted, stopped or removed. No provider
-execution, shell installer, profile edits or GPU add-on installation occurs.
+execution, shell installer, implicit profile edits or GPU add-on installation occurs.
+Separate explicit PATH registration uses an owned command link into the selected
+Ollama bundle; switching versions retains that link and the sibling-library layout.
+Uninstall detaches exact owned profile blocks before deselection or deletion;
+edited blocks refuse removal and incomplete recovery retains local evidence.
 Hermes Agent, Ollama system/service workflows, Codex Desktop and real shell/provider
 acceptance remain Pending; source-level portability is not runtime acceptance.
 

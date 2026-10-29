@@ -203,7 +203,7 @@ func TestOptionsStrict(t *testing.T) {
 		args []string
 	}{
 		{"menu", []string{"picoclaw", "extra"}}, {"menu", []string{"hermes-agent"}}, {"menu", []string{"--provider", "picoclaw"}},
-		{"status", []string{"picoclaw"}}, {"install", nil}, {"integrate", []string{"--provider", "ollama"}},
+		{"status", []string{"picoclaw"}}, {"install", nil}, {"integrate", []string{"--provider", "hermes-desktop"}},
 		{"install", []string{"--provider", "picoclaw", "--provider", "codex-cli"}}, {"install", []string{"--provider", "picoclaw", "--version", "../x"}},
 		{"install", []string{"--provider", "picoclaw", "--version", "1.2.3-beta"}}, {"install", []string{"--provider", "picoclaw", "--trust-download=yes"}},
 		{"remove", []string{"--provider", "picoclaw"}}, {"use", []string{"--provider", "picoclaw", "--version", "latest"}},
@@ -215,7 +215,7 @@ func TestOptionsStrict(t *testing.T) {
 			t.Errorf("accepted %s %v", c.op, c.args)
 		}
 	}
-	for _, args := range [][]string{nil, {"--provider", "picoclaw"}, {"--provider=codex-cli", "--remove-path"}, {"--remove-path"}} {
+	for _, args := range [][]string{nil, {"--provider", "picoclaw"}, {"--provider=codex-cli", "--remove-path"}, {"--provider", "ollama"}, {"--remove-path"}} {
 		if _, err := parseOptions("integrate", args); err != nil {
 			t.Errorf("rejected integrate %v: %v", args, err)
 		}
