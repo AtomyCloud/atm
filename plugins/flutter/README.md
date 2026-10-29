@@ -87,6 +87,11 @@ owner who can rewrite both the payload and the receipt.
 
 ## Safety And Limits
 
+- XZ decoding uses a fixed 64 KiB input buffer to avoid byte-at-a-time file reads.
+  It remains native Go; dictionary/stream checks, cancellation, SHA-256, rooted
+  extraction, per-file synchronization and ownership inventories are unchanged.
+  Decompression still uses CPU; less total CPU time does not imply a lower peak
+  utilization while decoding. Network and disk costs are separate.
 - Native JSONL-v1 operations, with confirmation and dry-run controlled by CORE;
   no Bash/Python/curl/tar/xz subprocess delegation or installer execution.
 - Fixed official HTTPS origin and exact archive path; bounded redirects cannot

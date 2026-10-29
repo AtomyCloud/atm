@@ -2,6 +2,7 @@ package main
 
 import (
 	"archive/tar"
+	"bufio"
 	"context"
 	"fmt"
 	"github.com/ulikunitz/xz"
@@ -55,6 +56,13 @@ func resolveLink(name string, links map[string]archiveLink) (string, error) {
 	}
 	return "", fmt.Errorf("archive link cycle or excessive chain")
 }
+func newXZReader(ctx context.Context, input io.Reader) (*xz.Reader, error) {
+	// The LZMA decoder requests single bytes; batch underlying file reads while
+	// keeping cancellation checks outside the buffer and stream validation intact.
+	input = bufio.NewReaderSize(input, 64<<10)
+	return (xz.ReaderConfig{DictCap: 8 << 20, SingleStream: true}).NewReader(contextReader{ctx, input})
+}
+
 func extractArchive(ctx context.Context, archive string, dest *os.Root, expectedPrefix string) error {
 	f, err := os.Open(archive)
 	if err != nil {
@@ -67,7 +75,7 @@ func extractArchive(ctx context.Context, archive string, dest *os.Root, expected
 	if _, err = f.Seek(0, io.SeekStart); err != nil {
 		return err
 	}
-	gz, err := (xz.ReaderConfig{DictCap: 8 << 20, SingleStream: true}).NewReader(contextReader{ctx, f})
+	gz, err := newXZReader(ctx, f)
 	if err != nil {
 		return err
 	}
