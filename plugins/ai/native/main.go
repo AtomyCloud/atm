@@ -251,6 +251,14 @@ func serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	return emit("result", message, status, choices)
 }
 func main() {
+	if len(os.Args) > 1 {
+		if os.Args[1] == "--hermes-cli" {
+			hermesCLIMain(os.Args[2:])
+			return
+		}
+		fmt.Fprintln(os.Stderr, label("hermes_launch_usage"))
+		os.Exit(1)
+	}
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	if err := serve(ctx, os.Stdin, os.Stdout); err != nil {

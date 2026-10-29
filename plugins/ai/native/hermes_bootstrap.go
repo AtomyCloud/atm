@@ -24,8 +24,9 @@ const hermesPMVersion = "0.22.5"
 const hermesPMCommit = "bf0203a794a07aac3ff764972ab9087baa4e4f4e"
 
 type hermesTools struct {
-	run func(context.Context, string, []string, string, []string) (string, error)
-	uid func() int
+	run         func(context.Context, string, []string, string, []string) (string, error)
+	uid         func() int
+	interactive func(context.Context, string, []string, string, []string) (hermesLaunchResult, error)
 }
 
 type hermesPin struct {

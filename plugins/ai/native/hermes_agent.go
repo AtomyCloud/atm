@@ -171,6 +171,7 @@ func (b *backend) hermesMenu(ctx context.Context) ([]choice, error) {
 	b.log(providers[hermesAgent].docs)
 	b.log(label("hermes_scope"))
 	b.log(label("hermes_consent"))
+	b.log(label("hermes_launch_usage"))
 	b.log("Private root: " + b.root(hermesAgent))
 	if err := b.hermesStatus(ctx); err != nil {
 		return nil, err

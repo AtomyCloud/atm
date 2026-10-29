@@ -19,7 +19,7 @@ route supports Linux amd64 only:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
-| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local CLI launcher publication and selection of completed owned preparations; reviewed contract only |
+| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection and consented direct native terminal bridge; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -127,14 +127,73 @@ that selection in place with the retained lock; inspect rather than assuming the
 previous version was restored. Hostile same-user filesystem races are not fully
 contained by these ownership checks.
 
-The upstream local CLI entry is `source/.hermes/bin/hermes --cli`, with the same
-private HOME/HERMES_HOME used during preparation. Do not use the bootstrap Python
-as the application interpreter or run the launcher's `--version` as a read-only
-ATM probe. Actual launch/provider compatibility remains Pending.
+The native direct terminal bridge below uses the official machine command helper
+and PM store Python, without executing the upstream POSIX shell launcher. Do not
+use the bootstrap Python as the application interpreter or run a launcher's
+`--version` as a read-only ATM probe. Actual provider compatibility remains Pending.
 
 Contract references: [PM documentation](https://hermes-agent.nousresearch.com/docs/reference/package-management),
 [pinned PM CLI](https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/pm/cli.py),
 [local launchers](https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/hermes_cli/_launchers.py).
+
+## Hermes Direct Terminal Preview
+
+After preparing and selecting the reviewed version in the isolated setup below,
+invoke the **AI preview executable**, not the CORE executable. This separate mode
+preserves terminal stdin/stdout/stderr; it is not a JSONL plugin operation or a
+menu action. It does not register a `hermes` command on PATH.
+
+```bash
+"$preview/runtime/plugins/ai/bin/linux-$arch/atm-ai" \
+  --hermes-cli --apps-dir "$preview/apps" --accept-runtime-execution \
+  --dry-run -- --help
+
+# Executes the reviewed upstream helper and Hermes runtime. Use a disposable VM.
+"$preview/runtime/plugins/ai/bin/linux-$arch/atm-ai" \
+  --hermes-cli --apps-dir "$preview/apps" --accept-runtime-execution -- --help
+```
+
+The `--` delimiter is mandatory; following arguments go to the Hermes CLI.
+Both explicit `--dry-run` and `ATM_DRY_RUN=1` validate syntax without inspecting
+the installation, writing files, contacting the network or starting subprocesses.
+Runtime consent is required even for `--help`. Root execution is refused.
+
+Launch validates the selected completed preparation, source, recorded PM evidence
+and ownership under the existing provider lock. It then asks the pinned official
+`_launchers.py --print-runtime-command` helper for a bounded JSON argument array,
+checks the exact store interpreter and unchanged CLI arguments, and rechecks the
+original preparation before execution. The returned bootstrap is trusted upstream
+code, not independently sandboxed Python. Native orchestration adds `-B` alongside
+`-I` to suppress bytecode writes; it does not execute the shell launcher or run PM
+installation/repair. Upstream runtime itself can access the network and mutate
+data, and its full behavior is not confined by ATM.
+
+The application keeps the caller's working directory, which must be outside the
+managed Hermes root. HOME/HERMES_HOME, XDG paths and tool PATH remain private to
+the prepared version. Caller API keys, Python/Hermes overrides and credential
+variables are not inherited. Configure providers inside that private environment.
+A valid terminal `TERM` is retained; preparation's forced CI/no-color settings are
+not. Private HOME is not a sandbox for application code or agent actions.
+
+ATM holds the provider lock while the immediate child runs, preventing its own
+selection/installation operations from overlapping. Interrupted or uncertain
+execution, changed preparation evidence or cleanup failure retains the lock and
+`launch.json` for manual inspection. This journal records no arguments, environment
+or credentials. Detached descendants are not contained; ensure all children have
+stopped before manually clearing a retained lock. No automatic repair, rollback or
+lock recovery is provided. Legitimate upstream changes to recorded PM evidence can
+cause later checks to refuse that preparation. Real provider/terminal acceptance
+and PATH enrollment remain Pending.
+
+Normal child exit codes are preserved; signal termination is reported as the
+conventional `128 + signal` exit code. TERM/HUP and context cancellation have a
+one-second grace period before the immediate child is killed. Terminal INT/QUIT
+are not forwarded a second time to a shared foreground process group. Because Go's
+signal notification does not identify the sender, a targeted supervisor-only
+INT/QUIT is not forwarded while that group owns a controlling terminal; use TERM
+for targeted supervisor shutdown. Any observed interruption conservatively retains
+the lock, even if the application later exits normally. Terminal resizing remains
+the operating system's foreground-group behavior, not a synthetic resize channel.
 
 ## Existing Installation Discovery
 
@@ -623,6 +682,7 @@ claim of actual APT, GUI or arm64 runtime acceptance.
 go test ./plugins/ai/native -count=1
 go test -race ./plugins/ai/native -count=1
 go vet ./plugins/ai/native
+python3 -B tests/check_ai_hermes_launch.py /path/to/compiled/atm-ai
 ```
 
 Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
@@ -640,6 +700,9 @@ Shell quoting is checked with the existing Go parser/expander without executing
 a shell. Foreign-owner creation is skipped when the test user is not root;
 tests never elevate to create that fixture.
 They never run provider code, real sudo/APT or change system packages. The
+Hermes launch tests use injected command results and harmless test-process helpers
+for terminal/process behavior; compiled guard tests trace refusals and dry-run.
+These checks are not actual Hermes runtime or dependency execution. The
 separate opt-in public metadata test performs read-only official
 release lookups, not provider downloads or execution.
 The separate `ATM_TEST_AI_PUBLIC_ARCHIVE=1` opt-in test downloads and parses a

@@ -767,7 +767,9 @@ package maintainer scripts through APT; an isolated preview HOME is not a system
 sandbox. Custom APT preferences are refused in this preview. Hermes Agent also
 has an explicitly consented source/official-PM preparation preview for one reviewed
 release, with private state, local CLI launchers and explicit selection of completed
-owned preparations without rerunning PM; full lifecycle and runtime
+owned preparations without rerunning PM. A separate consented native terminal
+bridge launches the selected preparation with private HOME and no shell wrapper;
+it does not enroll PATH. Full lifecycle and real provider/runtime
 acceptance remain Pending. Ollama system/service workflows and Codex Desktop
 remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.

@@ -132,6 +132,10 @@ version-bound state and publishes local launchers after PM completion checks.
 Explicit selection of an exact completed owned preparation is local-only: no
 downloads, PM execution, profile edits or data migration. Incomplete/modified or
 locked state is refused; only the reviewed contract is selectable.
+The preview executable also has an explicit native terminal mode for the selected
+Hermes preparation, using the official machine-command helper and private HOME.
+This is separate from the JSONL plugin protocol; no PATH enrollment or shell
+launcher. Runtime consent is required, and real provider acceptance remains Pending.
 No upstream shell installer, root execution or automatic privilege elevation;
 private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data
 migration, Ollama system/service workflows, Codex Desktop and real shell/provider
