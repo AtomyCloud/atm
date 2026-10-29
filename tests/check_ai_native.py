@@ -172,7 +172,29 @@ def check(executable, backend):
         plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", system,
                              "--trust-download", "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
-        for pending in ("hermes-agent", "codex-desktop"):
+        agent = "hermes-agent"
+        agent_menu = run("--yes", "plugin", "ai", "menu", agent)
+        choices = json.loads(agent_menu.stdout.splitlines()[-1])["choices"]
+        assert choices and all("--accept-dependency-execution" in c.get("arguments", [])
+                               for c in choices if c["operation"] in ("install", "update"))
+        for flags in ((), ("--trust-download",), ("--accept-dependency-execution",)):
+            run("--yes", "plugin", "ai", "install", "--provider", agent, *flags, success=False)
+        run("plugin", "ai", "install", "--provider", agent, "--trust-download",
+            "--accept-dependency-execution", success=False, started=False)
+        run("--dry-run", "plugin", "ai", "install", "--provider", agent,
+            "--trust-download", "--accept-dependency-execution", started=False)
+        for operation in ("use", "remove", "uninstall"):
+            run("--yes", "plugin", "ai", operation, "--provider", agent, "--version", "0.22.5", success=False)
+        run("--yes", "plugin", "ai", "update", "--provider", agent,
+            "--trust-download", "--accept-dependency-execution", success=False)
+        for provider in ("picoclaw", "codex-cli", "ollama", system):
+            run("--yes", "plugin", "ai", "install", "--provider", provider,
+                "--trust-download", "--accept-dependency-execution", success=False)
+        for flags in (("--accept-dependency-execution=true",),
+                      ("--accept-dependency-execution", "--accept-dependency-execution"),
+                      ("--accept-dependency-execution", "--version", "../../outside")):
+            run("--yes", "plugin", "ai", "install", "--provider", agent, "--trust-download", *flags, success=False)
+        for pending in ("codex-desktop",):
             run("--yes", "plugin", "ai", "menu", pending, success=False)
             run("--yes", "plugin", "ai", "install", "--provider", pending,
                 "--trust-download", success=False)

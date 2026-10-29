@@ -202,7 +202,7 @@ func TestOptionsStrict(t *testing.T) {
 		op   string
 		args []string
 	}{
-		{"menu", []string{"picoclaw", "extra"}}, {"menu", []string{"hermes-agent"}}, {"menu", []string{"--provider", "picoclaw"}},
+		{"menu", []string{"picoclaw", "extra"}}, {"menu", []string{"codex-desktop"}}, {"menu", []string{"--provider", "picoclaw"}},
 		{"status", []string{"picoclaw"}}, {"install", nil}, {"integrate", []string{"--provider", "hermes-desktop"}},
 		{"install", []string{"--provider", "picoclaw", "--provider", "codex-cli"}}, {"install", []string{"--provider", "picoclaw", "--version", "../x"}},
 		{"install", []string{"--provider", "picoclaw", "--version", "1.2.3-beta"}}, {"install", []string{"--provider", "picoclaw", "--trust-download=yes"}},
@@ -521,7 +521,7 @@ func TestServeProtocolOffline(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 6 {
+	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 7 {
 		t.Fatalf("unexpected result %+v", stream.Result)
 	}
 	if _, err := os.Lstat(req.AppsDir); !os.IsNotExist(err) {

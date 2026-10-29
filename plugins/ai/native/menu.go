@@ -38,6 +38,7 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 		}
 		out = append(out, choice{ID: hermesSystem, Label: providers[hermesSystem].name, Operation: "menu", Arguments: []string{hermesSystem}})
 		out = append(out, choice{ID: "ollama", Label: providers["ollama"].name, Operation: "menu", Arguments: []string{"ollama"}})
+		out = append(out, choice{ID: hermesAgent, Label: providers[hermesAgent].name, Operation: "menu", Arguments: []string{hermesAgent}})
 		return append(out, choice{ID: "status", Label: label("status"), Operation: "status"}), nil
 	}
 	if err := b.logDiscovery(ctx, id); err != nil {
@@ -45,6 +46,9 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 	}
 	if id == hermesSystem {
 		return b.systemMenu(ctx)
+	}
+	if id == hermesAgent {
+		return b.hermesMenu(ctx)
 	}
 	b.log(providers[id].docs)
 	b.log(label("trust"))
@@ -119,6 +123,9 @@ func (b *backend) status(ctx context.Context) error {
 		return err
 	}
 	if err := b.ollamaStatus(ctx); err != nil {
+		return err
+	}
+	if err := b.hermesStatus(ctx); err != nil {
 		return err
 	}
 	b.log(label("preserved"))

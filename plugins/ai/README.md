@@ -19,6 +19,7 @@ route supports Linux amd64 only:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
+| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation and local CLI launcher publication; install/update checks, reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -28,7 +29,8 @@ Codex CLI uses the standalone release binary, not npm in this preview.
 
 Pending before the entire AI plugin can switch to native Go:
 
-- Hermes Agent's supported package-management/bootstrap workflow.
+- Hermes Agent full lifecycle, data migration, PATH integration, removal and real
+  runtime acceptance. The narrower reviewed source/PM preparation is described below.
 - Ollama system installation, runtime/service acceptance and GPU add-on workflows;
   portable base-bundle lifecycle is implemented separately below.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
@@ -40,6 +42,85 @@ Pending before the entire AI plugin can switch to native Go:
 
 The preview does not fall back to Bash or an upstream installer script for any
 of these pending operations. Unsupported providers fail explicitly.
+
+## Hermes Agent PM Preview
+
+This route prepares CLI dependencies using the **official Hermes PM**, then
+publishes its official local launchers. It does not run the upstream shell
+installer or reimplement Python dependency resolution. This is not full installer
+parity: frontend builds, services, optional browser/computer-use tools, user data
+migration, PATH registration, version switching and removal remain outside it.
+
+Only the reviewed `0.22.5` contract at source commit
+`bf0203a794a07aac3ff764972ab9087baa4e4f4e` is enabled. `latest` resolves upstream
+metadata but **fails closed if a different contract is returned**. `update`
+requires a completed owned version; the same version does not reinstall or repair
+dependencies. Future versions need explicit contract review before activation.
+This restriction is intentional, not automatic compatibility with future PM APIs.
+
+Use the isolated `preview_atm` setup documented later in this guide:
+
+```bash
+preview_atm plugin ai menu hermes-agent
+preview_atm plugin ai install --provider hermes-agent --version 0.22.5 \
+  --trust-download --accept-dependency-execution
+preview_atm plugin ai update --provider hermes-agent \
+  --trust-download --accept-dependency-execution
+preview_atm plugin ai status
+```
+
+CORE confirmation is required in addition to both flags. Dependency preparation
+downloads and executes upstream tools and package build code with your user's
+permissions. A private HOME **is not a security sandbox**. Test in a disposable
+Linux glibc environment first. Root is refused; trusted `setpriv --no-new-privs`
+prevents subprocess privilege elevation. A curated build-tool PATH omits `sudo`
+and system package managers; missing host libraries/build prerequisites must be
+installed separately. There is no automatic privileged repair. Timeout/output
+bounds and process-group cancellation apply, but detached descendants and all
+possible user-level side effects cannot be contained by those mechanisms.
+
+State lives under `Apps/ai/hermes-agent/native-v1/versions/0.22.5/`:
+
+- `source/`: complete pinned source, verified against Git tree/blob identities.
+- `bootstrap/` and `python/`: verified uv and uv-managed bootstrap Python.
+- `home/.hermes/`: private PM tools, dependency generations and application data.
+- `host-bin/` and `tmp/`: curated host-tool links and temporary working files.
+- `source.json` and `complete.json`: ATM provenance and preparation evidence.
+
+These paths are established **before** PM runs and never renamed afterward.
+Each future version has independent private data; switching pointers does not
+migrate settings or conversations. Existing `~/.hermes` and external installations
+are not imported, replaced or removed. Private paths alone do not prohibit trusted
+upstream code from accessing other user-owned files.
+
+Bootstrap uv is checked against `pm/lock.json` and separately staged in PM's
+discovery slot. Bootstrap Python acquisition is delegated to that verified uv,
+with the pinned version/build selector; ATM does not independently rehash uv's
+Python download against Hermes's artifact digest. The application runtime is
+managed by PM. Consent trusts GitHub HTTPS source identity and upstream pins,
+not an independent release signature.
+
+Completion requires successful PM install/doctor, a fresh successful sync receipt,
+source-bound environment facts, exact `current` currency verdict and the two local
+launchers. Read-only ATM status compares recorded evidence; it never runs PM,
+repairs dependencies or claims the entire environment is immutable. Runtime may
+change PM state; changed evidence is refused rather than silently adopted.
+Interrupted attempts and locks are retained for manual inspection. Do not remove
+a lock until all child processes have stopped. No automatic rollback/retry or
+power-loss recovery is promised, and downloaded private data is never silently
+deleted to retry installation. A failure after selection publication can leave
+that selection in place with the retained lock; inspect rather than assuming the
+previous version was restored. Hostile same-user filesystem races are not fully
+contained by these ownership checks.
+
+The upstream local CLI entry is `source/.hermes/bin/hermes --cli`, with the same
+private HOME/HERMES_HOME used during preparation. Do not use the bootstrap Python
+as the application interpreter or run the launcher's `--version` as a read-only
+ATM probe. Actual launch/provider compatibility remains Pending.
+
+Contract references: [PM documentation](https://hermes-agent.nousresearch.com/docs/reference/package-management),
+[pinned PM CLI](https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/pm/cli.py),
+[local launchers](https://github.com/NousResearch/hermes-agent/blob/bf0203a794a07aac3ff764972ab9087baa4e4f4e/hermes_cli/_launchers.py).
 
 ## Existing Installation Discovery
 

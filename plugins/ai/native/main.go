@@ -30,12 +30,14 @@ type backend struct {
 	checkpoint func(string) error
 	system     *systemTools
 	discovery  *discoveryConfig
+	hermes     *hermesTools
 }
 type options struct {
 	provider, version string
 	trust             bool
 	acceptSystem      bool
 	removePath        bool
+	acceptPM          bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -80,6 +82,11 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 		seen[key] = true
 		switch key {
+		case "--accept-dependency-execution":
+			if eq || (op != "install" && op != "update") {
+				return o, fmt.Errorf("dependency execution consent applies only to install/update")
+			}
+			o.acceptPM = true
 		case "--remove-path":
 			if eq || op != "integrate" {
 				return o, fmt.Errorf("PATH removal is only applicable to integrate")
@@ -120,6 +127,12 @@ func parseOptions(op string, args []string) (options, error) {
 	}
 	if _, ok := providers[o.provider]; !ok {
 		return o, fmt.Errorf("explicit supported --provider required")
+	}
+	if o.acceptPM && o.provider != hermesAgent {
+		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
+	}
+	if o.provider == hermesAgent && op != "install" && op != "update" {
+		return o, fmt.Errorf("Hermes Agent preview supports install/update only; selection, PATH and removal remain Pending")
 	}
 	if o.provider == hermesSystem {
 		if op != "install" {
@@ -164,6 +177,12 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 			return nil, fmt.Errorf("system installation requires --trust-download and --accept-system-packages; review provider menu")
 		}
 		return nil, b.installHermesSystem(ctx, o)
+	}
+	if o.provider == hermesAgent {
+		if !o.acceptPM {
+			return nil, fmt.Errorf("Hermes Agent requires --trust-download and --accept-dependency-execution; review its menu first")
+		}
+		return nil, b.installHermesAgent(ctx, o)
 	}
 	err = b.locked(ctx, o.provider, func() error {
 		if o.provider == "ollama" {

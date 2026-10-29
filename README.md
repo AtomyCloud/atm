@@ -764,8 +764,11 @@ AppImage, Codex CLI and Ollama base bundles, plus explicitly authorized Hermes D
 installation on Linux amd64. It is not selected automatically or included as a
 production native backend. The DEB route changes the actual system and executes
 package maintainer scripts through APT; an isolated preview HOME is not a system
-sandbox. Custom APT preferences are refused in this preview. Hermes Agent,
-Ollama system/service workflows and Codex Desktop remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
+sandbox. Custom APT preferences are refused in this preview. Hermes Agent also
+has an explicitly consented source/official-PM preparation preview for one reviewed
+release, with private state and local CLI launchers; full lifecycle and runtime
+acceptance remain Pending. Ollama system/service workflows and Codex Desktop
+remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 
 The native preview also reports external executable candidates from known legacy

@@ -126,7 +126,12 @@ Separate explicit PATH registration uses an owned command link into the selected
 Ollama bundle; switching versions retains that link and the sibling-library layout.
 Uninstall detaches exact owned profile blocks before deselection or deletion;
 edited blocks refuse removal and incomplete recovery retains local evidence.
-Hermes Agent, Ollama system/service workflows, Codex Desktop and real shell/provider
+Hermes Agent's separate source/official-PM preview requires explicit dependency
+execution consent. It pins the reviewed source contract, prepares private
+version-bound state and publishes local launchers after PM completion checks.
+No upstream shell installer, root execution or automatic privilege elevation;
+private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data
+migration, Ollama system/service workflows, Codex Desktop and real shell/provider
 acceptance remain Pending; source-level portability is not runtime acceptance.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,

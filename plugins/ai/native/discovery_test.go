@@ -335,7 +335,7 @@ func TestDiscoveryStatusMenusAndNoLifecycleAuthorization(t *testing.T) {
 	if !strings.Contains(text, fmt.Sprintf("path=%q", path)) || strings.Contains(text, "ollama:") {
 		t.Fatalf("submenu did not filter discovery: %s", text)
 	}
-	for _, id := range []string{"hermes-agent", "codex-desktop"} {
+	for _, id := range []string{"codex-desktop"} {
 		if _, err := parseOptions("menu", []string{id}); err == nil {
 			t.Fatalf("detection enabled menu route %s", id)
 		}
