@@ -18,7 +18,7 @@ supports amd64; the separate ChatGPT Desktop DEB route supports amd64 and arm64:
 | Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
-| Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation and separately consented update of a configured system package; no downgrade, repair or removal |
+| Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation, explicit update and separately consented nonpurge removal of a configured system package; no downgrade or repair |
 | Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
@@ -36,8 +36,8 @@ Pending before the entire AI plugin can switch to native Go:
 - Ollama system installation, runtime/service and real GPU acceptance, drivers
   and non-ROCm add-on workflows; portable base and optional amd64 ROCm bundles
   are implemented separately below.
-- Codex Desktop removal, RPM/DNF and Arch package management; the Arch
-  shell bootstrap is not ported. Initial APT installation and explicit DEB updates
+- Codex Desktop RPM/DNF and Arch package management; the Arch
+  shell bootstrap is not ported. Initial APT installation, explicit DEB updates and guarded removal
   are described below.
 - PATH registration for providers other than the owned PicoClaw, standalone
   Codex CLI, Ollama and Hermes Agent previews, including external/legacy installations, is not implemented.
@@ -752,10 +752,10 @@ directory, never recursively removes an installation.
 
 Provider ID: `codex-desktop-system`. The official Linux application is currently
 branded **ChatGPT Desktop**, includes Codex, and uses package name `chatgpt`.
-This preview supports **initial installation and explicit update** on Linux
+This preview supports **initial installation, explicit update and nonpurge removal** on Linux
 amd64/arm64 with APT. It downloads the architecture-specific latest DEB from the fixed official
 `https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/` origin.
-Custom URLs and exact version selection are refused; removal, RPM/DNF and Arch
+Custom URLs and exact version selection are refused; RPM/DNF and Arch
 workflows remain Pending. `install` still refuses any existing `chatgpt` record,
 including held, incomplete and residual-configuration states. Only a separately
 confirmed `update` can change an eligible installed package. System dependencies
@@ -770,7 +770,7 @@ remote version. The exact original status/version/architecture is bound to the
 transaction and rechecked by both locked APT guards. A concurrent package change
 causes refusal rather than updating a different baseline. This explicit system
 operation can update a manually installed package, but grants no ATM ownership,
-removal authority or permission to migrate application settings.
+automatic removal authority or permission to migrate application settings.
 
 Trusted `dpkg --compare-versions` supplies Debian ordering, including epochs and
 revisions. A newer candidate is required for package changes. An equal candidate
@@ -837,6 +837,34 @@ journal paths never authorize deletion; successful cleanup removes only the
 current transaction's verified DEB, native guard, metadata and acknowledgements,
 followed by their empty staging directory.
 
+### Explicit System Removal
+
+`uninstall --provider codex-desktop-system --accept-system-packages` is a separate
+confirmed system operation. It does not require an ATM install receipt and can
+remove an eligible manually installed `chatgpt` package. This is explicit consent,
+not ownership inferred from discovery or a previous update. Only a configured,
+unheld package with a valid version and matching architecture is eligible.
+Absent, residual-configuration-only, incomplete or unknown states are refused.
+No download, `--trust-download`, version selection or implicit repair is involved.
+
+The original package baseline is checked by native root-staged guards under the
+APT frontend lock. The removal plan must identify only `chatgpt` with its original
+version and architecture; extra removals, installs and configuration actions are
+refused. The operation uses `remove`, never `purge` or `autoremove`, and does not
+download packages or refresh package indexes. Unrelated pending-operation sweeps
+and selection rewrites are disabled; normal removal triggers remain enabled.
+A package removal is successful only after required
+guard acknowledgements and an absent package or matching residual-configuration
+record are observed. Residual configuration is preserved, not silently purged.
+
+ATM does not delete personal profiles, credentials, conversations, Codex CLI
+installations or repository configuration as part of this operation. Package
+maintainer scripts and triggers still execute with system privileges and may
+affect services and desktop integration; this is not a sandbox or rollback.
+Unexpected state and interruptions retain evidence for manual inspection.
+The same provider lock serializes install, update and removal; incomplete earlier
+operations block new ones. Journal files never authorize recursive cleanup.
+
 For a human test, build the isolated preview below **inside a disposable supported
 Ubuntu/Debian VM with a snapshot**, not on a workstation. Only after accepting
 system changes and arranging sudo authorization, run:
@@ -852,6 +880,10 @@ preview_atm status ai
 # Separate optional update test in the same disposable VM:
 preview_atm plugin ai update --provider codex-desktop-system \
   --trust-download --accept-system-packages
+
+# Separate optional nonpurge removal test in the disposable VM:
+preview_atm plugin ai uninstall --provider codex-desktop-system \
+  --accept-system-packages
 ```
 
 Verify the package and GUI separately in the VM, then restore its snapshot.
@@ -985,6 +1017,11 @@ Update checks additionally cover the original package baseline through both guar
 Debian version ordering, equal-version no-op, downgrade refusal and operation-bound
 acknowledgements. Neither synthetic success nor cross-compilation proves a real
 privileged update or GUI works on a target host.
+Removal tests independently check architecture-qualified single-action plans,
+effective nonpurge policy, canonical metadata and phase-specific acknowledgements,
+changed original package records, cancellation and retained uncertain evidence.
+Compiled CLI tests exercise missing consent, invalid flags, cancellation and
+dry-run only; they never invoke a consented live system uninstall.
 Ollama tests use tar.zst bin/lib fixtures, library/helper preservation, legitimate
 link chains, malformed trees, exact response/hash limits, decoder bounds,
 interrupted cleanup and a compiled test ELF read only as fixture data. Parent

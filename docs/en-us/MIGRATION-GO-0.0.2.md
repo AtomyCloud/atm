@@ -173,7 +173,11 @@ The fixed latest HTTPS URL is the trust source; local SHA-256 checks staging
 continuity, not an independently published signature. Trusted metadata checks,
 root staging, conservative APT policy and exact package postconditions apply.
 APT runs privileged package code on the actual host; failures may leave partial
-system effects and retained evidence, not rollback. Removal, RPM/DNF,
+system effects and retained evidence, not rollback. Separate confirmed uninstall
+with system-package consent supports nonpurge removal of an eligible configured
+package, including manual installations, without adopting ownership. Native guards
+pin the original baseline and require a single-package, architecture-qualified APT
+removal plan; no autoremove, repair or personal-data cleanup. RPM/DNF,
 Arch and real package/GUI/arm64 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 

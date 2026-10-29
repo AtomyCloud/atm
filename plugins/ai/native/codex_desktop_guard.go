@@ -285,6 +285,7 @@ type codexAPTGuardTools struct {
 	stage         func(string) error
 	lock          func() error
 	policy        func(context.Context) error
+	removePolicy  func(context.Context) error
 	packageRecord func() (codexPackageRecord, error)
 	read          func(string, os.FileMode, int64) ([]byte, error)
 	hash          func(string, os.FileMode, int64) (int64, string, error)
@@ -298,6 +299,7 @@ func defaultCodexAPTGuardTools() codexAPTGuardTools {
 	return codexAPTGuardTools{
 		stage: t.commands.stage, lock: checkCodexAPTFrontendLock,
 		policy:        func(ctx context.Context) error { return checkCodexSystemPolicy(ctx, t) },
+		removePolicy:  func(ctx context.Context) error { return checkCodexRemovePolicy(ctx, t) },
 		packageRecord: installedCodexDesktop, read: readCodexRootFile, hash: hashCodexRootFile,
 		fields: func(ctx context.Context, path string) (string, error) {
 			ex, err := systemCommand("dpkg-deb")
@@ -349,6 +351,13 @@ func runCodexAPTGuardPhase(ctx context.Context, stage string, input io.Reader, t
 	data, err := t.read(stage+"/guard.json", 0600, 64<<10)
 	if err != nil {
 		return err
+	}
+	var schema struct{ Schema int }
+	if err := json.Unmarshal(data, &schema); err != nil {
+		return err
+	}
+	if schema.Schema == 3 {
+		return runCodexRemoveGuard(ctx, stage, input, t, early, data)
 	}
 	var m codexAPTGuardMetadata
 	if err := decode(data, &m, true); err != nil {
@@ -474,7 +483,7 @@ func codexAPTGuardMain(args []string) error {
 		return fmt.Errorf("internal root APT hook only")
 	}
 	if args[0] == codexGuardFlag && os.Getenv("APT_HOOK_INFO_FD") != "0" {
-		return fmt.Errorf("APT protocol-v1 input on stdin required")
+		return fmt.Errorf("APT hook protocol input on stdin required")
 	}
 	exe, err := os.Executable()
 	if err != nil {

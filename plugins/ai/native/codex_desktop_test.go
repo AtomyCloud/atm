@@ -258,7 +258,7 @@ func newCodexDesktopFixture(t *testing.T, arch string) *codexDesktopFixture {
 			return "synthetic package installation\n", nil
 		case "rm", "rmdir":
 			want := ""
-			if len(args) == 2 && slices.Contains([]string{"chatgpt.deb", codexGuardName, "guard.json", "guard-early", "guard-ok"}, filepath.Base(args[1])) {
+			if len(args) == 2 && slices.Contains([]string{"chatgpt.deb", codexGuardName, "guard.json", "guard-early", "guard-ok", "remove-early", "remove-ok"}, filepath.Base(args[1])) {
 				want = codexFixtureStage + "/" + filepath.Base(args[1])
 			}
 			if name == "rmdir" {

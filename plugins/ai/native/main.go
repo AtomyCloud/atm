@@ -118,8 +118,8 @@ func parseOptions(op string, args []string) (options, error) {
 			}
 			o.trust = true
 		case "--accept-system-packages":
-			if eq || (op != "install" && op != "update") {
-				return o, fmt.Errorf("system package consent is only applicable to supported install/update operations")
+			if eq || (op != "install" && op != "update" && op != "uninstall") {
+				return o, fmt.Errorf("system package consent is only applicable to supported install/update/uninstall operations")
 			}
 			o.acceptSystem = true
 		case "--provider", "--version":
@@ -170,8 +170,11 @@ func parseOptions(op string, args []string) (options, error) {
 		return o, fmt.Errorf("Hermes selection requires reviewed exact --version %s", hermesPMVersion)
 	}
 	if o.provider == codexDesktopSystem {
-		if (op != "install" && op != "update") || o.version != "latest" {
-			return o, fmt.Errorf("ChatGPT Desktop with Codex supports latest-only system DEB install/update; removal, DNF and Arch remain Pending")
+		if (op != "install" && op != "update" && op != "uninstall") || o.version != "latest" {
+			return o, fmt.Errorf("ChatGPT Desktop with Codex supports latest-only system DEB install/update and explicit nonpurge uninstall; DNF and Arch remain Pending")
+		}
+		if op == "uninstall" && !o.acceptSystem {
+			return o, fmt.Errorf("ChatGPT Desktop uninstall requires --accept-system-packages")
 		}
 	} else if o.provider == hermesSystem {
 		if op != "install" {
@@ -215,6 +218,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		}
 	}
 	if o.provider == codexDesktopSystem {
+		if b.req.Operation == "uninstall" {
+			return nil, b.removeCodexDesktop(ctx, o)
+		}
 		return nil, b.installCodexDesktop(ctx, o)
 	}
 	if o.provider == hermesSystem {

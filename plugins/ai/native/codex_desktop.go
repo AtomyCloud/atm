@@ -83,6 +83,12 @@ func (b *backend) codexDesktopRecord() (*codexDesktopJournal, error) {
 	if err = readJSON(filepath.Join(root, "journal.json"), &rec); err != nil {
 		return nil, err
 	}
+	if rec.Schema == 3 {
+		if err := validateCodexRemoveJournal(rec); err != nil {
+			return nil, err
+		}
+		return &rec, nil
+	}
 	want, urlErr := codexDesktopURL(rec.Arch)
 	legacy := rec.Schema == 1 && rec.Operation == "" && rec.Baseline == (codexPackageRecord{})
 	if (!legacy && (rec.Schema != 2 || !codexBaselineValid(rec.Operation, rec.Baseline, rec.Arch))) || rec.Plugin != "ai" || rec.Provider != codexDesktopSystem || rec.Package != "chatgpt" || urlErr != nil || rec.URL != want || rec.Trust != codexDesktopTrust || !codexDesktopPhase(rec.Phase) || !codexDesktopPhase(rec.LastPhase) || rec.Size < 0 || rec.Size > codexDesktopMaxDownload {
@@ -145,8 +151,16 @@ func (b *backend) codexDesktopStatus() {
 	if rec, err := b.codexDesktopRecord(); err != nil {
 		b.log(fmt.Sprintf(label("codex_desktop_journal_unknown"), err))
 	} else if rec != nil {
-		b.log(fmt.Sprintf(label("codex_desktop_journal"), rec.Phase, rec.LastPhase, rec.Version, rec.Size, rec.SHA256))
+		b.logCodexDesktopJournal(rec)
 	}
+}
+
+func (b *backend) logCodexDesktopJournal(rec *codexDesktopJournal) {
+	if rec.Schema == 3 {
+		b.log(fmt.Sprintf(label("codex_desktop_remove_journal"), rec.Phase, rec.LastPhase, rec.Version, rec.Arch))
+		return
+	}
+	b.log(fmt.Sprintf(label("codex_desktop_journal"), rec.Phase, rec.LastPhase, rec.Version, rec.Size, rec.SHA256))
 }
 
 func (b *backend) codexDesktopMenu(ctx context.Context) ([]choice, error) {
@@ -154,6 +168,7 @@ func (b *backend) codexDesktopMenu(ctx context.Context) ([]choice, error) {
 	b.log(label("codex_desktop_scope"))
 	b.log(label("codex_desktop_consent"))
 	b.log(label("codex_desktop_guard"))
+	b.log(label("codex_desktop_remove_scope"))
 	pkg, pkgErr := b.logCodexPackageRecord()
 	back := choice{ID: "back", Label: label("back"), Operation: "menu"}
 	rec, err := b.codexDesktopRecord()
@@ -161,7 +176,7 @@ func (b *backend) codexDesktopMenu(ctx context.Context) ([]choice, error) {
 		b.log(fmt.Sprintf(label("codex_desktop_journal_unknown"), err))
 	}
 	if rec != nil {
-		b.log(fmt.Sprintf(label("codex_desktop_journal"), rec.Phase, rec.LastPhase, rec.Version, rec.Size, rec.SHA256))
+		b.logCodexDesktopJournal(rec)
 	}
 	_, archErr := codexDesktopURL(b.arch)
 	_, lockErr := os.Lstat(b.root(codexDesktopSystem) + ".lock")
@@ -172,7 +187,10 @@ func (b *backend) codexDesktopMenu(ctx context.Context) ([]choice, error) {
 		if !codexUpdateEligible(pkg, b.arch) {
 			return []choice{back}, ctx.Err()
 		}
-		return []choice{{ID: "update", Label: label("codex_desktop_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopSystem, "--trust-download", "--accept-system-packages"}}, back}, ctx.Err()
+		return []choice{
+			{ID: "update", Label: label("codex_desktop_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopSystem, "--trust-download", "--accept-system-packages"}},
+			{ID: "uninstall", Label: label("codex_desktop_remove"), Operation: "uninstall", Arguments: []string{"--provider", codexDesktopSystem, "--accept-system-packages"}}, back,
+		}, ctx.Err()
 	}
 	return []choice{{ID: "install", Label: label("codex_desktop_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopSystem, "--trust-download", "--accept-system-packages"}}, back}, ctx.Err()
 }

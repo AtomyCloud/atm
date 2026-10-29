@@ -297,7 +297,7 @@ func TestCodexDesktopUpdateDowngrade(t *testing.T) {
 func TestCodexDesktopUpdateMenu(t *testing.T) {
 	f := newCodexUpdateFixture(t, "arm64", 1)
 	choices, err := f.b.menu(context.Background(), codexDesktopSystem)
-	if err != nil || len(choices) != 2 || choices[0].Operation != "update" || !strings.Contains(choices[0].Label, "system") {
+	if err != nil || len(choices) != 3 || choices[0].Operation != "update" || !strings.Contains(choices[0].Label, "system") {
 		t.Fatal(choices, err)
 	}
 	if _, err := parseOptions(choices[0].Operation, choices[0].Arguments); err != nil {

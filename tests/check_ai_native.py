@@ -210,10 +210,13 @@ def check(executable, backend):
         desktop_menu = run("--yes", "plugin", "ai", "menu", desktop)
         desktop_choices = json.loads(desktop_menu.stdout.splitlines()[-1])["choices"]
         assert desktop_choices, "native desktop review menu missing"
-        assert all(c["operation"] in ("menu", "install", "update", "status") for c in desktop_choices)
+        assert all(c["operation"] in ("menu", "install", "update", "uninstall", "status") for c in desktop_choices)
         for c in desktop_choices:
             if c["operation"] in ("install", "update"):
                 assert {"--trust-download", "--accept-system-packages"} <= set(c["arguments"])
+            if c["operation"] == "uninstall":
+                assert "--accept-system-packages" in c["arguments"]
+                assert "--trust-download" not in c["arguments"]
         for operation in ("use", "remove", "uninstall", "integrate"):
             run("--yes", "plugin", "ai", operation, "--provider", desktop, success=False)
         for operation in ("install", "update"):
@@ -232,6 +235,20 @@ def check(executable, backend):
         for provider in ("picoclaw", "codex-cli", "ollama", "hermes-agent", system):
             run("--yes", "plugin", "ai", "update", "--provider", provider,
                 "--trust-download", "--accept-system-packages", success=False)
+            run("--yes", "plugin", "ai", "uninstall", "--provider", provider,
+                "--accept-system-packages", success=False)
+        # Never run a consented live uninstall: the real host may have chatgpt installed.
+        for flags in (("--trust-download",), ("--version", "latest"), ("--version", "1.2.3"),
+                      ("--rocm",), ("--accept-dependency-execution",), ("--keep-preparation",),
+                      ("--remove-path",), ("--accept-system-packages",),
+                      ("--accept-system-packages=true",)):
+            run("--yes", "plugin", "ai", "uninstall", "--provider", desktop,
+                "--accept-system-packages", *flags, success=False)
+        run("plugin", "ai", "uninstall", "--provider", desktop,
+            "--accept-system-packages", success=False, started=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "uninstall", "--provider", desktop,
+                             "--accept-system-packages", started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
         agent = "hermes-agent"
         agent_menu = run("--yes", "plugin", "ai", "menu", agent)
         choices = json.loads(agent_menu.stdout.splitlines()[-1])["choices"]
