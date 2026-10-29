@@ -222,8 +222,12 @@ func parseOptions(op string, args []string) (options, error) {
 			return o, fmt.Errorf("ChatGPT Desktop uninstall requires --accept-system-packages")
 		}
 	} else if o.provider == codexDesktopRPM {
-		if (op != "install" && op != "update") || o.version != "latest" || !o.trust || !o.acceptSystem {
-			return o, fmt.Errorf("RPM install/update requires latest, --trust-download and --accept-system-packages; removal remains Pending")
+		if op == "uninstall" {
+			if !o.acceptSystem || o.trust || seen["--version"] {
+				return o, fmt.Errorf("RPM uninstall requires --accept-system-packages, no download trust or version")
+			}
+		} else if (op != "install" && op != "update") || o.version != "latest" || !o.trust || !o.acceptSystem {
+			return o, fmt.Errorf("RPM install/update requires latest, --trust-download and --accept-system-packages")
 		}
 		for key := range seen {
 			if key != "--provider" && key != "--version" && key != "--trust-download" && key != "--accept-system-packages" {
@@ -281,7 +285,7 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		return nil, b.installCodexDesktop(ctx, o)
 	}
 	if o.provider == codexDesktopRPM {
-		return nil, b.installOrUpdateCodexRPM(ctx, o)
+		return nil, b.manageCodexRPM(ctx, o)
 	}
 	if o.provider == hermesSystem {
 		if !o.acceptSystem {

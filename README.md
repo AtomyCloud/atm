@@ -793,8 +793,12 @@ both require consent flags, validate a single-package plan, then replay it with
 repositories disabled. Update binds the original installed identity, refuses
 implicit installation/downgrade, and treats an identical candidate as a verified
 no-op. Dependencies must already be satisfied. Before/after checks do not
-guarantee exclusion against other package frontends. RPM removal, Arch
-and real Fedora acceptance remain Pending. Ollama uses a separately consented user service for the
+guarantee exclusion against other package frontends. Explicit RPM removal requires
+system-package consent without download trust, binds the original installed
+identity and permits only that package's removal, with dependency cleanup off.
+ATM does not delete personal data; privileged package scripts may have side effects.
+Dependency-changing RPM workflows, DNF4, Arch and real Fedora acceptance remain
+Pending. Ollama uses a separately consented user service for the
 portable bundle, not the root-based upstream service. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 

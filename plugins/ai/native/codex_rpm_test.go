@@ -26,7 +26,9 @@ type rpmFixture struct {
 	present   bool
 	installed string
 	updating  bool
+	removing  bool
 	replays   int
+	stages    int
 	calls     []string
 	fault     func(string, []string) error
 }
@@ -86,10 +88,14 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 			if reflect.DeepEqual(args, []string{"--version"}) {
 				return "dnf5 version 5.2.17.0\n", nil
 			}
-			if len(args) < len(rpmDNFOptions()) || !reflect.DeepEqual(args[:len(rpmDNFOptions())], rpmDNFOptions()) {
+			dnfOptions := rpmDNFOptions()
+			if r.removing {
+				dnfOptions = append(dnfOptions, "--setopt=clean_requirements_on_remove=False")
+			}
+			if len(args) < len(dnfOptions) || !reflect.DeepEqual(args[:len(dnfOptions)], dnfOptions) {
 				t.Fatalf("unsafe DNF options %q", args)
 			}
-			args = args[len(rpmDNFOptions()):]
+			args = args[len(dnfOptions):]
 			switch args[0] {
 			case "--dump-main-config":
 				return r.policy, nil
@@ -104,17 +110,39 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 				r.dirs[tx] = true
 				r.files[tx+"/transaction.json"] = r.plan(t)
 				return "stored", nil
+			case "remove":
+				m, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
+				if err != nil {
+					t.Fatal(err)
+				}
+				target, err := codexRPMRemovalTarget(m)
+				if err != nil || !r.removing || len(args) != 4 || args[1] != "--no-autoremove" || !strings.HasPrefix(args[2], "--store=") || args[3] != target {
+					t.Fatalf("unsafe remove command: %q %v", args, err)
+				}
+				tx := strings.TrimPrefix(args[2], "--store=")
+				r.dirs[tx] = true
+				r.files[tx+"/transaction.json"] = r.plan(t)
+				return "stored", nil
 			case "replay":
 				r.replays++
-				r.present = true
-				r.installed = r.metadata()
+				r.present = !r.removing
+				if r.removing {
+					r.installed = ""
+				} else {
+					r.installed = r.metadata()
+				}
 				return "done", nil
 			default:
 				t.Fatalf("unexpected DNF action: %q", args)
 			}
 		case "mktemp":
-			r.dirs["/run/atm-ai-codex-rpm-AbCd012345"] = true
-			return "/run/atm-ai-codex-rpm-AbCd012345\n", nil
+			r.stages++
+			stage := "/run/atm-ai-codex-rpm-AbCd012345"
+			if r.stages > 1 {
+				stage = fmt.Sprintf("/run/atm-ai-codex-rpm-AbCd%06d", r.stages)
+			}
+			r.dirs[stage] = true
+			return stage + "\n", nil
 		case "install":
 			if len(args) == 5 && reflect.DeepEqual(args[:4], []string{"-d", "-m", "0700", "--"}) {
 				if r.dirs[args[4]] {
@@ -193,7 +221,7 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 	return r
 }
 
-const rpmPolicyFixture = "======== Main configuration: ========\ninstallroot = /\ntsflags = \nlocalpkg_gpgcheck = 1\noptional_metadata_types = \nproxy\nskip_system_repo_lock = false\n"
+const rpmPolicyFixture = "======== Main configuration: ========\ninstallroot = /\ntsflags = \nlocalpkg_gpgcheck = 1\noptional_metadata_types = \nproxy\nskip_system_repo_lock = false\nclean_requirements_on_remove = false\n"
 
 func (r *rpmFixture) metadata() string {
 	arch, _ := codexRPMArch(r.f.b.arch)
@@ -203,6 +231,17 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 	t.Helper()
 	arch, _ := codexRPMArch(r.f.b.arch)
 	p := map[string]any{"version": "1.0", "rpms": []any{map[string]string{"nevra": "chatgpt-1.2026.100-1." + arch, "action": "Install", "reason": "User", "repo_id": r.repo, "package_path": "./packages/chatgpt.rpm"}}}
+	if r.removing {
+		m, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		target, err := codexRPMRemovalTarget(m)
+		if err != nil {
+			t.Fatal(err)
+		}
+		p["rpms"] = []any{map[string]string{"nevra": target, "action": "Remove", "reason": "User", "repo_id": "@System"}}
+	}
 	if r.updating {
 		baseline, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
 		if err != nil {
@@ -225,6 +264,9 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 }
 func (r *rpmFixture) run() error {
 	op := "install"
+	if r.removing {
+		return r.f.run(context.Background(), "uninstall", "--provider", codexDesktopRPM, "--accept-system-packages")
+	}
 	if r.updating {
 		op = "update"
 	}
@@ -578,7 +620,7 @@ func TestCodexRPMPolicyOutput(t *testing.T) {
 		strings.ReplaceAll(rpmPolicyFixture, "skip_system_repo_lock = false\n", ""),
 		strings.ReplaceAll(rpmPolicyFixture, "localpkg_gpgcheck = 1", "localpkg_gpgcheck = false"),
 	} {
-		if err := codexRPMPolicy(valid); err != nil {
+		if err := codexRPMPolicy(valid, false); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -595,7 +637,7 @@ func TestCodexRPMPolicyOutput(t *testing.T) {
 		"oversized":        strings.Repeat("x", (64<<10)+1),
 	} {
 		t.Run(name, func(t *testing.T) {
-			if codexRPMPolicy(invalid) == nil {
+			if codexRPMPolicy(invalid, false) == nil {
 				t.Fatal("unsafe policy accepted")
 			}
 		})

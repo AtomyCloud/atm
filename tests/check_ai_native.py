@@ -211,9 +211,11 @@ def check(executable, backend):
         rpm_choices = json.loads(rpm_menu.stdout.splitlines()[-1])["choices"]
         assert rpm_choices, "native RPM review menu missing"
         for choice in rpm_choices:
-            assert choice["operation"] in ("menu", "install", "update", "status")
+            assert choice["operation"] in ("menu", "install", "update", "uninstall", "status")
             if choice["operation"] in ("install", "update"):
                 assert {"--trust-download", "--accept-system-packages"} <= set(choice["arguments"])
+            if choice["operation"] == "uninstall":
+                assert choice["arguments"] == ["--provider", rpm, "--accept-system-packages"]
         for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
             run("--yes", "plugin", "ai", "install", "--provider", rpm, *flags, success=False)
         for operation in ("use", "remove", "uninstall", "integrate"):
@@ -243,6 +245,19 @@ def check(executable, backend):
             "--trust-download", "--accept-system-packages", success=False, started=False)
         plan = json.loads(run("--dry-run", "plugin", "ai", "update", "--provider", rpm,
                              "--trust-download", "--accept-system-packages", started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
+        # Never execute a consented live RPM removal, regardless of host packages.
+        run("--yes", "plugin", "ai", "uninstall", "--provider", rpm, success=False)
+        for flags in (("--trust-download",), ("--version", "latest"), ("--version", "1.2.3"),
+                      ("--rocm",), ("--accept-dependency-execution",), ("--keep-preparation",),
+                      ("--remove-path",), ("--accept-system-packages",),
+                      ("--accept-system-packages=true",)):
+            run("--yes", "plugin", "ai", "uninstall", "--provider", rpm,
+                "--accept-system-packages", *flags, success=False)
+        run("plugin", "ai", "uninstall", "--provider", rpm,
+            "--accept-system-packages", success=False, started=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "uninstall", "--provider", rpm,
+                             "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
         desktop = "codex-desktop-system"
         desktop_menu = run("--yes", "plugin", "ai", "menu", desktop)

@@ -66,7 +66,7 @@ func validateCodexRPMPlan(data []byte, m codexRPMMetadata) error {
 	return nil
 }
 
-func codexRPMPolicy(output string) error {
+func codexRPMPolicy(output string, removing bool) error {
 	if len(output) == 0 || len(output) > 64<<10 {
 		return fmt.Errorf("invalid DNF5 configuration size")
 	}
@@ -112,6 +112,9 @@ func codexRPMPolicy(output string) error {
 		if !set["skip_system_repo_lock"] || value != "false" && value != "False" && value != "0" {
 			return fmt.Errorf("DNF5 system repository locking must remain enabled")
 		}
+	}
+	if removing && (!set["clean_requirements_on_remove"] || !strings.EqualFold(values["clean_requirements_on_remove"], "false") && values["clean_requirements_on_remove"] != "0") {
+		return fmt.Errorf("RPM removal requires dependency cleanup to remain disabled")
 	}
 	return nil
 }
@@ -178,8 +181,33 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 		return nil, err
 	}
 	u, err := codexRPMURL(b.arch)
-	if err != nil || (r.Schema != 1 && r.Schema != 2) || r.Plugin != "ai" || r.Provider != codexDesktopRPM || r.URL != u {
+	if err != nil || (r.Schema != 1 && r.Schema != 2 && r.Schema != 3) || r.Plugin != "ai" || r.Provider != codexDesktopRPM {
 		return nil, fmt.Errorf("invalid RPM journal")
+	}
+	removal := r.Schema == 3
+	if removal {
+		if r.Operation != "uninstall" || r.URL != "" || r.SHA256 != "" || r.Size != 0 || r.Input != "" || r.Package != (codexRPMMetadata{}) {
+			return nil, fmt.Errorf("RPM removal journal cannot contain download evidence")
+		}
+		if r.Phase == "downloaded" || r.Phase == "metadata-verified" || r.Phase == "unchanged" {
+			return nil, fmt.Errorf("invalid RPM removal journal phase")
+		}
+		switch r.Phase {
+		case "prepared":
+			if r.Stage != "" || r.PlanSHA256 != "" {
+				return nil, fmt.Errorf("unprepared RPM removal carries staged evidence")
+			}
+		case "root-staged":
+			if r.Stage == "" || r.PlanSHA256 != "" {
+				return nil, fmt.Errorf("invalid RPM removal staging evidence")
+			}
+		case "plan-verified", "replaying", "complete":
+			if r.Stage == "" || !validSHA(r.PlanSHA256) {
+				return nil, fmt.Errorf("missing RPM removal plan evidence")
+			}
+		}
+	} else if r.URL != u {
+		return nil, fmt.Errorf("invalid RPM download journal URL")
 	}
 	if r.Schema == 1 {
 		if r.Operation != "" || r.Baseline != (codexRPMMetadata{}) {
@@ -191,10 +219,13 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 			if r.Baseline != (codexRPMMetadata{}) {
 				return nil, fmt.Errorf("initial RPM journal cannot carry an installed baseline")
 			}
-		case "update":
+		case "update", "uninstall":
+			if (r.Operation == "uninstall") != removal {
+				return nil, fmt.Errorf("RPM operation requires matching journal schema")
+			}
 			m := r.Baseline
 			if _, e := parseCodexRPMMetadata(strings.Join([]string{m.Name, m.Epoch, m.Version, m.Release, m.Arch}, "\t")+"\n", b.arch); e != nil {
-				return nil, fmt.Errorf("invalid RPM update baseline: %w", e)
+				return nil, fmt.Errorf("invalid installed RPM baseline: %w", e)
 			}
 		default:
 			return nil, fmt.Errorf("invalid RPM journal operation")
@@ -226,7 +257,7 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 			return nil, fmt.Errorf("invalid RPM header evidence")
 		}
 	}
-	if r.Phase == "complete" && (r.Size == 0 || r.Package.Name == "" || r.Input == "" || r.Stage == "" || !validSHA(r.PlanSHA256)) {
+	if r.Phase == "complete" && (r.Stage == "" || !validSHA(r.PlanSHA256) || !removal && (r.Size == 0 || r.Package.Name == "" || r.Input == "")) {
 		return nil, fmt.Errorf("incomplete RPM success evidence")
 	}
 	return &r, nil
@@ -269,7 +300,11 @@ func (b *backend) codexRPMStatus() {
 	if r.Schema == 1 {
 		op = "install"
 	}
-	b.log(fmt.Sprintf(label("codex_rpm_record"), op, r.Phase, r.Package.Version, r.Package.Release, r.Package.Arch))
+	m := r.Package
+	if r.Operation == "uninstall" {
+		m = r.Baseline
+	}
+	b.log(fmt.Sprintf(label("codex_rpm_record"), op, r.Phase, m.Version, m.Release, m.Arch))
 }
 
 func (b *backend) codexRPMMenu(ctx context.Context) ([]choice, error) {
@@ -285,6 +320,7 @@ func (b *backend) codexRPMMenu(ctx context.Context) ([]choice, error) {
 	return []choice{
 		{ID: "install", Label: label("codex_rpm_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
 		{ID: "update", Label: label("codex_rpm_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
+		{ID: "uninstall", Label: label("codex_rpm_uninstall"), Operation: "uninstall", Arguments: []string{"--provider", codexDesktopRPM, "--accept-system-packages"}},
 		back,
 	}, ctx.Err()
 }
@@ -317,11 +353,12 @@ func rpmCall(ctx context.Context, s *systemTools, name string, args []string, el
 	return s.run(ctx, ex, args)
 }
 
-func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (result error) {
+func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) {
 	op := b.req.Operation
 	updating := op == "update"
-	if (op != "install" && !updating) || o.provider != codexDesktopRPM || o.version != "latest" || !o.trust || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.keepPreparation || o.refreshLauncher || o.serviceAction != "" || o.acceptService {
-		return fmt.Errorf("explicit latest-only RPM install/update consent required")
+	removing := op == "uninstall"
+	if (op != "install" && !updating && !removing) || o.provider != codexDesktopRPM || o.version != "latest" || o.trust == removing || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.keepPreparation || o.refreshLauncher || o.serviceAction != "" || o.acceptService {
+		return fmt.Errorf("explicit RPM operation consent required; removal accepts no download trust")
 	}
 	b.log(label("codex_rpm_scope"))
 	s := b.rpmTools()
@@ -329,7 +366,13 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 	if err != nil {
 		return err
 	}
-	for _, name := range []string{"rpm", "dnf5", "cat", "stat", "ls", "env", "mktemp", "install", "sha256sum"} {
+	commands := []string{"rpm", "dnf5", "cat", "stat", "env", "mktemp"}
+	if removing {
+		url = ""
+	} else {
+		commands = append(commands, "ls", "install", "sha256sum")
+	}
+	for _, name := range commands {
 		if _, err = s.resolve(name); err != nil {
 			return err
 		}
@@ -344,12 +387,12 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 		return fmt.Errorf("DNF5 is required; no DNF4 fallback: %v", err)
 	}
 	baseline, present, err := installedCodexRPM(ctx, s, b.arch)
-	if err != nil || present != updating {
-		return fmt.Errorf("RPM %s refused: initial install requires absence; update requires exactly one installed package; unknown state is preserved: %v", op, err)
+	if err != nil || present != (updating || removing) {
+		return fmt.Errorf("RPM %s refused: initial install requires absence; update/removal require exactly one installed package; unknown state is preserved: %v", op, err)
 	}
 	checkBaseline := func() error {
 		got, found, e := installedCodexRPM(ctx, s, b.arch)
-		if e != nil || found != updating || got != baseline {
+		if e != nil || found != (updating || removing) || got != baseline {
 			return fmt.Errorf("RPM %s original package state changed or is unknown: %v", op, e)
 		}
 		return ctx.Err()
@@ -459,6 +502,9 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 		return out, checkState()
 	}
 	r := codexRPMJournal{Schema: 2, Plugin: "ai", Provider: codexDesktopRPM, Phase: "prepared", URL: url, Operation: op, Baseline: baseline}
+	if removing {
+		r.Schema = 3
+	}
 	retain = true
 	privileged := false
 	defer func() {
@@ -489,68 +535,71 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 	if err = phase("prepared"); err != nil {
 		return err
 	}
-	r.Input, err = os.MkdirTemp(filepath.Dir(root), ".atm-ai-codex-rpm-input-")
-	if err != nil {
-		return err
-	}
-	if err = phase("prepared"); err != nil {
-		return err
-	}
-	local := filepath.Join(r.Input, "chatgpt.rpm")
-	f, err := os.OpenFile(local, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	r.Size, r.SHA256, err = b.downloadCodexRPM(ctx, f)
-	if err == nil {
-		err = f.Sync()
-	}
-	closeErr := f.Close()
-	if err != nil {
-		return err
-	}
-	if closeErr != nil {
-		return closeErr
-	}
-	if err = phase("downloaded"); err != nil {
-		return err
-	}
-	r.Package, err = queryCodexRPM(ctx, s, local, b.arch)
-	if err != nil {
-		return err
-	}
-	verifyInput := func() error {
-		f, e := regular(local, 0600, codexDesktopMaxDownload)
-		if e != nil {
-			return e
-		}
-		defer f.Close()
-		h := sha256.New()
-		n, e := io.Copy(h, io.LimitReader(f, r.Size+1))
-		if e != nil || n != r.Size || fmt.Sprintf("%x", h.Sum(nil)) != r.SHA256 {
-			return fmt.Errorf("downloaded RPM changed")
-		}
-		return ctx.Err()
-	}
-	if err = verifyInput(); err != nil {
-		return err
-	}
-	if err = phase("metadata-verified"); err != nil {
-		return err
-	}
-	if updating && r.Package == baseline {
-		if err = boundary("codex-rpm-before-unchanged"); err != nil {
+	local := ""
+	if !removing {
+		r.Input, err = os.MkdirTemp(filepath.Dir(root), ".atm-ai-codex-rpm-input-")
+		if err != nil {
 			return err
 		}
-		if err = checkBaseline(); err != nil {
+		if err = phase("prepared"); err != nil {
 			return err
 		}
-		if err = phase("unchanged"); err != nil {
+		local = filepath.Join(r.Input, "chatgpt.rpm")
+		f, err := os.OpenFile(local, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+		if err != nil {
 			return err
 		}
-		retain = false
-		b.log(label("codex_rpm_unchanged"))
-		return nil
+		r.Size, r.SHA256, err = b.downloadCodexRPM(ctx, f)
+		if err == nil {
+			err = f.Sync()
+		}
+		closeErr := f.Close()
+		if err != nil {
+			return err
+		}
+		if closeErr != nil {
+			return closeErr
+		}
+		if err = phase("downloaded"); err != nil {
+			return err
+		}
+		r.Package, err = queryCodexRPM(ctx, s, local, b.arch)
+		if err != nil {
+			return err
+		}
+		verifyInput := func() error {
+			f, e := regular(local, 0600, codexDesktopMaxDownload)
+			if e != nil {
+				return e
+			}
+			defer f.Close()
+			h := sha256.New()
+			n, e := io.Copy(h, io.LimitReader(f, r.Size+1))
+			if e != nil || n != r.Size || fmt.Sprintf("%x", h.Sum(nil)) != r.SHA256 {
+				return fmt.Errorf("downloaded RPM changed")
+			}
+			return ctx.Err()
+		}
+		if err = verifyInput(); err != nil {
+			return err
+		}
+		if err = phase("metadata-verified"); err != nil {
+			return err
+		}
+		if updating && r.Package == baseline {
+			if err = boundary("codex-rpm-before-unchanged"); err != nil {
+				return err
+			}
+			if err = checkBaseline(); err != nil {
+				return err
+			}
+			if err = phase("unchanged"); err != nil {
+				return err
+			}
+			retain = false
+			b.log(label("codex_rpm_unchanged"))
+			return nil
+		}
 	}
 	if err = boundary("codex-rpm-before-stage"); err != nil {
 		return err
@@ -575,8 +624,15 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 		return err
 	}
 	target := r.Stage + "/chatgpt.rpm"
-	if _, err = call("install", []string{"-T", "-m", "0600", "--", local, target}); err != nil {
-		return err
+	if removing {
+		target, err = codexRPMRemovalTarget(baseline)
+		if err != nil {
+			return err
+		}
+	} else {
+		if _, err = call("install", []string{"-T", "-m", "0600", "--", local, target}); err != nil {
+			return err
+		}
 	}
 	checkHash := func(path string) error {
 		if e := s.stage(r.Stage); e != nil {
@@ -591,17 +647,23 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 		}
 		return nil
 	}
-	if err = checkHash(target); err != nil {
-		return err
+	if !removing {
+		if err = checkHash(target); err != nil {
+			return err
+		}
+	}
+	dnfOptions := rpmDNFOptions()
+	if removing {
+		dnfOptions = append(dnfOptions, "--setopt=clean_requirements_on_remove=False")
 	}
 	dnf := func(args ...string) (string, error) {
-		return call("dnf5", append(rpmDNFOptions(), args...))
+		return call("dnf5", append(dnfOptions, args...))
 	}
 	policy, err := dnf("--dump-main-config")
 	if err != nil {
 		return err
 	}
-	if err = codexRPMPolicy(policy); err != nil {
+	if err = codexRPMPolicy(policy, removing); err != nil {
 		return err
 	}
 	db, err := call("rpm", []string{"--eval", "%{_dbpath}"})
@@ -622,7 +684,11 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 	if updating {
 		action = "upgrade"
 	}
-	if _, err = dnf(action, "--store="+tx, target); err != nil {
+	storeArgs := []string{action, "--store=" + tx, target}
+	if removing {
+		storeArgs = []string{"remove", "--no-autoremove", "--store=" + tx, target}
+	}
+	if _, err = dnf(storeArgs...); err != nil {
 		return err
 	}
 	identity := func(path string, directory bool) (string, error) {
@@ -668,7 +734,9 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 	if err != nil {
 		return err
 	}
-	if updating {
+	if removing {
+		err = validateCodexRPMRemovePlan(plan, baseline)
+	} else if updating {
 		err = validateCodexRPMUpdatePlan(plan, r.Package, baseline)
 	} else {
 		err = validateCodexRPMPlan(plan, r.Package)
@@ -677,76 +745,79 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 		return err
 	}
 	r.PlanSHA256 = fmt.Sprintf("%x", sha256.Sum256(plan))
-	if err = boundary("codex-rpm-before-populate"); err != nil {
-		return err
-	}
-	// GNU install has no exclusive-create mode. Establish absence via a bounded
-	// listing in the verified root-private tree; never overwrite an existing RPM.
-	list := func(path string) (string, error) {
-		if _, e := identity(path, true); e != nil {
-			return "", e
+	checkStored := checkTransaction
+	if !removing {
+		if err = boundary("codex-rpm-before-populate"); err != nil {
+			return err
 		}
-		return call("ls", []string{"-A1", "--quoting-style=escape", "--color=never", "--", path})
-	}
-	if err = checkTransaction(); err != nil {
-		return err
-	}
-	names, err := list(tx)
-	if err != nil {
-		return err
-	}
-	hasPackages := false
-	for _, name := range strings.Split(strings.TrimSuffix(names, "\n"), "\n") {
-		switch name {
-		case "transaction.json", "comps":
-		case "packages":
-			hasPackages = true
+		// GNU install has no exclusive-create mode. Establish absence via a bounded
+		// listing in the verified root-private tree; never overwrite an existing RPM.
+		list := func(path string) (string, error) {
+			if _, e := identity(path, true); e != nil {
+				return "", e
+			}
+			return call("ls", []string{"-A1", "--quoting-style=escape", "--color=never", "--", path})
+		}
+		if err = checkTransaction(); err != nil {
+			return err
+		}
+		names, err := list(tx)
+		if err != nil {
+			return err
+		}
+		hasPackages := false
+		for _, name := range strings.Split(strings.TrimSuffix(names, "\n"), "\n") {
+			switch name {
+			case "transaction.json", "comps":
+			case "packages":
+				hasPackages = true
+			default:
+				return fmt.Errorf("unexpected stored RPM transaction entry")
+			}
+		}
+		packages := tx + "/packages"
+		if !hasPackages {
+			if _, err = call("install", []string{"-d", "-m", "0700", "--", packages}); err != nil {
+				return err
+			}
+		}
+		packagesIdentity, err := identity(packages, true)
+		if err != nil {
+			return err
+		}
+		names, err = list(packages)
+		if err != nil {
+			return err
+		}
+		stored := packages + "/chatgpt.rpm"
+		switch names {
+		case "":
+			if _, err = identity(target, false); err != nil {
+				return err
+			}
+			if err = checkHash(target); err != nil {
+				return err
+			}
+			if _, err = call("install", []string{"-T", "-m", "0600", "--", target, stored}); err != nil {
+				return err
+			}
+		case "chatgpt.rpm\n": // DNF5 versions which already copied it: verify, never overwrite.
 		default:
-			return fmt.Errorf("unexpected stored RPM transaction entry")
+			return fmt.Errorf("unexpected stored RPM package entries")
 		}
-	}
-	packages := tx + "/packages"
-	if !hasPackages {
-		if _, err = call("install", []string{"-d", "-m", "0700", "--", packages}); err != nil {
-			return err
+		checkStored = func() error {
+			if e := checkTransaction(); e != nil {
+				return e
+			}
+			now, e := identity(packages, true)
+			if e != nil || now != packagesIdentity {
+				return fmt.Errorf("stored RPM package directory changed: %v", e)
+			}
+			if _, e = identity(stored, false); e != nil {
+				return e
+			}
+			return checkHash(stored)
 		}
-	}
-	packagesIdentity, err := identity(packages, true)
-	if err != nil {
-		return err
-	}
-	names, err = list(packages)
-	if err != nil {
-		return err
-	}
-	stored := packages + "/chatgpt.rpm"
-	switch names {
-	case "":
-		if _, err = identity(target, false); err != nil {
-			return err
-		}
-		if err = checkHash(target); err != nil {
-			return err
-		}
-		if _, err = call("install", []string{"-T", "-m", "0600", "--", target, stored}); err != nil {
-			return err
-		}
-	case "chatgpt.rpm\n": // DNF5 versions which already copied it: verify, never overwrite.
-	default:
-		return fmt.Errorf("unexpected stored RPM package entries")
-	}
-	checkStored := func() error {
-		if e := checkTransaction(); e != nil {
-			return e
-		}
-		now, e := identity(packages, true)
-		if e != nil || now != packagesIdentity {
-			return fmt.Errorf("stored RPM package directory changed: %v", e)
-		}
-		if _, e = identity(stored, false); e != nil {
-			return e
-		}
-		return checkHash(stored)
 	}
 	if err = checkStored(); err != nil {
 		return err
@@ -792,7 +863,8 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 		return err
 	}
 	got, present, err := installedCodexRPM(ctx, s, b.arch)
-	if err != nil || !present || got != r.Package {
+	wantPresent := !removing
+	if err != nil || present != wantPresent || got != r.Package {
 		return fmt.Errorf("RPM post-state not verified: %v", err)
 	}
 	if err = ctx.Err(); err != nil {
@@ -805,6 +877,10 @@ func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (resul
 	message := "codex_rpm_done"
 	if updating {
 		message = "codex_rpm_updated"
+	}
+	if removing {
+		b.log(fmt.Sprintf(label("codex_rpm_removed"), baseline.Version, baseline.Release, r.Stage))
+		return nil
 	}
 	b.log(fmt.Sprintf(label(message), r.Package.Version, r.Package.Release, r.Stage))
 	return nil

@@ -19,7 +19,7 @@ supports amd64; the separate ChatGPT Desktop DEB/RPM routes support amd64 and ar
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation, explicit update and separately consented nonpurge removal of a configured system package; no downgrade or repair |
-| Codex Desktop RPM (ChatGPT Desktop) | Official latest x86_64/aarch64 `chatgpt` RPM | Initial installation and explicit update with both consents; dependencies already satisfied, exact single-package stored plan and verified replay |
+| Codex Desktop RPM (ChatGPT Desktop) | Official latest x86_64/aarch64 `chatgpt` RPM | Initial installation/update with both consents; separate removal with system consent only, exact single-package stored plans and verified replay |
 | Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration and separately consented user-service management |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
@@ -37,7 +37,7 @@ Pending before the entire AI plugin can switch to native Go:
 - Ollama real user-service/runtime/GPU acceptance, drivers and non-ROCm add-on
   workflows. The selected service mode is the portable user service described
   below; root/system installation is outside this chosen scope.
-- Codex Desktop RPM removal/dependency workflows, DNF4 and Arch package management; the Arch
+- Codex Desktop RPM dependency-changing workflows, DNF4 and Arch package management; the Arch
   shell bootstrap is not ported. Initial APT installation, explicit DEB updates and guarded removal
   are described below.
 - PATH registration for providers other than the owned PicoClaw, standalone
@@ -813,7 +813,7 @@ This preview supports **initial installation, explicit update and nonpurge remov
 amd64/arm64 with APT. It downloads the architecture-specific latest DEB from the fixed official
 `https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/` origin.
 Custom URLs and exact version selection are refused. A separate
-DNF5 RPM install/update preview is described below; Arch remains Pending.
+DNF5 RPM install/update/removal preview is described below; Arch remains Pending.
 `install` still refuses any existing `chatgpt` record,
 including held, incomplete and residual-configuration states. Only a separately
 confirmed `update` can change an eligible installed package. System dependencies
@@ -951,15 +951,17 @@ real APT/GUI and arm64 runtime acceptance remain Pending.
 ## Codex Desktop System RPM
 
 Provider ID: `codex-desktop-rpm`. This Linux amd64/arm64 preview supports
-**initial installation and explicit update with DNF5**, using the architecture-specific latest
+**initial installation, explicit update and removal with DNF5**. Installation/update use the architecture-specific latest
 RPM linked by the [official Linux application documentation](https://learn.chatgpt.com/docs/linux/linux-app).
-It requires CORE confirmation, `--trust-download` and `--accept-system-packages`.
+Installation/update require CORE confirmation, `--trust-download` and `--accept-system-packages`.
+Removal requires CORE confirmation and `--accept-system-packages` only; download
+trust and version selection are rejected, and no RPM artifact is downloaded.
 There is no DNF4 fallback or upstream shell installer. Existing `chatgpt` RPM
-records block initial installation. `update` requires exactly one installed,
+records block initial installation. `update` and `uninstall` require exactly one installed,
 matching-architecture `chatgpt` record; it never implicitly installs a missing
 package. Unknown query results, including a successful RPM exit with diagnostics,
-and incomplete ATM operations block both flows. A manually installed system
-package can be explicitly updated without granting ATM ownership or adopting
+and incomplete ATM operations block all flows. A manually installed system
+package can be explicitly updated or removed without granting ATM ownership or adopting
 personal data.
 
 The fixed official HTTPS URL is the download trust source. A bounded download,
@@ -978,11 +980,19 @@ RPM ordering comes from the trusted [DNF5 upgrade solver](https://dnf5.readthedo
 not a semantic-version approximation. Downgrade, reinstall, implicit install,
 additional removal and dependency-changing plans are refused.
 
+Explicit removal pins that original installed identity, stores exactly one
+`Remove` action from `@System` with no artifact path, and rejects all extra actions.
+It uses [DNF5 remove](https://dnf5.readthedocs.io/en/latest/commands/remove.8.html)
+with `--no-autoremove` and `clean_requirements_on_remove=False` during store/replay.
+No dependency cleanup, download, manual personal-data deletion or old-preparation
+cleanup is performed. Privileged package scripts may still have side effects.
+
 All repositories are disabled during store/replay, so **dependencies must already
 be satisfied**. Original installed identity (or absence for initial install),
 effective policy and staged evidence are rechecked before execution. Afterwards,
-the installed RPM identity must match the downloaded header. Changes to the
-original installed version abort the update rather than silently selecting a new
+the installed RPM identity must match the downloaded header for install/update;
+removal requires a diagnostic-free query establishing absence. Changes to the
+original installed version abort update/removal rather than silently selecting a new
 baseline. Replay never uses flags that ignore installed-package mismatches.
 
 An exactly identical downloaded package identity is a verified no-op before
@@ -991,6 +1001,8 @@ Other empty plans are refused, not interpreted as a successful update. New schem
 journals distinguish install/update and record the original update baseline;
 schema1 initial-install journals remain readable. Older preview binaries may
 refuse these newer journals, rather than misinterpret them.
+Artifact-free schema3 removal journals retain schema1/2 read compatibility and
+require stage/plan evidence for advanced phases; they never claim a downloaded RPM.
 
 The approved boundary is **DNF5's own transaction coordination plus before/after
 checks**, not an exclusive guard against concurrent RPM/other package frontends.
@@ -999,13 +1011,13 @@ and RPM scripts still execute with privilege and may configure repositories or
 services. Failure/cancellation can leave partial effects or privileged descendants;
 ATM does not claim rollback or terminate unrelated processes.
 
-Journal, private input and root transaction are retained for inspection, even
+Journal, private input (install/update only) and root transaction are retained for inspection, even
 after success; `/run` staging is temporary across reboot. Failed/uncertain
 operations retain the ATM lock and require manual inspection before retry.
 Recorded paths never authorize automatic cleanup. Menu/status read historical
 ATM evidence only, without running RPM/DNF or proving current package health.
 The app is never launched and sign-in remains interactive.
-Both menu actions are offered without probing RPM; eligibility is checked only
+All three menu actions are offered without probing RPM; eligibility is checked only
 after explicit operation consent, not inferred from historical journal evidence.
 
 With the isolated helper below, on a **disposable supported Fedora VM only**:
@@ -1024,9 +1036,14 @@ preview_atm --dry-run plugin ai update --provider codex-desktop-rpm \
   --trust-download --accept-system-packages
 preview_atm plugin ai update --provider codex-desktop-rpm \
   --trust-download --accept-system-packages
+# Separate optional removal test; this changes actual VM system packages.
+preview_atm --dry-run plugin ai uninstall --provider codex-desktop-rpm \
+  --accept-system-packages
+preview_atm plugin ai uninstall --provider codex-desktop-rpm \
+  --accept-system-packages
 ```
 
-Removal, dependency-changing plans, DNF4 and Arch remain Pending.
+Dependency-changing plans, DNF4 and Arch remain Pending.
 Automated validation uses synthetic packages and mocked tools, never real RPM
 transactions. Actual Fedora/GUI/ARM64 acceptance remains Pending. This preview
 does not change the production AI manifest or native plugin count.

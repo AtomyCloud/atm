@@ -201,7 +201,13 @@ be satisfied; no dependency changes or unrelated removals. DNF5 replay
 and before/after checks are the approved coordination boundary, not exclusion
 against other package managers. Administrator signature policy is preserved,
 and root transaction/input evidence is retained. Default views never query RPM.
-RPM removal/dependency workflows, DNF4, Arch and real Fedora/package/GUI/arm64
+Explicit RPM uninstall requires CORE confirmation and system-package consent,
+without download trust or version selection. It pins the installed baseline,
+stores exactly one original `Remove` from `@System`, disables dependency cleanup,
+and verifies absence after replay. Artifact-free schema3 removal journals retain
+schema1/2 read compatibility. ATM does not delete personal data or old preparations;
+privileged package scripts may still have system side effects.
+Dependency-changing RPM workflows, DNF4, Arch and real Fedora/package/GUI/arm64
 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 
