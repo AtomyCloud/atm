@@ -189,14 +189,19 @@ with system-package consent supports nonpurge removal of an eligible configured
 package, including manual installations, without adopting ownership. Native guards
 pin the original baseline and require a single-package, architecture-qualified APT
 removal plan; no autoremove, repair or personal-data cleanup.
-The separate `codex-desktop-rpm` preview supports initial DNF5 installation only,
+The separate `codex-desktop-rpm` preview supports initial DNF5 installation and explicit update,
 with download/system-package consent and CORE confirmation. It validates one
-stored `chatgpt` Install action, disables repositories and requires dependencies
-to be satisfied already; no dependency changes, upgrades or removals. DNF5 replay
+stored `chatgpt` Install action for initial installation; update requires exactly
+the candidate Upgrade and original Replaced records, bound to the installed
+package baseline. Identical metadata is a verified no-op before elevation.
+Missing/unknown packages, changed baselines, downgrade, reinstall and extra
+package actions are refused. Schema2 operation/baseline journals retain schema1
+read compatibility. Repositories remain disabled and dependencies must already
+be satisfied; no dependency changes or unrelated removals. DNF5 replay
 and before/after checks are the approved coordination boundary, not exclusion
 against other package managers. Administrator signature policy is preserved,
 and root transaction/input evidence is retained. Default views never query RPM.
-RPM update/removal/dependency workflows, DNF4, Arch and real Fedora/package/GUI/arm64
+RPM removal/dependency workflows, DNF4, Arch and real Fedora/package/GUI/arm64
 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 

@@ -17,16 +17,18 @@ import (
 )
 
 type rpmFixture struct {
-	f       *fixture
-	files   map[string][]byte
-	dirs    map[string]bool
-	stats   map[string]string
-	policy  string
-	repo    string
-	present bool
-	replays int
-	calls   []string
-	fault   func(string, []string) error
+	f         *fixture
+	files     map[string][]byte
+	dirs      map[string]bool
+	stats     map[string]string
+	policy    string
+	repo      string
+	present   bool
+	installed string
+	updating  bool
+	replays   int
+	calls     []string
+	fault     func(string, []string) error
 }
 
 func newRPMFixture(t *testing.T, arch string) *rpmFixture {
@@ -73,6 +75,9 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 					queryFile = true
 				}
 			}
+			if !queryFile && r.present && r.installed != "" {
+				return r.installed, nil
+			}
 			if queryFile || r.present {
 				return r.metadata(), nil
 			}
@@ -88,7 +93,10 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 			switch args[0] {
 			case "--dump-main-config":
 				return r.policy, nil
-			case "install":
+			case "install", "upgrade":
+				if (args[0] == "upgrade") != r.updating {
+					t.Fatalf("wrong install/update action %q", args)
+				}
 				if len(args) != 3 || !strings.HasPrefix(args[1], "--store=") {
 					t.Fatalf("not a store-only operation: %q", args)
 				}
@@ -99,6 +107,7 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 			case "replay":
 				r.replays++
 				r.present = true
+				r.installed = r.metadata()
 				return "done", nil
 			default:
 				t.Fatalf("unexpected DNF action: %q", args)
@@ -194,6 +203,20 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 	t.Helper()
 	arch, _ := codexRPMArch(r.f.b.arch)
 	p := map[string]any{"version": "1.0", "rpms": []any{map[string]string{"nevra": "chatgpt-1.2026.100-1." + arch, "action": "Install", "reason": "User", "repo_id": r.repo, "package_path": "./packages/chatgpt.rpm"}}}
+	if r.updating {
+		baseline, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
+		if err != nil {
+			t.Fatal(err)
+		}
+		version := baseline.Version
+		if baseline.Epoch != "0" {
+			version = baseline.Epoch + ":" + version
+		}
+		p["rpms"] = []any{
+			map[string]string{"nevra": "chatgpt-1.2026.100-1." + arch, "action": "Upgrade", "reason": "User", "repo_id": r.repo, "package_path": "./packages/chatgpt.rpm"},
+			map[string]string{"nevra": "chatgpt-" + version + "-" + baseline.Release + "." + arch, "action": "Replaced", "reason": "User", "repo_id": "@System"},
+		}
+	}
 	d, e := json.Marshal(p)
 	if e != nil {
 		t.Fatal(e)
@@ -201,7 +224,11 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 	return d
 }
 func (r *rpmFixture) run() error {
-	return r.f.run(context.Background(), "install", "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages")
+	op := "install"
+	if r.updating {
+		op = "update"
+	}
+	return r.f.run(context.Background(), op, "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages")
 }
 
 func TestCodexRPMInitialLifecycle(t *testing.T) {
@@ -351,18 +378,197 @@ func TestCodexRPMUncertainReplayAndPostcheck(t *testing.T) {
 }
 
 func TestCodexRPMOptionsAndNoopViews(t *testing.T) {
-	for _, op := range []string{"update", "use", "remove", "uninstall", "integrate"} {
+	for _, op := range []string{"use", "remove", "uninstall", "integrate"} {
 		if _, e := parseOptions(op, []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}); e == nil {
 			t.Fatal(op)
 		}
 	}
-	for _, flags := range [][]string{{}, {"--trust-download"}, {"--accept-system-packages"}, {"--trust-download", "--accept-system-packages", "--version", "1.2.3"}, {"--trust-download", "--accept-system-packages", "--rocm"}} {
-		if _, e := parseOptions("install", append([]string{"--provider", codexDesktopRPM}, flags...)); e == nil {
-			t.Fatal(flags)
+	for _, op := range []string{"install", "update"} {
+		for _, flags := range [][]string{{}, {"--trust-download"}, {"--accept-system-packages"}, {"--trust-download", "--accept-system-packages", "--version", "1.2.3"}, {"--trust-download", "--accept-system-packages", "--rocm"}} {
+			if _, e := parseOptions(op, append([]string{"--provider", codexDesktopRPM}, flags...)); e == nil {
+				t.Fatal(op, flags)
+			}
+		}
+		if _, e := parseOptions(op, []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}); e != nil {
+			t.Fatal(e)
 		}
 	}
-	if _, e := parseOptions("install", []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}); e != nil {
-		t.Fatal(e)
+}
+
+func newRPMUpdateFixture(t *testing.T, arch string) *rpmFixture {
+	t.Helper()
+	r := newRPMFixture(t, arch)
+	r.updating, r.present = true, true
+	r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+	return r
+}
+
+func TestCodexRPMUpdateLifecycle(t *testing.T) {
+	for _, arch := range []string{"amd64", "arm64"} {
+		t.Run(arch, func(t *testing.T) {
+			r := newRPMUpdateFixture(t, arch)
+			baseline, err := parseCodexRPMMetadata(r.installed, arch)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = r.run(); err != nil {
+				t.Fatal(err)
+			}
+			j, err := r.f.b.rpmJournal()
+			if err != nil || j == nil || j.Schema != 2 || j.Operation != "update" || j.Baseline != baseline || j.Phase != "complete" || j.Package == baseline || r.replays != 1 {
+				t.Fatalf("update evidence %+v, replays=%d, err=%v", j, r.replays, err)
+			}
+			integrationMissing(t, r.f.b.root(codexDesktopRPM)+".lock")
+			if _, err = os.Stat(filepath.Join(j.Input, "chatgpt.rpm")); err != nil {
+				t.Fatal("update evidence not retained", err)
+			}
+		})
+	}
+}
+
+func TestCodexRPMUpdateRefusesMissingUnknownAndChangedBaseline(t *testing.T) {
+	for _, mode := range []string{"absent", "query-error", "multiple", "architecture"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newRPMUpdateFixture(t, "amd64")
+			switch mode {
+			case "absent":
+				r.present = false
+			case "query-error":
+				r.fault = func(name string, args []string) error {
+					if name == "rpm" && args[0] == "-qa" {
+						return errors.New("unknown database")
+					}
+					return nil
+				}
+			case "multiple":
+				r.installed += r.installed
+			case "architecture":
+				r.installed = strings.Replace(r.installed, "x86_64", "aarch64", 1)
+			}
+			if err := r.run(); err == nil || r.replays != 0 || r.f.calls != 0 {
+				t.Fatalf("invalid original state accepted: %v", err)
+			}
+		})
+	}
+	for _, point := range []string{"codex-rpm-before-stage", "codex-rpm-before-store", "codex-rpm-before-replay"} {
+		for _, change := range []string{"removed", "version", "epoch", "release"} {
+			t.Run(point+"/"+change, func(t *testing.T) {
+				r := newRPMUpdateFixture(t, "amd64")
+				r.f.b.checkpoint = func(got string) error {
+					if got == point {
+						switch change {
+						case "removed":
+							r.present = false
+						case "version":
+							r.installed = r.metadata()
+						case "epoch":
+							r.installed = strings.Replace(r.installed, "\t0\t", "\t1\t", 1)
+						case "release":
+							r.installed = strings.Replace(r.installed, "\t1\tx86_64", "\t2\tx86_64", 1)
+						}
+					}
+					return nil
+				}
+				if err := r.run(); err == nil || r.replays != 0 {
+					t.Fatalf("changed baseline reached replay: %v", err)
+				}
+			})
+		}
+	}
+}
+
+func TestCodexRPMUpdateUnchangedAndLegacyJournal(t *testing.T) {
+	for _, legacy := range []bool{false, true} {
+		t.Run(fmt.Sprint(legacy), func(t *testing.T) {
+			r := newRPMFixture(t, "amd64")
+			if legacy {
+				if err := r.run(); err != nil {
+					t.Fatal(err)
+				}
+				j, err := r.f.b.rpmJournal()
+				if err != nil {
+					t.Fatal(err)
+				}
+				j.Schema, j.Operation, j.Baseline = 1, "", codexRPMMetadata{}
+				if err = r.f.b.saveRPMJournal(*j); err != nil {
+					t.Fatal(err)
+				}
+				if _, err = r.f.b.rpmJournal(); err != nil {
+					t.Fatal("legacy initial journal rejected", err)
+				}
+			}
+			r.updating, r.present, r.installed = true, true, r.metadata()
+			r.calls, r.replays = nil, 0
+			if err := r.run(); err != nil {
+				t.Fatal(err)
+			}
+			j, err := r.f.b.rpmJournal()
+			if err != nil || j == nil || j.Schema != 2 || j.Operation != "update" || j.Phase != "unchanged" || j.Baseline != j.Package || j.Stage != "" || r.replays != 0 {
+				t.Fatalf("invalid no-op: %+v %v", j, err)
+			}
+			for _, call := range r.calls {
+				if !strings.HasPrefix(call, "rpm ") && call != "dnf5 --version" {
+					t.Fatalf("unchanged version performed privileged work: %s", call)
+				}
+			}
+			integrationMissing(t, r.f.b.root(codexDesktopRPM)+".lock")
+			j.Baseline = codexRPMMetadata{}
+			if err = r.f.b.saveRPMJournal(*j); err != nil {
+				t.Fatal(err)
+			}
+			if _, err = r.f.b.rpmJournal(); err == nil {
+				t.Fatal("update journal with missing baseline accepted")
+			}
+		})
+	}
+}
+
+func TestCodexRPMUpdateLateBaselineAndPostcondition(t *testing.T) {
+	for _, mode := range []string{"late-query", "replay-error", "post-absent", "post-old", "no-op-changed"} {
+		t.Run(mode, func(t *testing.T) {
+			r := newRPMUpdateFixture(t, "amd64")
+			original := r.installed
+			if mode == "no-op-changed" {
+				r.installed = r.metadata()
+			}
+			if mode == "late-query" || mode == "replay-error" {
+				versions := 0
+				r.fault = func(name string, args []string) error {
+					if name == "dnf5" && reflect.DeepEqual(args, []string{"--version"}) {
+						versions++
+						if mode == "late-query" && versions == 2 {
+							r.present = false
+						}
+					}
+					if mode == "replay-error" && name == "dnf5" && len(args) > len(rpmDNFOptions()) && args[len(rpmDNFOptions())] == "replay" {
+						return errors.New("uncertain update")
+					}
+					return nil
+				}
+			}
+			r.f.b.checkpoint = func(point string) error {
+				if point == "codex-rpm-after-replay" {
+					if mode == "post-absent" {
+						r.present = false
+					} else if mode == "post-old" {
+						r.installed = original
+					}
+				}
+				if point == "codex-rpm-before-unchanged" && mode == "no-op-changed" {
+					r.present = false
+				}
+				return nil
+			}
+			if err := r.run(); err == nil {
+				t.Fatal("uncertain update succeeded")
+			}
+			if (mode == "late-query" || mode == "no-op-changed") && r.replays != 0 {
+				t.Fatal("changed baseline reached replay")
+			}
+			if _, err := os.Stat(r.f.b.root(codexDesktopRPM) + ".lock"); err != nil {
+				t.Fatal("uncertain update lost lock", err)
+			}
+		})
 	}
 }
 

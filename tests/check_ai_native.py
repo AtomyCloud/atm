@@ -211,12 +211,12 @@ def check(executable, backend):
         rpm_choices = json.loads(rpm_menu.stdout.splitlines()[-1])["choices"]
         assert rpm_choices, "native RPM review menu missing"
         for choice in rpm_choices:
-            assert choice["operation"] in ("menu", "install", "status")
-            if choice["operation"] == "install":
+            assert choice["operation"] in ("menu", "install", "update", "status")
+            if choice["operation"] in ("install", "update"):
                 assert {"--trust-download", "--accept-system-packages"} <= set(choice["arguments"])
         for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
             run("--yes", "plugin", "ai", "install", "--provider", rpm, *flags, success=False)
-        for operation in ("update", "use", "remove", "uninstall", "integrate"):
+        for operation in ("use", "remove", "uninstall", "integrate"):
             run("--yes", "plugin", "ai", operation, "--provider", rpm,
                 "--trust-download", "--accept-system-packages", success=False)
         for flags in (("--version", "1.2.3"), ("--version", "../../outside"),
@@ -229,6 +229,19 @@ def check(executable, backend):
         run("plugin", "ai", "install", "--provider", rpm,
             "--trust-download", "--accept-system-packages", success=False, started=False)
         plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", rpm,
+                             "--trust-download", "--accept-system-packages", started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
+        for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
+            run("--yes", "plugin", "ai", "update", "--provider", rpm, *flags, success=False)
+        for flags in (("--version", "1.2.3"), ("--version", "../../outside"),
+                      ("--rocm",), ("--accept-dependency-execution",),
+                      ("--accept-system-packages",), ("--remove-path",),
+                      ("--trust-download=true",), ("--keep-preparation",)):
+            run("--yes", "plugin", "ai", "update", "--provider", rpm,
+                "--trust-download", "--accept-system-packages", *flags, success=False)
+        run("plugin", "ai", "update", "--provider", rpm,
+            "--trust-download", "--accept-system-packages", success=False, started=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "update", "--provider", rpm,
                              "--trust-download", "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
         desktop = "codex-desktop-system"

@@ -23,6 +23,8 @@ type codexRPMJournal struct {
 	Plugin, Provider, Phase, URL, SHA256, Input, Stage, PlanSHA256 string
 	Size                                                           int64
 	Package                                                        codexRPMMetadata
+	Operation                                                      string
+	Baseline                                                       codexRPMMetadata
 }
 
 type codexRPMPlan struct {
@@ -176,11 +178,34 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 		return nil, err
 	}
 	u, err := codexRPMURL(b.arch)
-	if err != nil || r.Schema != 1 || r.Plugin != "ai" || r.Provider != codexDesktopRPM || r.URL != u {
+	if err != nil || (r.Schema != 1 && r.Schema != 2) || r.Plugin != "ai" || r.Provider != codexDesktopRPM || r.URL != u {
 		return nil, fmt.Errorf("invalid RPM journal")
+	}
+	if r.Schema == 1 {
+		if r.Operation != "" || r.Baseline != (codexRPMMetadata{}) {
+			return nil, fmt.Errorf("legacy RPM journal cannot describe an update")
+		}
+	} else {
+		switch r.Operation {
+		case "install":
+			if r.Baseline != (codexRPMMetadata{}) {
+				return nil, fmt.Errorf("initial RPM journal cannot carry an installed baseline")
+			}
+		case "update":
+			m := r.Baseline
+			if _, e := parseCodexRPMMetadata(strings.Join([]string{m.Name, m.Epoch, m.Version, m.Release, m.Arch}, "\t")+"\n", b.arch); e != nil {
+				return nil, fmt.Errorf("invalid RPM update baseline: %w", e)
+			}
+		default:
+			return nil, fmt.Errorf("invalid RPM journal operation")
+		}
 	}
 	switch r.Phase {
 	case "prepared", "downloaded", "metadata-verified", "root-staged", "plan-verified", "replaying", "complete", "failed", "unknown":
+	case "unchanged":
+		if r.Schema != 2 || r.Operation != "update" || r.Package != r.Baseline || r.Size == 0 || r.Input == "" || r.Stage != "" || r.PlanSHA256 != "" {
+			return nil, fmt.Errorf("invalid unchanged RPM evidence")
+		}
 	default:
 		return nil, fmt.Errorf("invalid RPM journal phase")
 	}
@@ -205,6 +230,10 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 		return nil, fmt.Errorf("incomplete RPM success evidence")
 	}
 	return &r, nil
+}
+
+func codexRPMJournalFinished(r *codexRPMJournal) bool {
+	return r == nil || r.Phase == "complete" || r.Phase == "unchanged"
 }
 
 func (b *backend) saveRPMJournal(r codexRPMJournal) error {
@@ -236,7 +265,11 @@ func (b *backend) codexRPMStatus() {
 		b.log(label("codex_rpm_unobserved"))
 		return
 	}
-	b.log(fmt.Sprintf(label("codex_rpm_record"), r.Phase, r.Package.Version, r.Package.Release, r.Package.Arch))
+	op := r.Operation
+	if r.Schema == 1 {
+		op = "install"
+	}
+	b.log(fmt.Sprintf(label("codex_rpm_record"), op, r.Phase, r.Package.Version, r.Package.Release, r.Package.Arch))
 }
 
 func (b *backend) codexRPMMenu(ctx context.Context) ([]choice, error) {
@@ -246,10 +279,14 @@ func (b *backend) codexRPMMenu(ctx context.Context) ([]choice, error) {
 	back := choice{ID: "back", Label: label("back"), Operation: "menu"}
 	r, err := b.rpmJournal()
 	_, lockErr := os.Lstat(b.root(codexDesktopRPM) + ".lock")
-	if err != nil || r != nil && r.Phase != "complete" || !os.IsNotExist(lockErr) {
+	if err != nil || !codexRPMJournalFinished(r) || !os.IsNotExist(lockErr) {
 		return []choice{back}, ctx.Err()
 	}
-	return []choice{{ID: "install", Label: label("codex_rpm_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}}, back}, ctx.Err()
+	return []choice{
+		{ID: "install", Label: label("codex_rpm_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
+		{ID: "update", Label: label("codex_rpm_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
+		back,
+	}, ctx.Err()
 }
 
 func rpmDNFOptions() []string {
@@ -280,9 +317,11 @@ func rpmCall(ctx context.Context, s *systemTools, name string, args []string, el
 	return s.run(ctx, ex, args)
 }
 
-func (b *backend) installCodexRPM(ctx context.Context, o options) (result error) {
-	if b.req.Operation != "install" || o.provider != codexDesktopRPM || o.version != "latest" || !o.trust || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.keepPreparation || o.refreshLauncher || o.serviceAction != "" || o.acceptService {
-		return fmt.Errorf("explicit latest-only RPM initial installation consent required")
+func (b *backend) installOrUpdateCodexRPM(ctx context.Context, o options) (result error) {
+	op := b.req.Operation
+	updating := op == "update"
+	if (op != "install" && !updating) || o.provider != codexDesktopRPM || o.version != "latest" || !o.trust || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.keepPreparation || o.refreshLauncher || o.serviceAction != "" || o.acceptService {
+		return fmt.Errorf("explicit latest-only RPM install/update consent required")
 	}
 	b.log(label("codex_rpm_scope"))
 	s := b.rpmTools()
@@ -304,14 +343,22 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 	if err != nil || !strings.HasPrefix(version, "dnf5 version 5.") {
 		return fmt.Errorf("DNF5 is required; no DNF4 fallback: %v", err)
 	}
-	if _, present, e := installedCodexRPM(ctx, s, b.arch); e != nil || present {
-		return fmt.Errorf("existing or unknown ChatGPT RPM state preserved: %v", e)
+	baseline, present, err := installedCodexRPM(ctx, s, b.arch)
+	if err != nil || present != updating {
+		return fmt.Errorf("RPM %s refused: initial install requires absence; update requires exactly one installed package; unknown state is preserved: %v", op, err)
+	}
+	checkBaseline := func() error {
+		got, found, e := installedCodexRPM(ctx, s, b.arch)
+		if e != nil || found != updating || got != baseline {
+			return fmt.Errorf("RPM %s original package state changed or is unknown: %v", op, e)
+		}
+		return ctx.Err()
 	}
 	prior, err := b.rpmJournal()
 	if err != nil {
 		return err
 	}
-	if prior != nil && prior.Phase != "complete" {
+	if !codexRPMJournalFinished(prior) {
 		return fmt.Errorf("unfinished RPM operation; inspect retained evidence manually")
 	}
 	root := b.root(codexDesktopRPM)
@@ -353,8 +400,11 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 		}
 	}()
 	prior, err = b.rpmJournal()
-	if err != nil || prior != nil && prior.Phase != "complete" {
+	if err != nil || !codexRPMJournalFinished(prior) {
 		return fmt.Errorf("RPM journal changed under lock: %v", err)
+	}
+	if err = checkBaseline(); err != nil {
+		return err
 	}
 	if _, err = os.Lstat(root); os.IsNotExist(err) {
 		if err = os.Mkdir(root, 0700); err != nil {
@@ -408,7 +458,7 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 		}
 		return out, checkState()
 	}
-	r := codexRPMJournal{Schema: 1, Plugin: "ai", Provider: codexDesktopRPM, Phase: "prepared", URL: url}
+	r := codexRPMJournal{Schema: 2, Plugin: "ai", Provider: codexDesktopRPM, Phase: "prepared", URL: url, Operation: op, Baseline: baseline}
 	retain = true
 	privileged := false
 	defer func() {
@@ -488,11 +538,25 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 	if err = phase("metadata-verified"); err != nil {
 		return err
 	}
+	if updating && r.Package == baseline {
+		if err = boundary("codex-rpm-before-unchanged"); err != nil {
+			return err
+		}
+		if err = checkBaseline(); err != nil {
+			return err
+		}
+		if err = phase("unchanged"); err != nil {
+			return err
+		}
+		retain = false
+		b.log(label("codex_rpm_unchanged"))
+		return nil
+	}
 	if err = boundary("codex-rpm-before-stage"); err != nil {
 		return err
 	}
-	if _, present, e := installedCodexRPM(ctx, s, b.arch); e != nil || present {
-		return fmt.Errorf("ChatGPT RPM appeared before staging: %v", e)
+	if err = checkBaseline(); err != nil {
+		return err
 	}
 	privileged = true
 	out, err := call("mktemp", []string{"-d", "/run/atm-ai-codex-rpm-XXXXXXXXXX"})
@@ -551,7 +615,14 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 	if err = boundary("codex-rpm-before-store"); err != nil {
 		return err
 	}
-	if _, err = dnf("install", "--store="+tx, target); err != nil {
+	if err = checkBaseline(); err != nil {
+		return err
+	}
+	action := "install"
+	if updating {
+		action = "upgrade"
+	}
+	if _, err = dnf(action, "--store="+tx, target); err != nil {
 		return err
 	}
 	identity := func(path string, directory bool) (string, error) {
@@ -597,7 +668,12 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 	if err != nil {
 		return err
 	}
-	if err = validateCodexRPMPlan(plan, r.Package); err != nil {
+	if updating {
+		err = validateCodexRPMUpdatePlan(plan, r.Package, baseline)
+	} else {
+		err = validateCodexRPMPlan(plan, r.Package)
+	}
+	if err != nil {
 		return err
 	}
 	r.PlanSHA256 = fmt.Sprintf("%x", sha256.Sum256(plan))
@@ -684,8 +760,8 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 	if err = phase("replaying"); err != nil {
 		return err
 	}
-	if _, present, e := installedCodexRPM(ctx, s, b.arch); e != nil || present {
-		return fmt.Errorf("ChatGPT RPM appeared before replay: %v", e)
+	if err = checkBaseline(); err != nil {
+		return err
 	}
 	now, err := dnf("--dump-main-config")
 	if err != nil || now != policy {
@@ -706,6 +782,9 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 	if err = checkStored(); err != nil {
 		return err
 	}
+	if err = checkBaseline(); err != nil {
+		return err
+	}
 	if _, err = dnf("replay", tx); err != nil {
 		return err
 	}
@@ -723,6 +802,10 @@ func (b *backend) installCodexRPM(ctx context.Context, o options) (result error)
 		return err
 	}
 	retain = false
-	b.log(fmt.Sprintf(label("codex_rpm_done"), r.Package.Version, r.Package.Release, r.Stage))
+	message := "codex_rpm_done"
+	if updating {
+		message = "codex_rpm_updated"
+	}
+	b.log(fmt.Sprintf(label(message), r.Package.Version, r.Package.Release, r.Stage))
 	return nil
 }

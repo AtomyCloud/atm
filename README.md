@@ -788,10 +788,12 @@ package, pins its original state through APT guards and refuses downgrade.
 Separate system-package consent enables guarded removal of the observed configured
 package, including manual installations, without purge, autoremove or personal-data
 cleanup. The plan must target only `chatgpt`; package scripts still run as root.
-An initial-only DNF5 RPM preview is also available: it requires both consent flags,
-stores and validates a single-package plan, then replays it with repositories
-disabled. Dependencies must already be satisfied. Before/after checks do not
-guarantee exclusion against other package frontends. RPM update/removal, Arch
+DNF5 RPM initial installation and explicit update are also available in preview:
+both require consent flags, validate a single-package plan, then replay it with
+repositories disabled. Update binds the original installed identity, refuses
+implicit installation/downgrade, and treats an identical candidate as a verified
+no-op. Dependencies must already be satisfied. Before/after checks do not
+guarantee exclusion against other package frontends. RPM removal, Arch
 and real Fedora acceptance remain Pending. Ollama uses a separately consented user service for the
 portable bundle, not the root-based upstream service. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.

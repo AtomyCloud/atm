@@ -263,7 +263,7 @@ func TestCodexDesktopUpdateRefusals(t *testing.T) {
 		}
 	}
 	for name := range providers {
-		if name == codexDesktopSystem {
+		if name == codexDesktopSystem || name == codexDesktopRPM {
 			continue
 		}
 		if _, err := parseOptions("update", []string{"--provider", name, "--trust-download", "--accept-system-packages"}); err == nil {
