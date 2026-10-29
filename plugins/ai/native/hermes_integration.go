@@ -107,6 +107,25 @@ func (b *backend) prepareHermesBridge(ctx context.Context, check func() error) (
 	if old != nil {
 		return nil, fmt.Errorf("Hermes native bridge appeared before staging; preserved")
 	}
+	return b.copyHermesBridge(ctx, nil, check, func(stage string, staged *hermesBridgeState, checkCopy func() error) (*hermesBridgeState, error) {
+		if err := checkCopy(); err != nil {
+			return nil, err
+		}
+		root := b.root(hermesAgent)
+		if err := unix.Renameat2(unix.AT_FDCWD, stage, unix.AT_FDCWD, filepath.Join(root, "bin"), unix.RENAME_NOREPLACE); err != nil {
+			return nil, err
+		}
+		now, err := b.inspectHermesBridge(ctx)
+		if err != nil || !sameHermesBridge(staged, now) {
+			return nil, fmt.Errorf("published native bridge changed; retained at %s: %v", root, err)
+		}
+		return now, nil
+	})
+}
+
+// Both enrollment and explicit refresh copy the running backend with the same
+// identity/hash checks. The caller alone chooses the publication operation.
+func (b *backend) copyHermesBridge(ctx context.Context, old *hermesBridgeState, check func() error, publish func(string, *hermesBridgeState, func() error) (*hermesBridgeState, error)) (*hermesBridgeState, error) {
 	selfPath := os.Executable
 	fixture := b.hermes != nil && b.hermes.selfPath != nil
 	if fixture {
@@ -135,6 +154,29 @@ func (b *backend) prepareHermesBridge(ctx context.Context, check func() error) (
 	_, original, err := hermesCompletionRead(ctx, filepath.Dir(source), source, hermesBridgeLimit, true, false)
 	if err != nil {
 		return nil, err
+	}
+	checkSource := func() error {
+		_, now, err := hermesCompletionRead(ctx, filepath.Dir(source), source, hermesBridgeLimit, true, false)
+		if err != nil {
+			return err
+		}
+		last, err := os.Lstat(source)
+		if err != nil || original != now || !os.SameFile(info, last) {
+			return fmt.Errorf("native backend changed before publication")
+		}
+		return verifySelf()
+	}
+	if old != nil && original.SHA256 == old.payload.hash.SHA256 && original.Size == old.payload.hash.Size {
+		if err := b.boundary("hermes-refresh-before-noop"); err != nil {
+			return nil, err
+		}
+		if err := check(); err != nil {
+			return nil, err
+		}
+		if err := checkSource(); err != nil {
+			return nil, err
+		}
+		return old, ctx.Err()
 	}
 	f, err := regular(source, info.Mode().Perm(), hermesBridgeLimit)
 	if err != nil {
@@ -194,32 +236,24 @@ func (b *backend) prepareHermesBridge(ctx context.Context, check func() error) (
 	if err := check(); err != nil {
 		return fail(err)
 	}
-	_, sourceNow, err := hermesCompletionRead(ctx, filepath.Dir(source), source, hermesBridgeLimit, true, false)
-	if err != nil || original != sourceNow {
-		return fail(fmt.Errorf("native backend changed before publication: %v", err))
+	checkCopy := func() error {
+		if err := checkSource(); err != nil {
+			return err
+		}
+		now, err := b.hermesBridgeSnapshot(ctx, stage)
+		if err != nil || !sameHermesBridge(staged, now) {
+			return fmt.Errorf("native bridge stage changed: %v", err)
+		}
+		return ctx.Err()
 	}
-	last, err := os.Lstat(source)
-	if err != nil || !os.SameFile(info, last) {
-		return fail(fmt.Errorf("native backend replaced before publication"))
-	}
-	if err := verifySelf(); err != nil {
+	if err := checkCopy(); err != nil {
 		return fail(err)
 	}
-	now, err := b.hermesBridgeSnapshot(ctx, stage)
-	if err != nil || !sameHermesBridge(staged, now) {
-		return fail(fmt.Errorf("native bridge stage changed: %v", err))
-	}
-	if err := ctx.Err(); err != nil {
+	published, err := publish(stage, staged, checkCopy)
+	if err != nil {
 		return fail(err)
 	}
-	if err := unix.Renameat2(unix.AT_FDCWD, stage, unix.AT_FDCWD, filepath.Join(root, "bin"), unix.RENAME_NOREPLACE); err != nil {
-		return fail(err)
-	}
-	now, err = b.inspectHermesBridge(ctx)
-	if err != nil || !sameHermesBridge(staged, now) {
-		return nil, fmt.Errorf("published native bridge changed; retained at %s: %v", root, err)
-	}
-	return now, nil
+	return published, nil
 }
 
 func (b *backend) changeHermesIntegration(ctx context.Context, remove bool) (result error) {

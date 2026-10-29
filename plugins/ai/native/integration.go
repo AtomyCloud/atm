@@ -278,6 +278,9 @@ func (b *backend) integrationChanges(id, home string, rec *pathReceipt, remove b
 }
 
 func (b *backend) integrate(ctx context.Context, o options) error {
+	if o.refreshLauncher {
+		return b.refreshHermesLauncher(ctx)
+	}
 	ids := integrationProviders
 	if o.provider != "" {
 		ids = []string{o.provider}

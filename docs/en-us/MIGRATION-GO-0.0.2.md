@@ -138,8 +138,11 @@ This is separate from the JSONL plugin protocol and uses no shell launcher.
 Explicit PATH enrollment copies an owned native `hermes` executable with a
 hash/architecture receipt. Detach removes only its profile enrollment, retaining
 the verified copy and provider data. Reenrollment reuses that copy, never silently
-refreshes it; bridge refresh and full Hermes removal remain Pending. The alias
-requires valid enrollment and explicit runtime consent. Real provider and shell
+refreshes it. A separate explicit launcher-refresh action replaces the owned copy
+from the running AI backend while preserving enrollment, profiles, selection and
+provider data. It never downloads or executes Hermes; uncertain exchange/cleanup
+retains locks and manual-inspection evidence. Full Hermes removal remains Pending.
+The alias requires valid enrollment and explicit runtime consent. Real provider and shell
 acceptance remain Pending.
 No upstream shell installer, root execution or automatic privilege elevation;
 private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data

@@ -227,6 +227,26 @@ def check(executable, backend):
         run("--dry-run", "plugin", "ai", "integrate", "--provider", agent, started=False)
         run("--dry-run", "plugin", "ai", "integrate", "--provider", agent,
             "--remove-path", started=False)
+        run("--dry-run", "plugin", "ai", "integrate", "--provider", agent,
+            "--refresh-launcher", started=False)
+        run("plugin", "ai", "integrate", "--provider", agent,
+            "--refresh-launcher", started=False, success=False)
+        run("--yes", "plugin", "ai", "integrate", "--provider", agent,
+            "--refresh-launcher", success=False)
+        for flags in (("--remove-path",), ("--refresh-launcher",),
+                      ("--version", "0.22.5"), ("--trust-download",),
+                      ("--accept-dependency-execution",), ("--accept-system-packages",)):
+            run("--yes", "plugin", "ai", "integrate", "--provider", agent,
+                "--refresh-launcher", *flags, success=False)
+        for provider in ("picoclaw", "codex-cli", "ollama", "hermes-desktop", system):
+            run("--yes", "plugin", "ai", "integrate", "--provider", provider,
+                "--refresh-launcher", success=False)
+        run("--yes", "plugin", "ai", "integrate", "--refresh-launcher", success=False)
+        run("--yes", "plugin", "ai", "integrate", "--provider", agent,
+            "--refresh-launcher=true", success=False)
+        for operation in ("install", "update", "use", "remove", "uninstall"):
+            run("--yes", "plugin", "ai", operation, "--provider", agent,
+                "--refresh-launcher", success=False)
         for provider in ("hermes-desktop", system, "codex-desktop"):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
         run("install", "ai", success=False, started=False)

@@ -772,6 +772,8 @@ bridge launches the selected preparation with private HOME and no shell wrapper;
 PATH enrollment is a separate explicit action using an owned native copy, with
 guarded detach that preserves the copy and application data. The alias still
 requires runtime consent; reenrollment never silently refreshes an old copy.
+An explicit launcher-refresh action replaces that copy with the running AI backend
+without changing profiles, enrollment, selection or provider data.
 Full lifecycle and real provider/runtime
 acceptance remain Pending. Ollama system/service workflows and Codex Desktop
 remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview

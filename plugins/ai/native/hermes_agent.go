@@ -216,6 +216,13 @@ func (b *backend) hermesMenu(ctx context.Context) ([]choice, error) {
 				if rec != nil {
 					choices = append(choices, choice{ID: "remove-path", Label: label("path_detach"), Operation: "integrate", Arguments: []string{"--provider", hermesAgent, "--remove-path"}})
 				}
+				bridge, err := b.inspectHermesBridge(ctx)
+				if err != nil {
+					return nil, err
+				}
+				if bridge != nil {
+					choices = append(choices, choice{ID: "refresh-launcher", Label: label("hermes_refresh"), Operation: "integrate", Arguments: []string{"--provider", hermesAgent, "--refresh-launcher"}})
+				}
 			}
 		}
 	}

@@ -19,7 +19,7 @@ route supports Linux amd64 only:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
-| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge and explicit PATH enrollment/detach; reviewed contract only |
+| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach and native launcher refresh; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -226,9 +226,9 @@ These checks accompany the existing selected-preparation and provider-lock guard
 Detach removes only the enrolled blocks and `path.json`. It retains the verified
 native copy and its independent receipt; execution through the detached alias is
 refused. Reenrollment reuses that copy without silently updating it. Upgrading the
-AI backend does **not** refresh an existing Hermes bridge; automatic or explicit
-bridge refresh and full Hermes uninstall remain Pending. Use the current direct
-preview executable for testing newer bridge code without adopting an old copy.
+AI backend does **not** automatically refresh an existing Hermes bridge. Use the
+separate explicit action below to replace that owned copy. Full Hermes uninstall
+remains Pending.
 
 Failures may leave the bridge, staging, HOME/provider locks and
 `hermes-bridge.json` evidence for manual inspection, even when profile changes
@@ -236,6 +236,44 @@ were restored. Never assume an interrupted enrollment completed or that all
 state was rolled back. Modified/foreign state is refused and preserved. No
 automatic recovery or power-loss consistency is promised. Real shell/provider
 acceptance, Linux arm64 execution and other platforms remain Pending.
+
+### Explicit Launcher Refresh
+
+After rebuilding or replacing the preview backend, run:
+
+```bash
+preview_atm --dry-run plugin ai integrate --provider hermes-agent --refresh-launcher
+preview_atm plugin ai integrate --provider hermes-agent --refresh-launcher
+```
+
+The Hermes submenu also offers the refresh action when a verified owned bridge
+exists. CORE confirmation is required. This copies the **currently running AI
+backend**, not a downloaded Hermes release, and does not update Hermes, run PM,
+start the provider, fetch metadata or modify profiles. An identical verified
+image is a no-op. `--provider hermes-agent` is mandatory; `--remove-path`, version,
+download-trust and dependency/system execution flags cannot be combined with it.
+An absent bridge must first be enrolled separately; foreign/changed copies and
+locked/interrupted operations are refused rather than adopted or repaired.
+
+Both enrolled and detached copies can be refreshed. Existing profile bytes,
+permissions and file identities, `path.json`, active selection and private
+provider data are preserved. A detached alias stays detached and cannot launch
+the provider until explicitly reenrolled. Refresh does not waive runtime consent.
+The action verifies local ownership and executable identity; it is not a remote
+release-signature check or a guarantee that the supplied backend is newer.
+
+Refresh holds provider and HOME PATH locks, pins the original bridge and
+preparation, and verifies the new source and staged copy. It exchanges the whole
+private bin directory atomically, keeping executable and receipt together. Only
+the two exact verified retired files and their empty directory are cleaned up;
+there is no recursive removal. The filesystem must support this atomic exchange.
+Uncertain failures preserve locks, remaining staging and small
+`native-v1.lock/hermes-refresh*.json` records for manual inspection. The new
+bridge may already be active and the old copy may be partly cleaned up: **no
+automatic rollback or crash recovery is promised**. Never clear retained locks
+while processes may still be using the installation. Large binaries are not
+serialized into the profile journal. Linux arm64 execution and real provider
+acceptance remain Pending.
 
 ## Existing Installation Discovery
 
@@ -475,6 +513,7 @@ Owned PicoClaw, standalone Codex CLI, Ollama and Hermes Agent previews can be in
 
 ```text
 integrate [--provider picoclaw|codex-cli|ollama|hermes-agent] [--remove-path]
+integrate --provider hermes-agent --refresh-launcher
 ```
 
 Use `preview_atm plugin ai integrate ...` with the isolated runtime below.
@@ -745,8 +784,9 @@ tests never elevate to create that fixture.
 They never run provider code, real sudo/APT or change system packages. The
 Hermes launch tests use injected command results and harmless test-process helpers
 for terminal/process behavior; compiled guard tests trace refusals and dry-run.
-The compiled PATH lifecycle builds a real multi-MiB native backend, enrolls and
-detaches it only in a temporary HOME, preserves foreign files and profile modes,
+The compiled PATH lifecycle builds two distinct real multi-MiB native images,
+enrolls and refreshes both enrolled and detached copies only in a temporary HOME,
+checks verified same-image no-op and exact preservation of profiles/selection,
 and rejects actual launch through a detached alias before upstream execution.
 Its optional trace check requires `strace` and verifies no child/network activity
 for those operations. Unit checks also reject a mismatched running executable,

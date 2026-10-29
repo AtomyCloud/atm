@@ -292,10 +292,17 @@ func TestHermesCommandDescendantCleanup(t *testing.T) {
 			}
 			for _, pid := range pids {
 				until := time.Now().Add(time.Second)
-				for !hermesProcessStopped(pid) && time.Now().Before(until) {
+				stopped := false
+				for time.Now().Before(until) {
+					if hermesProcessStopped(pid) {
+						stopped = true
+						break
+					}
 					time.Sleep(10 * time.Millisecond)
 				}
-				if !hermesProcessStopped(pid) {
+				// Keep the terminal observation: another /proc read can race
+				// with reaping after a zombie or absent process was observed.
+				if !stopped {
 					t.Fatal("command process survived", pid)
 				}
 			}

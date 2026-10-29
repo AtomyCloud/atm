@@ -38,6 +38,7 @@ type options struct {
 	trust             bool
 	acceptSystem      bool
 	removePath        bool
+	refreshLauncher   bool
 	acceptPM          bool
 }
 
@@ -83,6 +84,11 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 		seen[key] = true
 		switch key {
+		case "--refresh-launcher":
+			if eq || op != "integrate" {
+				return o, fmt.Errorf("launcher refresh applies only to integrate")
+			}
+			o.refreshLauncher = true
 		case "--accept-dependency-execution":
 			if eq || (op != "install" && op != "update") {
 				return o, fmt.Errorf("dependency execution consent applies only to install/update")
@@ -121,6 +127,9 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 	}
 	if op == "integrate" {
+		if o.refreshLauncher && (o.provider != hermesAgent || o.removePath) {
+			return o, fmt.Errorf("--refresh-launcher requires explicit --provider hermes-agent and excludes --remove-path")
+		}
 		if seen["--version"] || (seen["--provider"] && cliCommand(o.provider) == "") {
 			return o, fmt.Errorf("integrate accepts only --provider picoclaw|codex-cli|ollama|hermes-agent and --remove-path")
 		}

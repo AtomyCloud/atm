@@ -28,15 +28,21 @@ func TestHermesPATHCompiledLifecycle(t *testing.T) {
 		t.Fatal(err)
 	}
 	binary := filepath.Join(buildDir, "atm-ai")
+	originalBinary := binary
+	replacementBinary := filepath.Join(buildDir, "atm-ai-replacement")
 	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Minute)
 	defer cancel()
-	build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-o", binary, ".")
-	build.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
-	if output, err := build.CombinedOutput(); err != nil {
-		t.Fatal("build preview", err, string(output))
-	}
-	if err := os.Chmod(binary, 0755); err != nil {
-		t.Fatal(err)
+	for i, target := range []string{originalBinary, replacementBinary} {
+		// Distinct build IDs produce two real native images without changing
+		// repository versions or executing any provider code.
+		build := exec.CommandContext(ctx, filepath.Join(runtime.GOROOT(), "bin", "go"), "build", "-ldflags=-buildid=atm-hermes-fixture-"+fmt.Sprint(i), "-o", target, ".")
+		build.Env = append(os.Environ(), "GOOS=linux", "GOARCH="+runtime.GOARCH, "CGO_ENABLED=0")
+		if output, err := build.CombinedOutput(); err != nil {
+			t.Fatal("build preview", err, string(output))
+		}
+		if err := os.Chmod(target, 0755); err != nil {
+			t.Fatal(err)
+		}
 	}
 	tracer := ""
 	if os.Getenv("ATM_TEST_HERMES_PATH_TRACE") == "1" {
@@ -60,6 +66,13 @@ func TestHermesPATHCompiledLifecycle(t *testing.T) {
 	external := filepath.Join(home, ".local", "bin", "hermes")
 	writeFixture(t, external, []byte("foreign executable; never execute\n"), 0700)
 	before := integrationRead(t, external)
+	dataPaths := []string{
+		filepath.Join(home, ".hermes", "config.yaml"),
+		filepath.Join(root, "versions", hermesPMVersion, "home", ".hermes", "config.yaml"),
+	}
+	for _, path := range dataPaths {
+		writeFixture(t, path, []byte("preserve fixture data; no credentials\n"), 0600)
+	}
 	env := []string{"HOME=" + home, "PATH=", "ATM_DRY_RUN=0", "LANG=C.UTF-8"}
 	invoke := func(executable string, args []string, input []byte) ([]byte, error) {
 		t.Helper()
@@ -137,6 +150,54 @@ func TestHermesPATHCompiledLifecycle(t *testing.T) {
 	if err != nil || !os.SameFile(i, j) || !i.ModTime().Equal(j.ModTime()) {
 		t.Fatal("repeat enrollment replaced owned native bridge", err)
 	}
+	refresh := func(target string) {
+		t.Helper()
+		paths := []string{filepath.Join(root, "path.json"), filepath.Join(root, "current.json"), filepath.Join(root, "owner.json")}
+		paths = append(paths, dataPaths...)
+		paths = append(paths, external)
+		for _, name := range profileNames {
+			paths = append(paths, filepath.Join(home, name))
+		}
+		for _, name := range []string{"source.json", "complete.json"} {
+			paths = append(paths, filepath.Join(root, "versions", hermesPMVersion, name))
+		}
+		preserved := map[string]pathState{}
+		for _, path := range paths {
+			state, err := pathSnapshot(path, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			preserved[path] = state
+		}
+		previous, err := os.Lstat(bridge)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want, old := integrationRead(t, target), integrationRead(t, bridge)
+		if bytes.Equal(want, old) {
+			t.Fatal("refresh fixture requires distinct native images")
+		}
+		binary = target
+		wire("integrate", "--provider", hermesAgent, "--refresh-launcher")
+		updated, err := os.Lstat(bridge)
+		if err != nil || os.SameFile(previous, updated) || !bytes.Equal(want, integrationRead(t, bridge)) {
+			t.Fatal("refresh did not install the currently running backend image", err)
+		}
+		wire("integrate", "--provider", hermesAgent, "--refresh-launcher")
+		again, err := os.Lstat(bridge)
+		if err != nil || !os.SameFile(updated, again) || !updated.ModTime().Equal(again.ModTime()) {
+			t.Fatal("same-image refresh was not a verified no-op", err)
+		}
+		for path, before := range preserved {
+			after, err := pathSnapshot(path, false)
+			if err != nil || !pathUnchanged(after, before) {
+				t.Fatal("refresh modified enrollment, profile or preparation", path, err)
+			}
+		}
+		integrationMissing(t, root+".lock")
+		integrationMissing(t, filepath.Join(home, ".atm-ai-path.lock"))
+	}
+	refresh(replacementBinary)
 	for _, args := range [][]string{
 		{"--accept-runtime-execution", "--dry-run", "--", "--help"},
 		{"--accept-runtime-execution", "--dry-run", "--", "chat", "spaces and 'quotes'"},
@@ -171,11 +232,15 @@ func TestHermesPATHCompiledLifecycle(t *testing.T) {
 	if !bytes.Equal(integrationRead(t, external), before) {
 		t.Fatal("foreign Hermes command was modified")
 	}
+	refresh(originalBinary)
+	if output, err := invoke(bridge, []string{"--accept-runtime-execution", "--", "--help"}, nil); err == nil || !bytes.Contains(output, []byte("requires valid explicit PATH enrollment")) {
+		t.Fatal("refresh implicitly reenrolled the detached alias", err, string(output))
+	}
 	wire("integrate", "--provider", hermesAgent)
 	wire("integrate", "--provider", hermesAgent, "--remove-path")
 	integrationMissing(t, root+".lock")
 	integrationMissing(t, filepath.Join(home, ".atm-ai-path.lock"))
-	t.Log(fmt.Sprintf("real native bridge %d bytes; provider never executed; trace=%t", i.Size(), tracer != ""))
+	t.Log(fmt.Sprintf("two-image native bridge refresh/enrollment %d bytes; provider never executed; trace=%t", i.Size(), tracer != ""))
 }
 
 func TestHermesAliasAuthorityRefusals(t *testing.T) {
