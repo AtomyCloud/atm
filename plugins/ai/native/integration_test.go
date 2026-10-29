@@ -77,7 +77,9 @@ func TestIntegrationOptions(t *testing.T) {
 	f := newFixture(t, "amd64")
 	mustRun(t, f, "integrate")
 	integrationMissing(t, f.b.req.AppsDir)
-	integrationMissing(t, os.Getenv("HOME"))
+	if entries, err := os.ReadDir(os.Getenv("HOME")); err != nil || len(entries) != 0 {
+		t.Fatalf("empty fixture HOME changed by no-op integration: %v %v", entries, err)
+	}
 }
 
 func TestIntegrationLifecycleAndProfiles(t *testing.T) {

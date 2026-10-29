@@ -249,6 +249,30 @@ def check(executable, backend):
         plan = json.loads(run("--dry-run", "plugin", "ai", "uninstall", "--provider", desktop,
                              "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
+        # Service operations below must never contact a real user manager.
+        for action in ("register", "start", "stop", "remove"):
+            run("--yes", "plugin", "ai", "integrate", "--provider", "ollama",
+                "--service-action", action, success=False)
+            run("plugin", "ai", "integrate", "--provider", "ollama",
+                "--service-action", action, "--accept-service-execution", success=False, started=False)
+            plan = json.loads(run("--dry-run", "plugin", "ai", "integrate", "--provider", "ollama",
+                                 "--service-action", action, "--accept-service-execution", started=False).stdout)
+            assert plan["dry_run"] and plan["executor"] == "native"
+        for flags in (("--remove-path",), ("--version", "latest"), ("--trust-download",),
+                      ("--rocm",), ("--keep-preparation",), ("--refresh-launcher",),
+                      ("--accept-system-packages",), ("--accept-dependency-execution",),
+                      ("--service-action", "start"), ("--accept-service-execution=true",)):
+            run("--yes", "plugin", "ai", "integrate", "--provider", "ollama",
+                "--service-action", "register", "--accept-service-execution", *flags, success=False)
+        for provider in ("picoclaw", "codex-cli", "hermes-agent", desktop, system):
+            run("--yes", "plugin", "ai", "integrate", "--provider", provider,
+                "--service-action", "register", "--accept-service-execution", success=False)
+        for operation in ("install", "update", "use", "remove", "uninstall"):
+            run("--yes", "plugin", "ai", operation, "--provider", "ollama",
+                "--service-action", "start", "--accept-service-execution", success=False)
+        for flags in (("--accept-service-execution",), ("--service-action", "invalid"),
+                      ("--service-action", "status", "--accept-service-execution")):
+            run("--yes", "plugin", "ai", "integrate", "--provider", "ollama", *flags, success=False)
         agent = "hermes-agent"
         agent_menu = run("--yes", "plugin", "ai", "menu", agent)
         choices = json.loads(agent_menu.stdout.splitlines()[-1])["choices"]

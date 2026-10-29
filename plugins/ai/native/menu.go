@@ -62,6 +62,7 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 	}
 	if id == "ollama" {
 		b.ollamaGuidance()
+		b.log(label("ollama_service_scope"))
 	}
 	vs, current, err := b.inspect(ctx, id, false)
 	if err != nil {
@@ -72,6 +73,15 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 		{ID: "install", Label: label("install"), Operation: "install", Arguments: append(append([]string{}, base...), "--trust-download")},
 		{ID: "custom", Label: label("custom"), Operation: "install", Arguments: append(append([]string{}, base...), "--trust-download", "--version"), Prompt: label("version_prompt")},
 		{ID: "update", Label: label("update"), Operation: "update", Arguments: append(append([]string{}, base...), "--trust-download")},
+	}
+	if id == "ollama" {
+		for _, action := range []string{"status", "register", "start", "stop", "remove"} {
+			args := []string{"--provider", "ollama", "--service-action", action}
+			if action != "status" {
+				args = append(args, "--accept-service-execution")
+			}
+			out = append(out, choice{ID: "service-" + action, Label: label("ollama_service_" + action), Operation: "integrate", Arguments: args})
+		}
 	}
 	if id == "ollama" && b.arch == "amd64" {
 		out = append(out,

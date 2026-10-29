@@ -27,12 +27,14 @@ type backend struct {
 	client *http.Client
 	log    func(string)
 	// Unit tests inject transaction faults, never through the process environment.
-	checkpoint   func(string) error
-	system       *systemTools
-	codexDesktop *codexDesktopTools
-	discovery    *discoveryConfig
-	hermes       *hermesTools
-	hermesAlias  string
+	checkpoint          func(string) error
+	system              *systemTools
+	codexDesktop        *codexDesktopTools
+	discovery           *discoveryConfig
+	hermes              *hermesTools
+	hermesAlias         string
+	ollamaService       *ollamaServiceTools
+	ollamaLifecycleLock os.FileInfo
 }
 type options struct {
 	provider, version string
@@ -43,6 +45,8 @@ type options struct {
 	keepPreparation   bool
 	acceptPM          bool
 	rocm              bool
+	serviceAction     string
+	acceptService     bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -87,6 +91,23 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 		seen[key] = true
 		switch key {
+		case "--accept-service-execution":
+			if eq || op != "integrate" {
+				return o, fmt.Errorf("service consent is a bare integrate-only flag")
+			}
+			o.acceptService = true
+		case "--service-action":
+			if op != "integrate" {
+				return o, fmt.Errorf("service actions require integrate")
+			}
+			if !eq {
+				i++
+				if i == len(args) {
+					return o, fmt.Errorf("missing service action")
+				}
+				value = args[i]
+			}
+			o.serviceAction = value
 		case "--rocm":
 			if eq || (op != "install" && op != "update") {
 				return o, fmt.Errorf("--rocm is a bare opt-in for Ollama install/update only")
@@ -140,6 +161,29 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 	}
 	if op == "integrate" {
+		if seen["--service-action"] || o.acceptService {
+			if o.provider != "ollama" || !seen["--service-action"] {
+				return o, fmt.Errorf("service action requires explicit --provider ollama")
+			}
+			for key := range seen {
+				if key != "--provider" && key != "--service-action" && key != "--accept-service-execution" {
+					return o, fmt.Errorf("service and PATH/version/download options cannot be combined")
+				}
+			}
+			switch o.serviceAction {
+			case "status":
+				if o.acceptService {
+					return o, fmt.Errorf("readonly service status accepts no consent")
+				}
+			case "register", "start", "stop", "remove":
+				if !o.acceptService {
+					return o, fmt.Errorf("service mutation requires --accept-service-execution and CORE confirmation")
+				}
+			default:
+				return o, fmt.Errorf("unsupported service action; autostart is deferred")
+			}
+			return o, nil
+		}
 		if o.refreshLauncher && (o.provider != hermesAgent || o.removePath) {
 			return o, fmt.Errorf("--refresh-launcher requires explicit --provider hermes-agent and excludes --remove-path")
 		}
@@ -211,6 +255,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 	case "status":
 		return nil, b.status(ctx)
 	case "integrate":
+		if o.serviceAction != "" {
+			return nil, b.ollamaServiceExecute(ctx, o)
+		}
 		return nil, b.integrate(ctx, o)
 	case "install", "update":
 		if !o.trust {

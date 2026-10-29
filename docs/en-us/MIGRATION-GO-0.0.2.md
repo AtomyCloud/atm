@@ -126,8 +126,19 @@ an explicit optional ROCm companion: one release response pins both artifacts,
 each with size/digest verification, collision-safe unpublished assembly and a
 combined inventory. Base receipts remain compatible; ROCm receipts require both
 artifacts. Updates preserve the variant; same-version variant replacement is
-refused. No GPU driver, service, hardware probe or model operation is performed.
+refused. Installation performs no GPU driver, service, hardware probe or model operation.
 Real ROCm bundle/runtime acceptance remains Pending.
+The user selected a portable **user service** instead of upstream root/system
+installation. Explicit `integrate --provider ollama --service-action` routes
+register/start/stop/remove the dedicated `atm-ollama.service`, with separate
+`--accept-service-execution` consent and CORE confirmation. Explicit `status`
+queries the manager without that consent flag; aggregate status/menu remain
+metadata-only. No sudo, auto-start, enablement or linger changes occur.
+Registration pins the owned bundle; all portable version mutations are blocked
+until registration is removed. Service data is retained outside the version
+store. Ambiguous/interrupted manager operations retain evidence for manual
+inspection, not automatic rollback. Real user-manager/GPU acceptance is Pending;
+mocked tests and ARM64 cross-builds do not establish that acceptance.
 Separate explicit PATH registration uses an owned command link into the selected
 Ollama bundle; switching versions retains that link and the sibling-library layout.
 Uninstall detaches exact owned profile blocks before deselection or deletion;
@@ -157,7 +168,7 @@ The alias requires valid enrollment and explicit runtime consent. Real provider 
 acceptance remain Pending.
 No upstream shell installer, root execution or automatic privilege elevation;
 private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data
-migration, Ollama system/service workflows and real shell/provider
+migration and real Ollama service/shell/provider
 acceptance remain Pending; source-level portability is not runtime acceptance.
 
 Codex Desktop additionally has native initial APT installation and explicit DEB update for the current

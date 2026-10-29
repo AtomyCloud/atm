@@ -788,8 +788,8 @@ package, pins its original state through APT guards and refuses downgrade.
 Separate system-package consent enables guarded removal of the observed configured
 package, including manual installations, without purge, autoremove or personal-data
 cleanup. The plan must target only `chatgpt`; package scripts still run as root.
-RPM/Arch remain Pending, as do
-Ollama system/service workflows. See the [AI plugin guide](plugins/ai/README.md) for preview
+RPM/Arch remain Pending. Ollama uses a separately consented user service for the
+portable bundle, not the root-based upstream service. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 
 The native preview also reports external executable candidates from known legacy
@@ -814,8 +814,13 @@ removal. Linux amd64 also offers an explicit `--rocm` companion from the same
 release, with both SHA-256 digests checked; updates preserve the installed variant.
 An existing same-version directory is never converted in place. It downloads
 pinned stable archives with SHA-256 verification and
-does not run the upstream installer or the application. It does not configure
-services, GPU drivers or models, and leaves existing installations untouched.
+does not run the upstream installer or the application during installation.
+Separate explicit actions register, start, stop, inspect and remove the owned
+`atm-ollama.service` user unit. Registration never starts or enables it automatically;
+starting requires separate consent. The service pins one verified version and
+uses retained private data under `~/Apps/ai/ollama/service-v1`. Remove the service
+registration before changing or deleting portable versions. Foreign services,
+GPU drivers and existing model directories remain untouched.
 PATH registration is a separate explicit action; its stable command link retains
 the executable's location within the selected bundle and its sibling libraries.
 Real runtime/GPU compatibility remains pending. The normal legacy menu below is

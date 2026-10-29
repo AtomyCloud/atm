@@ -19,7 +19,7 @@ supports amd64; the separate ChatGPT Desktop DEB route supports amd64 and arm64:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation, explicit update and separately consented nonpurge removal of a configured system package; no downgrade or repair |
-| Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
+| Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration and separately consented user-service management |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
@@ -33,9 +33,9 @@ Pending before the entire AI plugin can switch to native Go:
 - Hermes Agent remaining installer/runtime acceptance beyond the reviewed
   source/PM contract described below. External-data migration and physical
   preparation deletion are outside the selected retention policy.
-- Ollama system installation, runtime/service and real GPU acceptance, drivers
-  and non-ROCm add-on workflows; portable base and optional amd64 ROCm bundles
-  are implemented separately below.
+- Ollama real user-service/runtime/GPU acceptance, drivers and non-ROCm add-on
+  workflows. The selected service mode is the portable user service described
+  below; root/system installation is outside this chosen scope.
 - Codex Desktop RPM/DNF and Arch package management; the Arch
   shell bootstrap is not ported. Initial APT installation, explicit DEB updates and guarded removal
   are described below.
@@ -456,8 +456,9 @@ the provider's existing installation directory.
 
 ## Ollama Portable Bundle
 
-Provider ID: `ollama`. This isolated preview implements native portable lifecycle,
-not the upstream system installer or service setup. It preserves the complete
+Provider ID: `ollama`. This isolated preview implements native portable lifecycle
+and a separately consented user service, not the upstream root/system installer.
+It preserves the complete
 official `bin/ollama` and `lib/ollama` base tree, including library links, helper
 executables and licenses. Keeping these paths adjacent matters: Ollama resolves
 its executable path to locate sibling libraries. No downloaded shell is executed.
@@ -533,9 +534,11 @@ power-loss durability or hostile same-user isolation is promised. Inspect the
 reported paths and confirm no installer is active before manual recovery.
 
 **Manually close/stop processes using this owned bundle before updating,
-switching or removing it.** ATM does not probe, start or stop Ollama processes or
-existing services. No model download, GPU setup, service/user creation, system
-package operation or global PATH write occurs. Install, update and use never edit
+switching or removing it.** Also remove any ATM user-service registration first;
+stopping it alone does not unlock version mutations. Lifecycle commands do not
+probe, start or stop external Ollama processes or services. No model download,
+GPU setup, system-user creation, system package operation or global PATH write
+occurs. Install, update and use never edit
 profiles. Explicit `integrate` enables only the owned preview command in user
 profiles; uninstall detaches that exact integration before removing versions.
 Existing external/legacy installations, models, credentials and
@@ -598,11 +601,64 @@ preview_atm plugin ai uninstall --provider ollama
 ```
 
 The menu/selection logs print shell-literal optional manual examples using the
-full `current/bin/ollama` path: `serve`, `run llama3` and `pull llama3`. ATM never
-runs these commands. `run`/`pull` may download models independently of the bundle
+full `current/bin/ollama` path: `serve`, `run llama3` and `pull llama3`. Printing these
+examples does not execute them. The separate user-service start action below
+explicitly executes `serve`. `run`/`pull` may download models independently of the bundle
 installation. Real upstream bundle download/extraction and runtime acceptance,
 active-process handling, GPU behavior and Linux arm64 execution remain Pending;
 synthetic archives and public metadata checks do not establish those claims.
+
+## Ollama User Service
+
+This preview's selected service mode is a **Linux systemd user service**, not the
+official root-based installation. It uses only an owned, selected and completely
+verified portable bundle. It does not adopt `ollama.service`, external units,
+aliases, overrides, existing model directories or an external Ollama installation.
+
+The Ollama submenu offers these separate actions. CLI arguments for the native
+preview are:
+
+```text
+plugin ai integrate --provider ollama --service-action register --accept-service-execution
+plugin ai integrate --provider ollama --service-action start --accept-service-execution
+plugin ai integrate --provider ollama --service-action status
+plugin ai integrate --provider ollama --service-action stop --accept-service-execution
+plugin ai integrate --provider ollama --service-action remove --accept-service-execution
+```
+
+Mutations require the bare consent flag plus CORE confirmation. Do not combine
+service actions with PATH, download, version, ROCm or system-package options.
+`status` rejects the consent flag; it is an explicit bounded manager query.
+Ordinary menu/aggregate status never contact the manager or execute Ollama.
+
+Registration writes the dedicated `~/.config/systemd/user/atm-ollama.service`
+and reloads the user manager. It never starts/enables the unit or changes linger.
+The unit pins an exact version, binds to `127.0.0.1:11434` and uses a clean
+environment with private HOME and models beneath `Apps/ai/ollama/service-v1/data`.
+The data and ownership evidence survive service removal and portable uninstall.
+ATM never automatically imports or deletes your existing models or credentials.
+Private HOME is not a sandbox; starting the server executes the selected provider.
+
+All Ollama install/update/use/remove/uninstall operations are blocked while the
+service is registered or its state is uncertain, even when it is stopped. Stop,
+remove the registration, change versions, then register/start again. Removal
+requires the owned service to be stopped and preserves data. Changed unit files,
+drop-ins, aliases, pending jobs or ambiguous manager output refuse mutation.
+Interrupted operations retain a journal for manual inspection; there is no
+automatic recovery or guaranteed whole-operation rollback.
+
+The user must be non-root with a reachable login user manager. Only default
+XDG configuration/data paths are supported, and the unit directory must appear
+in that manager's search paths. A temporary `HOME` does **not** redirect a running
+user manager: the isolated `preview_atm` wrapper below is for lifecycle/guard
+testing, not a real service test. Do not bypass a path/ownership diagnostic.
+Real service acceptance needs a separately reviewed preview using the login
+user's actual HOME; no real service was started during automated verification.
+
+`active/running` means only that the manager reports the process running, not
+that inference, model access or GPU acceleration works. There is no automatic
+model download, driver setup, restart policy, auto-start or port-conflict repair.
+Real Linux service/GPU and ARM64 runtime acceptance remain Pending.
 
 ## Explicit CLI PATH Integration
 

@@ -18,6 +18,9 @@ import (
 )
 
 func (b *backend) ollamaExecute(ctx context.Context, o options) error {
+	if err := b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
 	switch b.req.Operation {
 	case "install", "update":
 		return b.ollamaInstall(ctx, o)
@@ -90,6 +93,13 @@ func (b *backend) ollamaInitialize(stage string) error {
 }
 
 func (b *backend) ollamaInstall(ctx context.Context, o options) error {
+	return b.ollamaLifecycle(ctx, func() error { return b.ollamaInstallHeld(ctx, o) })
+}
+
+func (b *backend) ollamaInstallHeld(ctx context.Context, o options) error {
+	if err := b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
 	_, current, err := b.ollamaInspect(ctx)
 	if err != nil {
 		return err
@@ -187,6 +197,9 @@ func (b *backend) ollamaInstall(ctx context.Context, o options) error {
 	if err = b.ollamaInitialize(stage); err != nil {
 		return err
 	}
+	if err = b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
 	if err = unix.Renameat2(unix.AT_FDCWD, versionDir, unix.AT_FDCWD, target, unix.RENAME_NOREPLACE); err != nil {
 		return err
 	}
@@ -221,6 +234,13 @@ func (b *backend) ollamaDownload(ctx context.Context, a artifact, archive string
 }
 
 func (b *backend) ollamaActivate(ctx context.Context, v string) error {
+	return b.ollamaLifecycle(ctx, func() error { return b.ollamaActivateHeld(ctx, v) })
+}
+
+func (b *backend) ollamaActivateHeld(ctx context.Context, v string) error {
+	if err := b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
 	_, previous, err := b.ollamaInspect(ctx)
 	if err != nil {
 		return err
@@ -247,6 +267,9 @@ func (b *backend) ollamaActivate(ctx context.Context, v string) error {
 		return err
 	}
 	if err = b.boundary("ollama-before-activation"); err != nil {
+		return err
+	}
+	if err = b.ollamaServiceMutationGuard(); err != nil {
 		return err
 	}
 	if _, now, err := b.ollamaInspect(ctx); err != nil {
@@ -300,6 +323,13 @@ func (b *backend) ollamaActivate(ctx context.Context, v string) error {
 }
 
 func (b *backend) ollamaRemove(ctx context.Context, v string) error {
+	return b.ollamaLifecycle(ctx, func() error { return b.ollamaRemoveHeld(ctx, v) })
+}
+
+func (b *backend) ollamaRemoveHeld(ctx context.Context, v string) error {
+	if err := b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
 	_, current, err := b.ollamaInspect(ctx)
 	if err != nil {
 		return err
@@ -323,6 +353,9 @@ func (b *backend) ollamaRemove(ctx context.Context, v string) error {
 	defer os.Remove(stage)
 	detached := filepath.Join(stage, "version")
 	if err = b.boundary("ollama-before-removal-detach"); err != nil {
+		return err
+	}
+	if err = b.ollamaServiceMutationGuard(); err != nil {
 		return err
 	}
 	if _, now, err := b.ollamaInspect(ctx); err != nil {
@@ -417,16 +450,29 @@ func (b *backend) ollamaDeleteTree(ctx context.Context, r *os.Root, files map[st
 }
 
 func (b *backend) ollamaUninstall(ctx context.Context) error {
+	if err := b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
+	if err := b.detachIntegration(ctx, "ollama"); err != nil {
+		return err
+	}
+	if err := b.boundary("ollama-before-uninstall-deselect"); err != nil {
+		return err
+	}
+	return b.ollamaLifecycle(ctx, func() error { return b.ollamaUninstallHeld(ctx) })
+}
+
+func (b *backend) ollamaUninstallHeld(ctx context.Context) error {
+	if err := b.ollamaServiceMutationGuard(); err != nil {
+		return err
+	}
 	vs, current, err := b.ollamaInspect(ctx)
 	if err != nil {
 		return err
 	}
-	if err = b.detachIntegration(ctx, "ollama"); err != nil {
-		return err
-	}
 	// PATH detach commits separately. Subsequent failure retains the bundle;
 	// never remove a selection still referenced by owned profile integration.
-	if err = b.boundary("ollama-before-uninstall-deselect"); err != nil {
+	if err = b.ollamaServiceMutationGuard(); err != nil {
 		return err
 	}
 	now, selected, err := b.ollamaInspect(ctx)

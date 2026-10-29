@@ -90,6 +90,9 @@ func newFixture(t *testing.T, arch string) *fixture {
 		packageRecord: func() (codexPackageRecord, error) { return codexPackageRecord{}, nil },
 	}
 	f.b.discovery = &discoveryConfig{home: filepath.Join(root, "user"), cwd: filepath.Join(root, "cwd")}
+	if err := os.Mkdir(f.b.discovery.home, 0700); err != nil {
+		t.Fatal(err)
+	}
 	t.Setenv("HOME", f.b.discovery.home)
 	t.Setenv("PATH", "")
 	f.b.client = &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
