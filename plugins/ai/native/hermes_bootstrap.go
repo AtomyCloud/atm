@@ -27,6 +27,7 @@ type hermesTools struct {
 	run         func(context.Context, string, []string, string, []string) (string, error)
 	uid         func() int
 	interactive func(context.Context, string, []string, string, []string) (hermesLaunchResult, error)
+	selfPath    func() (string, error)
 }
 
 type hermesPin struct {

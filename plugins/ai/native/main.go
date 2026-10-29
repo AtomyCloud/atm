@@ -27,10 +27,11 @@ type backend struct {
 	client *http.Client
 	log    func(string)
 	// Unit tests inject transaction faults, never through the process environment.
-	checkpoint func(string) error
-	system     *systemTools
-	discovery  *discoveryConfig
-	hermes     *hermesTools
+	checkpoint  func(string) error
+	system      *systemTools
+	discovery   *discoveryConfig
+	hermes      *hermesTools
+	hermesAlias string
 }
 type options struct {
 	provider, version string
@@ -121,7 +122,7 @@ func parseOptions(op string, args []string) (options, error) {
 	}
 	if op == "integrate" {
 		if seen["--version"] || (seen["--provider"] && cliCommand(o.provider) == "") {
-			return o, fmt.Errorf("integrate accepts only --provider picoclaw|codex-cli|ollama and --remove-path")
+			return o, fmt.Errorf("integrate accepts only --provider picoclaw|codex-cli|ollama|hermes-agent and --remove-path")
 		}
 		return o, nil
 	}
@@ -132,7 +133,7 @@ func parseOptions(op string, args []string) (options, error) {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
 	}
 	if o.provider == hermesAgent && op != "install" && op != "update" && op != "use" {
-		return o, fmt.Errorf("Hermes Agent preview supports install/update and exact completed selection only; PATH and removal remain Pending")
+		return o, fmt.Errorf("Hermes Agent preview supports install/update, exact completed selection and explicit PATH; removal remains Pending")
 	}
 	if o.provider == hermesAgent && op == "use" && (!seen["--version"] || o.version != hermesPMVersion) {
 		return o, fmt.Errorf("Hermes selection requires reviewed exact --version %s", hermesPMVersion)
@@ -251,6 +252,10 @@ func serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	return emit("result", message, status, choices)
 }
 func main() {
+	if executable, err := os.Executable(); err == nil && filepath.Base(executable) == "hermes" {
+		hermesAliasMain(executable, os.Args[1:])
+		return
+	}
 	if len(os.Args) > 1 {
 		if os.Args[1] == "--hermes-cli" {
 			hermesCLIMain(os.Args[2:])

@@ -81,7 +81,8 @@ func TestIntegrationOptions(t *testing.T) {
 }
 
 func TestIntegrationLifecycleAndProfiles(t *testing.T) {
-	for _, id := range integrationProviders {
+	// Hermes owns a native copy, not the portable providers' current symlink.
+	for _, id := range []string{"picoclaw", "codex-cli", "ollama"} {
 		t.Run(id, func(t *testing.T) {
 			f := integrationFixture(t, id)
 			home := os.Getenv("HOME")
@@ -153,7 +154,7 @@ func TestIntegrationProviderSeparation(t *testing.T) {
 	mustRun(t, f, "integrate")
 	for _, name := range profileNames {
 		data := integrationRead(t, filepath.Join(home, name))
-		for _, id := range integrationProviders {
+		for _, id := range []string{"picoclaw", "codex-cli", "ollama"} {
 			if strings.Count(string(data), f.b.pathBlock(id)) != 1 {
 				t.Fatal("missing independent provider block", id, name)
 			}

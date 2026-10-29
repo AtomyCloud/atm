@@ -214,7 +214,7 @@ func (b *backend) discover(ctx context.Context) (discoveryReport, error) {
 		r.Evidence = append(r.Evidence, discoveryEvidence{Provider: id, Path: path, Source: source})
 	}
 	var nativeRoots []string
-	for _, id := range append(append([]string{}, providerOrder...), "ollama") {
+	for _, id := range append(append([]string{}, providerOrder...), "ollama", hermesAgent) {
 		root := b.root(id)
 		nativeRoots = append(nativeRoots, root)
 		resolved, _, _, err := discoveryStat(ctx, root)
@@ -227,6 +227,8 @@ func (b *backend) discover(ctx context.Context) (discoveryReport, error) {
 		active := filepath.Join(root, "current")
 		if id == "ollama" {
 			active = filepath.Join(active, "bin", "ollama")
+		} else if id == hermesAgent {
+			active = filepath.Join(root, "bin", "hermes")
 		}
 		add(id, active, "managed-preview")
 	}

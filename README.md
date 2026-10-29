@@ -769,7 +769,10 @@ has an explicitly consented source/official-PM preparation preview for one revie
 release, with private state, local CLI launchers and explicit selection of completed
 owned preparations without rerunning PM. A separate consented native terminal
 bridge launches the selected preparation with private HOME and no shell wrapper;
-it does not enroll PATH. Full lifecycle and real provider/runtime
+PATH enrollment is a separate explicit action using an owned native copy, with
+guarded detach that preserves the copy and application data. The alias still
+requires runtime consent; reenrollment never silently refreshes an old copy.
+Full lifecycle and real provider/runtime
 acceptance remain Pending. Ollama system/service workflows and Codex Desktop
 remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
@@ -781,9 +784,9 @@ their configuration or establish their version. Found candidates are unverified,
 not adopted or made eligible for native removal. Missing candidates do not prove
 that an application is absent from the system.
 
-Owned PicoClaw, Codex CLI and Ollama previews support explicit native PATH integration,
+Owned PicoClaw, Codex CLI, Ollama and Hermes Agent previews support explicit native PATH integration,
 with separate removal of their exact owned profile blocks. Version selection
-keeps stable command links; installation does not enable PATH automatically.
+keeps stable commands; installation does not enable PATH automatically.
 Existing external commands are not replaced. Remaining AI installer routes and
 real shell/provider acceptance are still pending; see the guide for isolated tests.
 

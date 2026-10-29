@@ -19,7 +19,7 @@ route supports Linux amd64 only:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
-| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection and consented direct native terminal bridge; reviewed contract only |
+| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge and explicit PATH enrollment/detach; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -29,13 +29,13 @@ Codex CLI uses the standalone release binary, not npm in this preview.
 
 Pending before the entire AI plugin can switch to native Go:
 
-- Hermes Agent full lifecycle, data migration, PATH integration, removal and real
+- Hermes Agent full lifecycle, data migration, removal and real
   runtime acceptance. The narrower reviewed source/PM preparation is described below.
 - Ollama system installation, runtime/service acceptance and GPU add-on workflows;
   portable base-bundle lifecycle is implemented separately below.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
 - PATH registration for providers other than the owned PicoClaw, standalone
-  Codex CLI and Ollama previews, including external/legacy installations, is not implemented.
+  Codex CLI, Ollama and Hermes Agent previews, including external/legacy installations, is not implemented.
 - PicoClaw WebUI/launcher support if added to the native provider scope.
 - Real provider/runtime acceptance, Linux arm64 execution, other platforms and
   translations of the preview's English labels.
@@ -49,8 +49,8 @@ This route prepares CLI dependencies using the **official Hermes PM**, then
 publishes its official local launchers. It does not run the upstream shell
 installer or reimplement Python dependency resolution. This is not full installer
 parity: frontend builds, services, optional browser/computer-use tools, user data
-migration, PATH registration and removal remain outside it. An explicit local
-selection operation is available for completed owned preparations.
+migration and removal remain outside it. Explicit local selection and separate
+native PATH registration are available for completed owned preparations.
 
 Only the reviewed `0.22.5` contract at source commit
 `bf0203a794a07aac3ff764972ab9087baa4e4f4e` is enabled. `latest` resolves upstream
@@ -183,7 +183,7 @@ or credentials. Detached descendants are not contained; ensure all children have
 stopped before manually clearing a retained lock. No automatic repair, rollback or
 lock recovery is provided. Legitimate upstream changes to recorded PM evidence can
 cause later checks to refuse that preparation. Real provider/terminal acceptance
-and PATH enrollment remain Pending.
+remains Pending.
 
 Normal child exit codes are preserved; signal termination is reported as the
 conventional `128 + signal` exit code. TERM/HUP and context cancellation have a
@@ -194,6 +194,48 @@ INT/QUIT is not forwarded while that group owns a controlling terminal; use TERM
 for targeted supervisor shutdown. Any observed interruption conservatively retains
 the lock, even if the application later exits normally. Terminal resizing remains
 the operating system's foreground-group behavior, not a synthetic resize channel.
+
+## Hermes Native PATH Preview
+
+After preparing and selecting the reviewed version, explicitly enroll its native
+command through the isolated runtime:
+
+```bash
+preview_atm plugin ai integrate --provider hermes-agent
+"$preview/apps/ai/hermes-agent/native-v1/bin/hermes" \
+  --accept-runtime-execution --dry-run -- --help
+preview_atm plugin ai integrate --provider hermes-agent --remove-path
+```
+
+CORE confirmation is required. Enrollment copies the running native AI backend
+to `native-v1/bin/hermes` (0755), with a SHA-256/size/architecture ownership receipt
+`bin/launcher.json` (0600). This is a native executable, not a shell wrapper or a
+link to the upstream POSIX launcher. The private bin directory is published as
+one unit. Its potentially multi-MiB payload is not stored in the small profile
+rollback journal. Neither enrollment nor detach starts Hermes, PM or downloads.
+
+The exact profile blocks and `path.json` follow the rules below. A new shell can
+resolve `hermes`; the caller's current shell is not changed. The alias derives its
+Apps root from its owned layout and refuses caller root overrides. Real invocation
+still requires `hermes --accept-runtime-execution -- <arguments>`; even `--help`
+executes upstream code. Syntax-only dry-run does not validate an installation.
+Before execution, the alias requires intact enrollment, profiles and bridge
+receipt, the matching running executable, and no interrupted HOME PATH operation.
+These checks accompany the existing selected-preparation and provider-lock guards.
+
+Detach removes only the enrolled blocks and `path.json`. It retains the verified
+native copy and its independent receipt; execution through the detached alias is
+refused. Reenrollment reuses that copy without silently updating it. Upgrading the
+AI backend does **not** refresh an existing Hermes bridge; automatic or explicit
+bridge refresh and full Hermes uninstall remain Pending. Use the current direct
+preview executable for testing newer bridge code without adopting an old copy.
+
+Failures may leave the bridge, staging, HOME/provider locks and
+`hermes-bridge.json` evidence for manual inspection, even when profile changes
+were restored. Never assume an interrupted enrollment completed or that all
+state was rolled back. Modified/foreign state is refused and preserved. No
+automatic recovery or power-loss consistency is promised. Real shell/provider
+acceptance, Linux arm64 execution and other platforms remain Pending.
 
 ## Existing Installation Discovery
 
@@ -429,23 +471,23 @@ synthetic archives and public metadata checks do not establish those claims.
 
 ## Explicit CLI PATH Integration
 
-Only the owned PicoClaw, standalone Codex CLI and Ollama previews can be integrated:
+Owned PicoClaw, standalone Codex CLI, Ollama and Hermes Agent previews can be integrated:
 
 ```text
-integrate [--provider picoclaw|codex-cli|ollama] [--remove-path]
+integrate [--provider picoclaw|codex-cli|ollama|hermes-agent] [--remove-path]
 ```
 
 Use `preview_atm plugin ai integrate ...` with the isolated runtime below.
 CORE confirmation or its explicit `--yes` authorizes this mutation; no download
 or system-package flags apply. `--version` is not accepted. Without a provider,
-the operation processes selected owned PicoClaw, Codex CLI, then Ollama previews.
+the operation processes selected owned PicoClaw, Codex CLI, Ollama, then Hermes Agent previews.
 The generic `preview_atm path apply --plugins` route also includes these owned
 previews through provider-less integration. Missing
 previews are skipped, but unsafe/foreign stores are refused, never adopted.
 Each provider commits separately: if a later provider fails, earlier completed
 providers remain changed and the error lists them. There is no aggregate rollback.
 
-Integration creates `native-v1/bin/picoclaw -> ../current`,
+For the first three providers, integration creates `native-v1/bin/picoclaw -> ../current`,
 `native-v1/bin/codex -> ../current`, or
 `native-v1/bin/ollama -> ../current/bin/ollama`, plus `native-v1/path.json` (0600). The bin
 directory is private (0700). The receipt binds the provider, root, default user
@@ -483,14 +525,14 @@ detach. A newline inserted after unterminated original text is removed only if
 that will not join remaining content to the original line. If another provider
 or later content needs it, that newline remains, possibly after the final detach.
 
-`--remove-path` detaches only exact owned blocks, the command link and receipt;
+For those three providers, `--remove-path` detaches only exact owned blocks, the command link and receipt;
 it retains all provider versions and the empty bin directory. Uninstall performs
 that same guarded detach before deselecting or deleting versions, or refuses
 before destructive work. Failures after detach can leave PATH detached while
 versions remain; no whole-uninstall rollback is promised.
 
 The existing sibling `native-v1.lock/` and shared `$HOME/.atm-ai-path.lock/`
-(0700) are fail-fast locks. The HOME lock coordinates all three CLI providers and
+(0700) are fail-fast locks. The HOME lock coordinates all four CLI providers and
 distinct Apps roots using the same markers. A different Apps root cannot adopt
 an existing block. This lock does not coordinate profile writers in other plugins
 or external tools. Per-file staging uses `.atm-ai-path-write-*/entry` beneath
@@ -682,6 +724,7 @@ claim of actual APT, GUI or arm64 runtime acceptance.
 go test ./plugins/ai/native -count=1
 go test -race ./plugins/ai/native -count=1
 go vet ./plugins/ai/native
+ATM_TEST_HERMES_PATH_TRACE=1 go test ./plugins/ai/native -run '^TestHermesPATHCompiledLifecycle$' -count=1 -v
 python3 -B tests/check_ai_hermes_launch.py /path/to/compiled/atm-ai
 ```
 
@@ -702,6 +745,12 @@ tests never elevate to create that fixture.
 They never run provider code, real sudo/APT or change system packages. The
 Hermes launch tests use injected command results and harmless test-process helpers
 for terminal/process behavior; compiled guard tests trace refusals and dry-run.
+The compiled PATH lifecycle builds a real multi-MiB native backend, enrolls and
+detaches it only in a temporary HOME, preserves foreign files and profile modes,
+and rejects actual launch through a detached alias before upstream execution.
+Its optional trace check requires `strace` and verifies no child/network activity
+for those operations. Unit checks also reject a mismatched running executable,
+interrupted HOME PATH operations and altered enrollment profiles.
 These checks are not actual Hermes runtime or dependency execution. The
 separate opt-in public metadata test performs read-only official
 release lookups, not provider downloads or execution.

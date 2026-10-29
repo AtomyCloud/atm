@@ -83,12 +83,12 @@ func (b *backend) hermesInspect(ctx context.Context) ([]string, string, error) {
 	if own != (ownership{1, "ai", hermesAgent}) {
 		return nil, "", fmt.Errorf("foreign Hermes root preserved")
 	}
-	es, err := entries(root, 3)
+	es, err := entries(root, 5)
 	if err != nil {
 		return nil, "", err
 	}
 	for _, e := range es {
-		if e.Name() != "owner.json" && e.Name() != "versions" && e.Name() != "current.json" {
+		if e.Name() != "owner.json" && e.Name() != "versions" && e.Name() != "current.json" && e.Name() != "bin" && e.Name() != "path.json" {
 			return nil, "", fmt.Errorf("unknown Hermes entry preserved")
 		}
 	}
@@ -149,6 +149,9 @@ func (b *backend) hermesInspect(ctx context.Context) ([]string, string, error) {
 		return nil, "", fmt.Errorf("active Hermes version missing")
 	}
 	sort.Strings(versions)
+	if _, err := b.inspectIntegrationContext(ctx, hermesAgent, active.Version); err != nil {
+		return nil, "", err
+	}
 	return versions, active.Version, nil
 }
 
@@ -158,6 +161,17 @@ func (b *backend) hermesStatus(ctx context.Context) error {
 		return err
 	}
 	b.log(fmt.Sprintf(label("hermes_status"), len(vs), active))
+	if active != "" {
+		rec, err := b.inspectIntegrationContext(ctx, hermesAgent, active)
+		if err != nil {
+			return err
+		}
+		state := "path_absent"
+		if rec != nil {
+			state = "path_recorded"
+		}
+		b.log(providers[hermesAgent].name + ": " + label(state))
+	}
 	for _, v := range vs {
 		path := filepath.Join(b.root(hermesAgent), "versions", v)
 		if _, err := os.Lstat(filepath.Join(path, "complete.json")); os.IsNotExist(err) {
@@ -172,6 +186,7 @@ func (b *backend) hermesMenu(ctx context.Context) ([]choice, error) {
 	b.log(label("hermes_scope"))
 	b.log(label("hermes_consent"))
 	b.log(label("hermes_launch_usage"))
+	b.log(label("hermes_alias_usage"))
 	b.log("Private root: " + b.root(hermesAgent))
 	if err := b.hermesStatus(ctx); err != nil {
 		return nil, err
@@ -188,6 +203,20 @@ func (b *backend) hermesMenu(ctx context.Context) ([]choice, error) {
 		var complete hermesCompletion
 		if err := readJSON(filepath.Join(b.root(hermesAgent), "versions", hermesPMVersion, "complete.json"), &complete); err == nil {
 			choices = append(choices, choice{ID: "use", Label: label("hermes_use"), Operation: "use", Arguments: []string{"--provider", hermesAgent, "--version", hermesPMVersion}})
+			_, active, err := b.hermesInspect(ctx)
+			if err != nil {
+				return nil, err
+			}
+			if active != "" {
+				choices = append(choices, choice{ID: "integrate", Label: label("path_integrate"), Operation: "integrate", Arguments: []string{"--provider", hermesAgent}})
+				rec, err := b.inspectIntegrationContext(ctx, hermesAgent, active)
+				if err != nil {
+					return nil, err
+				}
+				if rec != nil {
+					choices = append(choices, choice{ID: "remove-path", Label: label("path_detach"), Operation: "integrate", Arguments: []string{"--provider", hermesAgent, "--remove-path"}})
+				}
+			}
 		}
 	}
 	return append(choices, choice{ID: "back", Label: label("back"), Operation: "menu"}), ctx.Err()

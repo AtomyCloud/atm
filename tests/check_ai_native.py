@@ -217,14 +217,17 @@ def check(executable, backend):
             "--trust-download", "--accept-system-packages", success=False)
         run("--dry-run", "plugin", "ai", "install", "--provider", "ollama",
             "--trust-download", started=False)
-        for provider in ("picoclaw", "codex-cli", "ollama"):
+        for provider in ("picoclaw", "codex-cli", "ollama", agent):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
             run("plugin", "ai", "integrate", "--provider", provider, started=False, success=False)
             for flags in (("--version", "0.1.0"), ("--trust-download",),
                           ("--accept-system-packages",), ("--provider", provider)):
                 run("--yes", "plugin", "ai", "integrate", "--provider", provider,
                     *flags, success=False)
-        for provider in ("hermes-desktop", system, "hermes-agent", "codex-desktop"):
+        run("--dry-run", "plugin", "ai", "integrate", "--provider", agent, started=False)
+        run("--dry-run", "plugin", "ai", "integrate", "--provider", agent,
+            "--remove-path", started=False)
+        for provider in ("hermes-desktop", system, "codex-desktop"):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
         run("install", "ai", success=False, started=False)
         run("--yes", "plugin", "ai", "status", "--unexpected", success=False)

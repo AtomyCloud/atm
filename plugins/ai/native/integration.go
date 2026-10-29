@@ -13,7 +13,7 @@ import (
 	"strings"
 )
 
-var integrationProviders = []string{"picoclaw", "codex-cli", "ollama"}
+var integrationProviders = []string{"picoclaw", "codex-cli", "ollama", hermesAgent}
 var profileNames = []string{".profile", ".bashrc", ".zshrc"}
 
 type pathProfile struct {
@@ -34,6 +34,8 @@ func cliCommand(id string) string {
 		return "codex"
 	case "ollama":
 		return "ollama"
+	case hermesAgent:
+		return "hermes"
 	}
 	return ""
 }
@@ -108,6 +110,13 @@ func (r *pathReceipt) profile(name string) *pathProfile {
 }
 
 func (b *backend) inspectIntegration(id, current string) (*pathReceipt, error) {
+	return b.inspectIntegrationContext(context.Background(), id, current)
+}
+
+func (b *backend) inspectIntegrationContext(ctx context.Context, id, current string) (*pathReceipt, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	if cliCommand(id) == "" {
 		return nil, nil
 	}
@@ -141,6 +150,16 @@ func (b *backend) inspectIntegration(id, current string) (*pathReceipt, error) {
 		}
 	} else if !os.IsNotExist(err) {
 		return nil, err
+	}
+	if id == hermesAgent {
+		bridge, err := b.inspectHermesBridge(ctx)
+		if err != nil {
+			return nil, err
+		}
+		if rec != nil && bridge == nil {
+			return nil, fmt.Errorf("enrolled Hermes native bridge missing")
+		}
+		return rec, nil
 	}
 	bin := filepath.Join(root, "bin")
 	es, err := entries(bin, 1)
@@ -229,6 +248,14 @@ func (b *backend) integrationChanges(id, home string, rec *pathReceipt, remove b
 		after = pathRegular(append(data, '\n'))
 	}
 	record := pathChange{Path: filepath.Join(root, "path.json"), Before: before, After: after}
+	// Hermes retains its independently receipt-owned native bridge on detach.
+	// Only small profile/receipt data enters the profile rollback journal.
+	if id == hermesAgent {
+		if remove {
+			return append(profiles, record), nil
+		}
+		return append([]pathChange{record}, profiles...), nil
+	}
 	linkPath := filepath.Join(root, "bin", cliCommand(id))
 	linkBefore := pathState{}
 	if _, e := os.Lstat(filepath.Dir(linkPath)); e == nil {
@@ -299,6 +326,9 @@ func (b *backend) detachIntegration(ctx context.Context, id string) error {
 }
 
 func (b *backend) changeIntegration(ctx context.Context, id string, remove bool) (result error) {
+	if id == hermesAgent {
+		return b.changeHermesIntegration(ctx, remove)
+	}
 	home, err := integrationHome()
 	if err != nil {
 		return err

@@ -188,7 +188,14 @@ func (b *backend) launchHermes(ctx context.Context, args []string) (result herme
 	if err != nil {
 		return result, err
 	}
+	aliasGuard, err := b.hermesAliasGuard(ctx)
+	if err != nil {
+		return result, err
+	}
 	verify := func() error {
+		if err := aliasGuard(); err != nil {
+			return err
+		}
 		if err := pinned.verify(ctx, root); err != nil {
 			return err
 		}

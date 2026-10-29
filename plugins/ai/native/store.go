@@ -179,6 +179,9 @@ func (b *backend) current(id string) (string, error) {
 	return v, nil
 }
 func (b *backend) inspect(ctx context.Context, id string, verify bool) ([]string, string, error) {
+	if id == hermesAgent {
+		return b.hermesInspect(ctx)
+	}
 	if id == "ollama" {
 		return b.ollamaInspect(ctx)
 	}
