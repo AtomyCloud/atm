@@ -194,7 +194,10 @@ func TestHermesAgentConsentAndPendingRoutes(t *testing.T) {
 			t.Fatal("missing consent accepted")
 		}
 	}
-	for _, op := range []string{"use", "remove", "uninstall", "integrate"} {
+	if err := f.run(context.Background(), "use", "--provider", hermesAgent, "--version", hermesPMVersion); err == nil {
+		t.Fatal("unowned selection accepted")
+	}
+	for _, op := range []string{"remove", "uninstall", "integrate"} {
 		if err := f.run(context.Background(), op, "--provider", hermesAgent, "--version", hermesPMVersion); err == nil {
 			t.Fatal("pending route accepted", op)
 		}

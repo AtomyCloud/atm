@@ -176,12 +176,20 @@ func (b *backend) hermesMenu(ctx context.Context) ([]choice, error) {
 		return nil, err
 	}
 	base := []string{"--provider", hermesAgent, "--trust-download", "--accept-dependency-execution"}
-	return []choice{
+	choices := []choice{
 		{ID: "install", Label: label("hermes_install"), Operation: "install", Arguments: base},
 		{ID: "custom", Label: label("hermes_custom"), Operation: "install", Arguments: append(append([]string{}, base...), "--version"), Prompt: label("version_prompt")},
 		{ID: "update", Label: label("hermes_update"), Operation: "update", Arguments: base},
-		{ID: "back", Label: label("back"), Operation: "menu"},
-	}, nil
+	}
+	// Status permits incomplete attempts, but selection never does. A retained
+	// lock also hides selection, including selection of the current version.
+	if _, err := os.Lstat(b.root(hermesAgent) + ".lock"); os.IsNotExist(err) {
+		var complete hermesCompletion
+		if err := readJSON(filepath.Join(b.root(hermesAgent), "versions", hermesPMVersion, "complete.json"), &complete); err == nil {
+			choices = append(choices, choice{ID: "use", Label: label("hermes_use"), Operation: "use", Arguments: []string{"--provider", hermesAgent, "--version", hermesPMVersion}})
+		}
+	}
+	return append(choices, choice{ID: "back", Label: label("back"), Operation: "menu"}), ctx.Err()
 }
 
 func (b *backend) installHermesAgent(ctx context.Context, o options) (err error) {
@@ -379,8 +387,13 @@ func (b *backend) installHermesAgent(ctx context.Context, o options) (err error)
 	return nil
 }
 
-func (b *backend) hermesPublishSelection(ctx context.Context, target string, before pathState, data []byte) error {
-	stage, err := os.MkdirTemp(filepath.Dir(target), ".hermes-select-")
+func (b *backend) hermesPublishSelection(ctx context.Context, target string, before pathState, data []byte, verify ...func() error) error {
+	stageParent := filepath.Dir(target)
+	if len(verify) != 0 {
+		// Keep temporary files outside the inspected owned inventory.
+		stageParent += ".lock"
+	}
+	stage, err := os.MkdirTemp(stageParent, ".hermes-select-")
 	if err != nil {
 		return err
 	}
@@ -399,6 +412,11 @@ func (b *backend) hermesPublishSelection(ctx context.Context, target string, bef
 	}
 	if err := b.boundary("hermes-before-select"); err != nil {
 		return err
+	}
+	for _, check := range verify {
+		if err := check(); err != nil {
+			return err
+		}
 	}
 	if err := ctx.Err(); err != nil {
 		return err

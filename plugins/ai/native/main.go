@@ -131,8 +131,11 @@ func parseOptions(op string, args []string) (options, error) {
 	if o.acceptPM && o.provider != hermesAgent {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
 	}
-	if o.provider == hermesAgent && op != "install" && op != "update" {
-		return o, fmt.Errorf("Hermes Agent preview supports install/update only; selection, PATH and removal remain Pending")
+	if o.provider == hermesAgent && op != "install" && op != "update" && op != "use" {
+		return o, fmt.Errorf("Hermes Agent preview supports install/update and exact completed selection only; PATH and removal remain Pending")
+	}
+	if o.provider == hermesAgent && op == "use" && (!seen["--version"] || o.version != hermesPMVersion) {
+		return o, fmt.Errorf("Hermes selection requires reviewed exact --version %s", hermesPMVersion)
 	}
 	if o.provider == hermesSystem {
 		if op != "install" {
@@ -179,6 +182,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		return nil, b.installHermesSystem(ctx, o)
 	}
 	if o.provider == hermesAgent {
+		if b.req.Operation == "use" {
+			return nil, b.useHermesAgent(ctx, o.version)
+		}
 		if !o.acceptPM {
 			return nil, fmt.Errorf("Hermes Agent requires --trust-download and --accept-dependency-execution; review its menu first")
 		}

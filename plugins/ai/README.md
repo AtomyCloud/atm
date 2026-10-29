@@ -19,7 +19,7 @@ route supports Linux amd64 only:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
-| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation and local CLI launcher publication; install/update checks, reviewed contract only |
+| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local CLI launcher publication and selection of completed owned preparations; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -49,7 +49,8 @@ This route prepares CLI dependencies using the **official Hermes PM**, then
 publishes its official local launchers. It does not run the upstream shell
 installer or reimplement Python dependency resolution. This is not full installer
 parity: frontend builds, services, optional browser/computer-use tools, user data
-migration, PATH registration, version switching and removal remain outside it.
+migration, PATH registration and removal remain outside it. An explicit local
+selection operation is available for completed owned preparations.
 
 Only the reviewed `0.22.5` contract at source commit
 `bf0203a794a07aac3ff764972ab9087baa4e4f4e` is enabled. `latest` resolves upstream
@@ -66,10 +67,23 @@ preview_atm plugin ai install --provider hermes-agent --version 0.22.5 \
   --trust-download --accept-dependency-execution
 preview_atm plugin ai update --provider hermes-agent \
   --trust-download --accept-dependency-execution
+preview_atm plugin ai use --provider hermes-agent --version 0.22.5
 preview_atm plugin ai status
 ```
 
-CORE confirmation is required in addition to both flags. Dependency preparation
+`use` requires an exact version and CORE confirmation, but neither download nor
+dependency-execution flags. It checks the existing preparation and changes only
+ATM's selection pointer; it does not download, run PM, launch Hermes, edit PATH or
+copy user data. Selecting the current verified preparation is a no-op. Incomplete,
+modified, foreign or locked preparations are refused. This is not automatic
+recovery of an interrupted installation: inspect retained locks and state manually.
+If selection fails after publication starts, `native-v1.lock/selection.json`
+retains the previous pointer and requested version for manual inspection. The
+pointer may already have changed; ATM does not automatically roll it back.
+Only the reviewed `0.22.5` contract is selectable today; this does not enable
+unreviewed versions or establish cross-version runtime compatibility.
+
+For install/update, CORE confirmation is required in addition to both flags. Dependency preparation
 downloads and executes upstream tools and package build code with your user's
 permissions. A private HOME **is not a security sandbox**. Test in a disposable
 Linux glibc environment first. Root is refused; trusted `setpriv --no-new-privs`

@@ -766,7 +766,8 @@ production native backend. The DEB route changes the actual system and executes
 package maintainer scripts through APT; an isolated preview HOME is not a system
 sandbox. Custom APT preferences are refused in this preview. Hermes Agent also
 has an explicitly consented source/official-PM preparation preview for one reviewed
-release, with private state and local CLI launchers; full lifecycle and runtime
+release, with private state, local CLI launchers and explicit selection of completed
+owned preparations without rerunning PM; full lifecycle and runtime
 acceptance remain Pending. Ollama system/service workflows and Codex Desktop
 remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.

@@ -177,6 +177,7 @@ def check(executable, backend):
         choices = json.loads(agent_menu.stdout.splitlines()[-1])["choices"]
         assert choices and all("--accept-dependency-execution" in c.get("arguments", [])
                                for c in choices if c["operation"] in ("install", "update"))
+        assert not any(c["operation"] == "use" for c in choices), "unowned Hermes preparation offered for selection"
         for flags in ((), ("--trust-download",), ("--accept-dependency-execution",)):
             run("--yes", "plugin", "ai", "install", "--provider", agent, *flags, success=False)
         run("plugin", "ai", "install", "--provider", agent, "--trust-download",
@@ -185,6 +186,18 @@ def check(executable, backend):
             "--trust-download", "--accept-dependency-execution", started=False)
         for operation in ("use", "remove", "uninstall"):
             run("--yes", "plugin", "ai", operation, "--provider", agent, "--version", "0.22.5", success=False)
+        # Selection is local-only, exact, and still needs CORE confirmation.
+        run("plugin", "ai", "use", "--provider", agent, "--version", "0.22.5",
+            success=False, started=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "use", "--provider", agent,
+                              "--version", "0.22.5", started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
+        for flags in ((), ("--version", "latest"), ("--version", "../../outside"),
+                      ("--version", "0.22.5", "--version", "0.22.5"),
+                      ("--version", "0.22.5", "--trust-download"),
+                      ("--version", "0.22.5", "--accept-dependency-execution"),
+                      ("--version", "0.22.5", "--accept-system-packages")):
+            run("--yes", "plugin", "ai", "use", "--provider", agent, *flags, success=False)
         run("--yes", "plugin", "ai", "update", "--provider", agent,
             "--trust-download", "--accept-dependency-execution", success=False)
         for provider in ("picoclaw", "codex-cli", "ollama", system):

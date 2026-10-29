@@ -129,6 +129,9 @@ edited blocks refuse removal and incomplete recovery retains local evidence.
 Hermes Agent's separate source/official-PM preview requires explicit dependency
 execution consent. It pins the reviewed source contract, prepares private
 version-bound state and publishes local launchers after PM completion checks.
+Explicit selection of an exact completed owned preparation is local-only: no
+downloads, PM execution, profile edits or data migration. Incomplete/modified or
+locked state is refused; only the reviewed contract is selectable.
 No upstream shell installer, root execution or automatic privilege elevation;
 private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data
 migration, Ollama system/service workflows, Codex Desktop and real shell/provider
