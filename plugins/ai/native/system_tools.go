@@ -36,7 +36,7 @@ func defaultSystemTools() *systemTools {
 
 func systemCommand(name string) (string, error) {
 	switch name {
-	case "apt-get", "apt-config", "dpkg-deb", "sudo", "mktemp", "install", "sha256sum", "rm", "rmdir":
+	case "apt-get", "apt-config", "dpkg", "dpkg-deb", "env", "sudo", "mktemp", "install", "sha256sum", "rm", "rmdir":
 	default:
 		return "", fmt.Errorf("unsupported system tool")
 	}
@@ -85,7 +85,11 @@ func trustedRootFile(path string) error {
 var rootStageRE = regexp.MustCompile(`^/run/atm-ai-hermes-[A-Za-z0-9]{10}$`)
 
 func checkSystemStage(path string) error {
-	if !rootStageRE.MatchString(path) {
+	return checkRootStage(path, rootStageRE)
+}
+
+func checkRootStage(path string, pattern *regexp.Regexp) error {
+	if !pattern.MatchString(path) {
 		return fmt.Errorf("unexpected root staging path")
 	}
 	for p := path; ; p = filepath.Dir(p) {

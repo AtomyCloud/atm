@@ -9,8 +9,8 @@ activate the preview described below.
 
 ## Native Preview
 
-Portable providers are implemented for Linux amd64 and arm64; the system DEB
-route supports Linux amd64 only:
+Portable providers are implemented for Linux amd64 and arm64. Hermes system DEB
+supports amd64; the separate ChatGPT Desktop DEB route supports amd64 and arm64:
 
 | Provider | Artifact | Native operations |
 | --- | --- | --- |
@@ -18,6 +18,7 @@ route supports Linux amd64 only:
 | Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
+| Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation only, with explicit download and system-package consent; existing package records preserved |
 | Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
@@ -35,7 +36,8 @@ Pending before the entire AI plugin can switch to native Go:
 - Ollama system installation, runtime/service and real GPU acceptance, drivers
   and non-ROCm add-on workflows; portable base and optional amd64 ROCm bundles
   are implemented separately below.
-- Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
+- Codex Desktop update/removal, RPM/DNF and Arch package management; the Arch
+  shell bootstrap is not ported. Initial APT installation is described below.
 - PATH registration for providers other than the owned PicoClaw, standalone
   Codex CLI, Ollama and Hermes Agent previews, including external/legacy installations, is not implemented.
 - PicoClaw WebUI/launcher support if added to the native provider scope.
@@ -349,9 +351,11 @@ not the user's home. Known paths are checked even with empty PATH. These are
 filename heuristics, not provider identification. An `/opt` directory alone is
 never evidence. Hermes Agent and Ollama external evidence is visible in aggregate
 status without authorizing ownership or lifecycle operations on those paths.
-Codex Desktop remains explicitly
-unknown because the legacy check queries a package database, which discovery
-does not do; `codex` is not treated as Codex Desktop evidence.
+Codex Desktop has a separate native, bounded read of the root-trusted dpkg status
+file for package `chatgpt`. It reports package-record evidence, not ownership,
+application health or a running process. An unavailable, malformed or changing
+database means unknown, not absent. RPM/Arch presence remains unknown; `codex`
+is not treated as Codex Desktop evidence. No package-query subprocess is run.
 
 The three single-file `native-v1/current` paths and Ollama's
 `native-v1/current/bin/ollama` are reported separately. Literal
@@ -743,6 +747,85 @@ journal paths never authorize automatic privileged deletion. Successful cleanup
 only deletes this transaction's verified temporary file and then its empty
 directory, never recursively removes an installation.
 
+## Codex Desktop System DEB
+
+Provider ID: `codex-desktop-system`. The official Linux application is currently
+branded **ChatGPT Desktop**, includes Codex, and uses package name `chatgpt`.
+This preview supports **initial installation only** on Linux amd64/arm64 with
+APT. It downloads the architecture-specific latest DEB from the fixed official
+`https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/` origin.
+Custom URLs and exact version selection are refused; update, removal, RPM/DNF
+and Arch workflows remain Pending. Any existing `chatgpt` record, including held,
+incomplete and residual-configuration states, prevents installation. ATM does
+not adopt or replace it. System dependencies must already be available through
+the administrator's working APT configuration.
+
+The submenu and aggregate status read bounded dpkg records without running
+applications or package managers. Missing/unreadable database evidence or pending
+dpkg updates are unknown and disable installation, rather than assuming absence.
+The official desktop support matrix is narrower than "all APT systems"; use a
+supported Ubuntu/Debian release from the
+[official Linux guide](https://learn.chatgpt.com/docs/linux/linux-app).
+
+Installation requires CORE confirmation and **both** `--trust-download` and
+`--accept-system-packages`. Native HTTP refuses redirects, encoded responses,
+missing/invalid lengths and downloads over 512 MiB. The exact received length is
+checked. No independently published checksum or signature is asserted for this
+direct DEB: trust comes from the fixed official HTTPS origin. The locally
+computed SHA-256 only checks that staging did not change those downloaded bytes.
+Trusted `dpkg-deb` verifies package name, Debian version and architecture without
+executing package scripts. Root staging under `/run/atm-ai-codex-desktop-*` is
+checked again for hash and metadata before APT. A private copy of the running
+native backend, with verified hash and transaction-bound metadata, acts as an
+APT guard. An early hook checks absence before package preconfiguration; a second
+hook checks the exact staged DEB in the installation plan. Both require the
+kernel's whole-file frontend lock to belong to a root ancestor running the trusted
+APT executable. Fresh root-owned acknowledgements are required after APT returns;
+a skipped hook or no-op without that evidence is not success. The exact installed
+package version/architecture and configured state are checked afterward.
+
+As with Hermes system DEB, custom APT pins are refused and non-root execution
+requires separately authorized `sudo -n`. This provider additionally refuses
+database/root redirection, disabled locking and unsupported dpkg configuration.
+Existing `DPkg::Pre-Invoke` hooks are refused so no such hook precedes the early
+guard; stock `DPkg::Pre-Install-Pkgs` preconfiguration remains supported afterward.
+A trusted `env -i` fixes the post-sudo environment, including `HOME=/`.
+APT internally uses `/bin/sh` to invoke fixed literal hooks that execute the
+root-staged Go guard; there is no downloaded shell installer or Bash fallback.
+**APT runs maintainer scripts and triggers as root**, may change
+dependencies and desktop integration, and the official package can configure
+OpenAI's package repository. ATM does not itself launch/sign in to the app, edit
+profiles or refresh package indexes. Neither a temporary HOME nor Apps directory
+isolates these system effects. The guard relies on the APT/dpkg frontend-lock
+protocol; arbitrary root scripts and tools that ignore those locks are outside
+that coordination. Do not change package policy during the operation.
+
+The private `ATM_APPS_DIR/ai/codex-desktop-system/native-v1/` journal records the
+operation, not ownership of system files. Errors retain input evidence; after a
+privileged attempt they also retain the lock and uncertain root staging for
+manual inspection. Cancellation does not prove privileged descendants stopped.
+There is no automatic rollback, retry cleanup, force-unlock or recovery. Stored
+journal paths never authorize deletion; successful cleanup removes only the
+current transaction's verified DEB, native guard, metadata and acknowledgements,
+followed by their empty staging directory.
+
+For a human test, build the isolated preview below **inside a disposable supported
+Ubuntu/Debian VM with a snapshot**, not on a workstation. Only after accepting
+system changes and arranging sudo authorization, run:
+
+```bash
+preview_atm plugin ai menu codex-desktop-system
+# Human authorization in the VM; ATM does not collect a password.
+sudo -v
+preview_atm plugin ai install --provider codex-desktop-system \
+  --trust-download --accept-system-packages
+preview_atm status ai
+```
+
+Verify the package and GUI separately in the VM, then restore its snapshot.
+Automated checks use synthetic downloads and recording command substitutes;
+real APT/GUI and arm64 runtime acceptance remain Pending.
+
 ## Isolated Preview Test
 
 From the ATM source repository, create a separate runtime. These commands build
@@ -839,7 +922,7 @@ preview_atm plugin ai install --provider hermes-desktop-system \
 preview_atm plugin ai install --provider hermes-desktop-system \
   --version 0.7.7 --trust-download --accept-system-packages
 
-# This reports the journal and unverified candidates; no package query.
+# Hermes reports its journal/candidates; ChatGPT also reads the dpkg status file.
 preview_atm status ai
 ```
 
@@ -863,6 +946,9 @@ ATM_TEST_AI_PUBLIC_ROCM=1 go test ./plugins/ai/native -run '^TestOfficialOllamaR
 
 Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
 substitutes for system commands and temporary installation directories only.
+ChatGPT Desktop tests cover HTTP length/origin constraints, Debian metadata,
+package-record ambiguity, consent, existing-state preservation, privileged copy
+checks, package postconditions and retained failure/cancellation evidence.
 Ollama tests use tar.zst bin/lib fixtures, library/helper preservation, legitimate
 link chains, malformed trees, exact response/hash limits, decoder bounds,
 interrupted cleanup and a compiled test ELF read only as fixture data. Parent
@@ -904,5 +990,8 @@ does not install or execute PicoClaw and is not a runtime acceptance test.
 - [Hermes Desktop releases](https://github.com/fathah/hermes-desktop/releases/)
 - [Codex CLI documentation](https://learn.chatgpt.com/docs/codex/cli)
 - [Codex standalone releases](https://github.com/openai/codex/releases/)
+- [ChatGPT Desktop with Codex on Linux](https://learn.chatgpt.com/docs/linux/linux-app)
+- [APT frontend locking implementation](https://github.com/Debian/apt/blob/main/apt-pkg/deb/debsystem.cc)
+- [APT package hook ordering](https://github.com/Debian/apt/blob/main/apt-pkg/deb/dpkgpm.cc)
 - [Ollama Linux installation and base bundles](https://docs.ollama.com/linux)
 - [Ollama releases](https://github.com/ollama/ollama/releases/)

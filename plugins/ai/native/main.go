@@ -27,11 +27,12 @@ type backend struct {
 	client *http.Client
 	log    func(string)
 	// Unit tests inject transaction faults, never through the process environment.
-	checkpoint  func(string) error
-	system      *systemTools
-	discovery   *discoveryConfig
-	hermes      *hermesTools
-	hermesAlias string
+	checkpoint   func(string) error
+	system       *systemTools
+	codexDesktop *codexDesktopTools
+	discovery    *discoveryConfig
+	hermes       *hermesTools
+	hermesAlias  string
 }
 type options struct {
 	provider, version string
@@ -168,7 +169,11 @@ func parseOptions(op string, args []string) (options, error) {
 	if o.provider == hermesAgent && op == "use" && (!seen["--version"] || o.version != hermesPMVersion) {
 		return o, fmt.Errorf("Hermes selection requires reviewed exact --version %s", hermesPMVersion)
 	}
-	if o.provider == hermesSystem {
+	if o.provider == codexDesktopSystem {
+		if op != "install" || o.version != "latest" {
+			return o, fmt.Errorf("ChatGPT Desktop with Codex supports latest-only system DEB install; update, removal, DNF and Arch remain Pending")
+		}
+	} else if o.provider == hermesSystem {
 		if op != "install" {
 			return o, fmt.Errorf("Hermes Desktop system preview supports install only; use the system package manager for administration")
 		}
@@ -208,6 +213,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		if !o.trust {
 			return nil, fmt.Errorf("official executable download requires --trust-download; review provider menu")
 		}
+	}
+	if o.provider == codexDesktopSystem {
+		return nil, b.installCodexDesktop(ctx, o)
 	}
 	if o.provider == hermesSystem {
 		if !o.acceptSystem {
@@ -288,6 +296,13 @@ func serve(ctx context.Context, in io.Reader, out io.Writer) error {
 	return emit("result", message, status, choices)
 }
 func main() {
+	if len(os.Args) > 1 && (os.Args[1] == codexGuardFlag || os.Args[1] == codexGuardEarlyFlag) {
+		if err := codexAPTGuardMain(os.Args[1:]); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(1)
+		}
+		return
+	}
 	if executable, err := os.Executable(); err == nil && filepath.Base(executable) == "hermes" {
 		hermesAliasMain(executable, os.Args[1:])
 		return

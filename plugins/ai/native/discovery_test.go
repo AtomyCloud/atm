@@ -324,7 +324,7 @@ func TestDiscoveryStatusMenusAndNoLifecycleAuthorization(t *testing.T) {
 	f.b.log = func(s string) { logs = append(logs, s) }
 	mustRun(t, f, "status")
 	text := strings.Join(logs, "\n")
-	for _, want := range []string{fmt.Sprintf("path=%q", path), "unverified external executable candidate", "version=unknown", "runtime=unknown", "hermes-agent:", "ollama:", "codex-desktop:", "managed-preview path=", "legacy-default path=", "missing"} {
+	for _, want := range []string{fmt.Sprintf("path=%q", path), "unverified external executable candidate", "version=unknown", "runtime=unknown", "hermes-agent:", "ollama:", "codex-desktop-system", "managed-preview path=", "legacy-default path=", "missing"} {
 		if !strings.Contains(text, want) {
 			t.Fatalf("status missing %q: %s", want, text)
 		}

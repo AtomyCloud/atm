@@ -157,8 +157,20 @@ The alias requires valid enrollment and explicit runtime consent. Real provider 
 acceptance remain Pending.
 No upstream shell installer, root execution or automatic privilege elevation;
 private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data
-migration, Ollama system/service workflows, Codex Desktop and real shell/provider
+migration, Ollama system/service workflows and real shell/provider
 acceptance remain Pending; source-level portability is not runtime acceptance.
+
+Codex Desktop additionally has native initial APT installation for the current
+official ChatGPT Desktop `chatgpt` DEB, Linux amd64/arm64. It requires explicit
+download/system-package consent and CORE confirmation, preserves all existing
+package records, and reads bounded dpkg status without a query subprocess.
+The fixed latest HTTPS URL is the trust source; local SHA-256 checks staging
+continuity, not an independently published signature. Trusted metadata checks,
+root staging, conservative APT policy and exact package postconditions apply.
+APT runs privileged package code on the actual host; failures may leave partial
+system effects and retained evidence, not rollback. Update/removal, RPM/DNF,
+Arch and real package/GUI/arm64 acceptance remain Pending. This does not change
+the AI production manifest or the 13/16 native count.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,
 temporary repository configuration and retained restore recovery copies. It never

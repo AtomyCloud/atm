@@ -83,6 +83,12 @@ func newFixture(t *testing.T, arch string) *fixture {
 	}
 	f := &fixture{responses: map[string][]byte{}}
 	f.b = &backend{req: protocol.Request{PluginID: "ai", Home: filepath.Join(root, "atm"), AppsDir: filepath.Join(root, "Apps")}, arch: arch, log: func(string) {}}
+	f.b.codexDesktop = &codexDesktopTools{
+		commands: &systemTools{resolve: func(name string) (string, error) {
+			return "", fmt.Errorf("system command requires explicit test fixture: %s", name)
+		}},
+		packageRecord: func() (codexPackageRecord, error) { return codexPackageRecord{}, nil },
+	}
 	f.b.discovery = &discoveryConfig{home: filepath.Join(root, "user"), cwd: filepath.Join(root, "cwd")}
 	t.Setenv("HOME", f.b.discovery.home)
 	t.Setenv("PATH", "")
@@ -521,7 +527,7 @@ func TestServeProtocolOffline(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 7 {
+	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 8 {
 		t.Fatalf("unexpected result %+v", stream.Result)
 	}
 	if _, err := os.Lstat(req.AppsDir); !os.IsNotExist(err) {

@@ -37,9 +37,13 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 			out = append(out, choice{ID: p, Label: providers[p].name, Operation: "menu", Arguments: []string{p}})
 		}
 		out = append(out, choice{ID: hermesSystem, Label: providers[hermesSystem].name, Operation: "menu", Arguments: []string{hermesSystem}})
+		out = append(out, choice{ID: codexDesktopSystem, Label: providers[codexDesktopSystem].name, Operation: "menu", Arguments: []string{codexDesktopSystem}})
 		out = append(out, choice{ID: "ollama", Label: providers["ollama"].name, Operation: "menu", Arguments: []string{"ollama"}})
 		out = append(out, choice{ID: hermesAgent, Label: providers[hermesAgent].name, Operation: "menu", Arguments: []string{hermesAgent}})
 		return append(out, choice{ID: "status", Label: label("status"), Operation: "status"}), nil
+	}
+	if id == codexDesktopSystem {
+		return b.codexDesktopMenu(ctx)
 	}
 	if err := b.logDiscovery(ctx, id); err != nil {
 		return nil, err
@@ -128,6 +132,7 @@ func (b *backend) status(ctx context.Context) error {
 	if err := b.systemStatus(); err != nil {
 		return err
 	}
+	b.codexDesktopStatus()
 	if err := b.ollamaStatus(ctx); err != nil {
 		return err
 	}

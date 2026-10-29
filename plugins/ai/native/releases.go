@@ -23,12 +23,13 @@ var versionRE = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(
 type provider struct{ name, path, repo, tagPrefix, docs string }
 
 var providers = map[string]provider{
-	hermesAgent:      {"Hermes Agent (official PM)", "ai/hermes-agent", "NousResearch/hermes-agent", "v", "https://hermes-agent.nousresearch.com/docs/reference/package-management"},
-	"ollama":         {"Ollama (portable bundle)", "ai/ollama", "ollama/ollama", "v", "https://docs.ollama.com/linux"},
-	"picoclaw":       {"PicoClaw CLI", "ai/picoclaw", "sipeed/picoclaw", "v", "https://docs.picoclaw.io/docs/installation/"},
-	"hermes-desktop": {"Hermes Desktop (AppImage)", "hermes/hermes-desktop", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
-	hermesSystem:     {"Hermes Desktop (system DEB)", "ai/hermes-desktop-system", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
-	"codex-cli":      {"Codex CLI (standalone)", "ai/codex/cli", "openai/codex", "rust-v", "https://learn.chatgpt.com/docs/codex/cli"},
+	codexDesktopSystem: {"ChatGPT Desktop with Codex (system DEB)", "ai/codex-desktop-system", "", "", "https://learn.chatgpt.com/docs/linux/linux-app"},
+	hermesAgent:        {"Hermes Agent (official PM)", "ai/hermes-agent", "NousResearch/hermes-agent", "v", "https://hermes-agent.nousresearch.com/docs/reference/package-management"},
+	"ollama":           {"Ollama (portable bundle)", "ai/ollama", "ollama/ollama", "v", "https://docs.ollama.com/linux"},
+	"picoclaw":         {"PicoClaw CLI", "ai/picoclaw", "sipeed/picoclaw", "v", "https://docs.picoclaw.io/docs/installation/"},
+	"hermes-desktop":   {"Hermes Desktop (AppImage)", "hermes/hermes-desktop", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
+	hermesSystem:       {"Hermes Desktop (system DEB)", "ai/hermes-desktop-system", "fathah/hermes-desktop", "v", "https://github.com/fathah/hermes-desktop/releases/"},
+	"codex-cli":        {"Codex CLI (standalone)", "ai/codex/cli", "openai/codex", "rust-v", "https://learn.chatgpt.com/docs/codex/cli"},
 }
 
 type artifact struct {

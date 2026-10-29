@@ -778,8 +778,12 @@ Controlled deactivation removes only ATM's launcher, PATH blocks and active
 selection; the complete preparation and personal data remain at their original
 paths and can be reactivated without rerunning PM.
 Full lifecycle and real provider/runtime
-acceptance remain Pending. Ollama system/service workflows and Codex Desktop
-remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview
+acceptance remain Pending. Codex Desktop now has an initial-install-only native
+APT preview for the official `chatgpt` DEB on Linux amd64/arm64, with both consent
+flags, bounded HTTPS download and root-stage verification. Its local hash verifies
+staging continuity, not an independently published artifact signature. Existing
+package records are preserved; update/removal and RPM/Arch remain Pending, as do
+Ollama system/service workflows. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 
 The native preview also reports external executable candidates from known legacy
@@ -788,6 +792,9 @@ Discovery only inspects filesystem metadata: it does not execute programs, read
 their configuration or establish their version. Found candidates are unverified,
 not adopted or made eligible for native removal. Missing candidates do not prove
 that an application is absent from the system.
+Separate ChatGPT Desktop status reads bounded dpkg records without executing a
+package query or the app. Unknown database state is not treated as absence, and
+observing a package does not give ATM ownership of it.
 
 Owned PicoClaw, Codex CLI, Ollama and Hermes Agent previews support explicit native PATH integration,
 with separate removal of their exact owned profile blocks. Version selection
