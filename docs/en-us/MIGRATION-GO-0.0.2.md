@@ -160,15 +160,20 @@ private HOME is not a sandbox for dependency code. Full Hermes lifecycle/data
 migration, Ollama system/service workflows and real shell/provider
 acceptance remain Pending; source-level portability is not runtime acceptance.
 
-Codex Desktop additionally has native initial APT installation for the current
+Codex Desktop additionally has native initial APT installation and explicit DEB update for the current
 official ChatGPT Desktop `chatgpt` DEB, Linux amd64/arm64. It requires explicit
-download/system-package consent and CORE confirmation, preserves all existing
-package records, and reads bounded dpkg status without a query subprocess.
+download/system-package consent and CORE confirmation, and reads bounded dpkg
+status without a query subprocess. Install preserves all existing package records.
+Update requires an eligible configured package and pins its exact original state
+through both APT-locked guards; no missing-package install, repair or downgrade.
+Debian ordering comes from trusted dpkg, not a semantic-version approximation.
+An equal candidate is a no-op without privileged package changes. Journals and
+acknowledgements distinguish install/update and the original package baseline.
 The fixed latest HTTPS URL is the trust source; local SHA-256 checks staging
 continuity, not an independently published signature. Trusted metadata checks,
 root staging, conservative APT policy and exact package postconditions apply.
 APT runs privileged package code on the actual host; failures may leave partial
-system effects and retained evidence, not rollback. Update/removal, RPM/DNF,
+system effects and retained evidence, not rollback. Removal, RPM/DNF,
 Arch and real package/GUI/arm64 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 

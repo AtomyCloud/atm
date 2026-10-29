@@ -210,24 +210,28 @@ def check(executable, backend):
         desktop_menu = run("--yes", "plugin", "ai", "menu", desktop)
         desktop_choices = json.loads(desktop_menu.stdout.splitlines()[-1])["choices"]
         assert desktop_choices, "native desktop review menu missing"
-        assert all(c["operation"] in ("menu", "install", "status") for c in desktop_choices)
+        assert all(c["operation"] in ("menu", "install", "update", "status") for c in desktop_choices)
         for c in desktop_choices:
-            if c["operation"] == "install":
+            if c["operation"] in ("install", "update"):
                 assert {"--trust-download", "--accept-system-packages"} <= set(c["arguments"])
-        for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
-            run("--yes", "plugin", "ai", "install", "--provider", desktop, *flags, success=False)
-        for operation in ("update", "use", "remove", "uninstall", "integrate"):
+        for operation in ("use", "remove", "uninstall", "integrate"):
             run("--yes", "plugin", "ai", operation, "--provider", desktop, success=False)
-        for flags in (("--version", "1.2.3"), ("--version", "../../outside"),
-                      ("--rocm",), ("--accept-dependency-execution",),
-                      ("--accept-system-packages",), ("--trust-download=true",)):
-            run("--yes", "plugin", "ai", "install", "--provider", desktop,
-                "--trust-download", "--accept-system-packages", *flags, success=False)
-        run("plugin", "ai", "install", "--provider", desktop,
-            "--trust-download", "--accept-system-packages", success=False, started=False)
-        plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", desktop,
-                             "--trust-download", "--accept-system-packages", started=False).stdout)
-        assert plan["dry_run"] and plan["executor"] == "native"
+        for operation in ("install", "update"):
+            for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
+                run("--yes", "plugin", "ai", operation, "--provider", desktop, *flags, success=False)
+            for flags in (("--version", "1.2.3"), ("--version", "../../outside"),
+                          ("--rocm",), ("--accept-dependency-execution",),
+                          ("--accept-system-packages",), ("--trust-download=true",)):
+                run("--yes", "plugin", "ai", operation, "--provider", desktop,
+                    "--trust-download", "--accept-system-packages", *flags, success=False)
+            run("plugin", "ai", operation, "--provider", desktop,
+                "--trust-download", "--accept-system-packages", success=False, started=False)
+            plan = json.loads(run("--dry-run", "plugin", "ai", operation, "--provider", desktop,
+                                 "--trust-download", "--accept-system-packages", started=False).stdout)
+            assert plan["dry_run"] and plan["executor"] == "native"
+        for provider in ("picoclaw", "codex-cli", "ollama", "hermes-agent", system):
+            run("--yes", "plugin", "ai", "update", "--provider", provider,
+                "--trust-download", "--accept-system-packages", success=False)
         agent = "hermes-agent"
         agent_menu = run("--yes", "plugin", "ai", "menu", agent)
         choices = json.loads(agent_menu.stdout.splitlines()[-1])["choices"]

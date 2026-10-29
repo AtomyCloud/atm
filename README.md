@@ -778,11 +778,14 @@ Controlled deactivation removes only ATM's launcher, PATH blocks and active
 selection; the complete preparation and personal data remain at their original
 paths and can be reactivated without rerunning PM.
 Full lifecycle and real provider/runtime
-acceptance remain Pending. Codex Desktop now has an initial-install-only native
-APT preview for the official `chatgpt` DEB on Linux amd64/arm64, with both consent
+acceptance remain Pending. Codex Desktop now has initial installation and explicit
+update in the native APT preview for the official `chatgpt` DEB on Linux
+amd64/arm64, with both consent
 flags, bounded HTTPS download and root-stage verification. Its local hash verifies
-staging continuity, not an independently published artifact signature. Existing
-package records are preserved; update/removal and RPM/Arch remain Pending, as do
+staging continuity, not an independently published artifact signature. Install
+preserves existing package records; separately confirmed update requires a configured
+package, pins its original state through APT guards and refuses downgrade.
+Removal and RPM/Arch remain Pending, as do
 Ollama system/service workflows. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.
 

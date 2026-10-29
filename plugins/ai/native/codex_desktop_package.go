@@ -8,10 +8,12 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 	"time"
@@ -55,6 +57,48 @@ func codexDesktopURL(arch string) (string, error) {
 }
 
 func validDEBVersion(v string) bool { return len(v) <= 128 && debVersionRE.MatchString(v) }
+
+func codexUpdateEligible(p codexPackageRecord, arch string) bool {
+	return p.Present && p.Status == "install ok installed" && validDEBVersion(p.Version) && p.Arch == arch
+}
+
+func codexBaselineValid(operation string, p codexPackageRecord, arch string) bool {
+	return operation == "install" && p == (codexPackageRecord{}) || operation == "update" && codexUpdateEligible(p, arch)
+}
+
+// dpkg owns Debian ordering, including epochs, revisions and equal spellings.
+func compareCodexVersions(ctx context.Context, s *systemTools, candidate, baseline string) (int, error) {
+	if !validDEBVersion(candidate) || !validDEBVersion(baseline) {
+		return 0, fmt.Errorf("invalid Debian version comparison")
+	}
+	ex, err := s.resolve("dpkg")
+	if err != nil {
+		return 0, err
+	}
+	for _, test := range []struct {
+		op     string
+		result int
+	}{{"eq", 0}, {"gt", 1}, {"lt", -1}} {
+		if err := ctx.Err(); err != nil {
+			return 0, err
+		}
+		out, err := s.run(ctx, ex, []string{"--compare-versions", candidate, test.op, baseline})
+		if ctx.Err() != nil {
+			return 0, ctx.Err()
+		}
+		if out != "" {
+			return 0, fmt.Errorf("unexpected dpkg comparison output")
+		}
+		if err == nil {
+			return test.result, nil
+		}
+		var exit *exec.ExitError
+		if !errors.As(err, &exit) || exit.ExitCode() != 1 {
+			return 0, fmt.Errorf("dpkg comparison failed: %w", err)
+		}
+	}
+	return 0, fmt.Errorf("inconsistent dpkg version comparison")
+}
 
 // This reader reports package database evidence, never application ownership or health.
 func installedCodexDesktop() (codexPackageRecord, error) {

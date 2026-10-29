@@ -18,6 +18,8 @@ const codexDesktopTrust = "official-https-origin; local-sha256-continuity-only"
 
 type codexDesktopJournal struct {
 	Schema                                     int
+	Operation                                  string
+	Baseline                                   codexPackageRecord
 	Plugin, Provider, Phase, LastPhase         string
 	URL, Package, Version, Arch, SHA256, Trust string
 	Size                                       int64
@@ -27,10 +29,31 @@ type codexDesktopJournal struct {
 
 func codexDesktopPhase(phase string) bool {
 	switch phase {
-	case "prepared", "downloaded", "metadata-verified", "root-mktemp", "root-copy", "root-hash", "root-metadata", "root-guard-copy", "root-guard-hash", "root-guard-config", "apt-running", "installed", "root-cleanup", "complete", "failed", "unknown":
+	case "prepared", "downloaded", "metadata-verified", "root-mktemp", "root-copy", "root-hash", "root-metadata", "root-guard-copy", "root-guard-hash", "root-guard-config", "apt-running", "installed", "root-cleanup", "complete", "no-update", "failed", "unknown":
 		return true
 	}
 	return false
+}
+
+func codexDesktopFinished(rec *codexDesktopJournal) bool {
+	return rec == nil || rec.Phase == "complete" || rec.Phase == "no-update"
+}
+
+func (r *codexDesktopJournal) UnmarshalJSON(data []byte) error {
+	type plain codexDesktopJournal
+	var v plain
+	if err := decode(data, &v, true); err != nil {
+		return err
+	}
+	var optional []string
+	if v.Schema == 1 {
+		optional = []string{"Operation", "Baseline"}
+	}
+	if err := codexCanonicalJSON(data, v, optional...); err != nil {
+		return err
+	}
+	*r = codexDesktopJournal(v)
+	return nil
 }
 
 func (b *backend) codexDesktopRecord() (*codexDesktopJournal, error) {
@@ -61,8 +84,14 @@ func (b *backend) codexDesktopRecord() (*codexDesktopJournal, error) {
 		return nil, err
 	}
 	want, urlErr := codexDesktopURL(rec.Arch)
-	if rec.Schema != 1 || rec.Plugin != "ai" || rec.Provider != codexDesktopSystem || rec.Package != "chatgpt" || urlErr != nil || rec.URL != want || rec.Trust != codexDesktopTrust || !codexDesktopPhase(rec.Phase) || !codexDesktopPhase(rec.LastPhase) || rec.Size < 0 || rec.Size > codexDesktopMaxDownload {
+	legacy := rec.Schema == 1 && rec.Operation == "" && rec.Baseline == (codexPackageRecord{})
+	if (!legacy && (rec.Schema != 2 || !codexBaselineValid(rec.Operation, rec.Baseline, rec.Arch))) || rec.Plugin != "ai" || rec.Provider != codexDesktopSystem || rec.Package != "chatgpt" || urlErr != nil || rec.URL != want || rec.Trust != codexDesktopTrust || !codexDesktopPhase(rec.Phase) || !codexDesktopPhase(rec.LastPhase) || rec.Size < 0 || rec.Size > codexDesktopMaxDownload {
 		return nil, fmt.Errorf("invalid ChatGPT Desktop operation journal")
+	}
+	if rec.Phase == "no-update" || rec.LastPhase == "no-update" {
+		if rec.Schema != 2 || rec.Operation != "update" || rec.Staging != "" || rec.GuardSHA256 != "" || rec.GuardConfigSHA256 != "" || rec.GuardNonce != "" || rec.Phase == "no-update" && rec.LastPhase != "no-update" {
+			return nil, fmt.Errorf("invalid no-update journal evidence")
+		}
 	}
 	if (rec.Size == 0) != (rec.SHA256 == "") || rec.SHA256 != "" && !validSHA(rec.SHA256) || rec.Version != "" && !validDEBVersion(rec.Version) {
 		return nil, fmt.Errorf("invalid ChatGPT Desktop journal evidence")
@@ -136,15 +165,22 @@ func (b *backend) codexDesktopMenu(ctx context.Context) ([]choice, error) {
 	}
 	_, archErr := codexDesktopURL(b.arch)
 	_, lockErr := os.Lstat(b.root(codexDesktopSystem) + ".lock")
-	if pkgErr != nil || pkg.Present || err != nil || rec != nil && rec.Phase != "complete" || archErr != nil || !os.IsNotExist(lockErr) {
+	if pkgErr != nil || err != nil || !codexDesktopFinished(rec) || archErr != nil || !os.IsNotExist(lockErr) {
 		return []choice{back}, ctx.Err()
+	}
+	if pkg.Present {
+		if !codexUpdateEligible(pkg, b.arch) {
+			return []choice{back}, ctx.Err()
+		}
+		return []choice{{ID: "update", Label: label("codex_desktop_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopSystem, "--trust-download", "--accept-system-packages"}}, back}, ctx.Err()
 	}
 	return []choice{{ID: "install", Label: label("codex_desktop_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopSystem, "--trust-download", "--accept-system-packages"}}, back}, ctx.Err()
 }
 
 func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error) {
-	if b.req.Operation != "install" || o.provider != codexDesktopSystem || o.version != "latest" || !o.trust || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.refreshLauncher || o.keepPreparation {
-		return fmt.Errorf("ChatGPT Desktop latest-only install requires --trust-download and --accept-system-packages; other operations remain Pending")
+	operation := b.req.Operation
+	if (operation != "install" && operation != "update") || o.provider != codexDesktopSystem || o.version != "latest" || !o.trust || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.refreshLauncher || o.keepPreparation {
+		return fmt.Errorf("ChatGPT Desktop latest-only install/update requires --trust-download and --accept-system-packages; other operations remain Pending")
 	}
 	url, err := codexDesktopURL(b.arch)
 	if err != nil {
@@ -162,8 +198,8 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	if err != nil {
 		return fmt.Errorf("ChatGPT package state unknown: %w", err)
 	}
-	if before.Present {
-		return fmt.Errorf("existing chatgpt package record preserved (including held/incomplete states); install only when absent")
+	if !codexBaselineValid(operation, before, b.arch) {
+		return fmt.Errorf("chatgpt state preserved: install requires absence; update requires exact installed, valid-version, matching-architecture state without hold")
 	}
 	for _, name := range []string{"apt-get", "apt-config", "dpkg-deb", "env", "mktemp", "install", "sha256sum", "rm", "rmdir"} {
 		if _, err = s.resolve(name); err != nil {
@@ -182,7 +218,7 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	if err != nil {
 		return err
 	}
-	if prior != nil && prior.Phase != "complete" {
+	if !codexDesktopFinished(prior) {
 		return fmt.Errorf("incomplete ChatGPT Desktop operation; inspect journal, processes and package manager manually")
 	}
 	root := b.root(codexDesktopSystem)
@@ -194,13 +230,14 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 		return fmt.Errorf("ChatGPT Desktop operation locked/interrupted: %w", err)
 	}
 	retain := false
+	lockReleaseAttempted := false
 	defer func() {
-		if !retain {
+		if !retain && !lockReleaseAttempted {
 			_ = os.Remove(lock)
 		}
 	}()
 	prior, err = b.codexDesktopRecord()
-	if err != nil || prior != nil && prior.Phase != "complete" {
+	if err != nil || !codexDesktopFinished(prior) {
 		return fmt.Errorf("ChatGPT Desktop journal changed under lock: %v", err)
 	}
 	retain = true
@@ -214,7 +251,7 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	} else if err != nil {
 		return err
 	}
-	rec := codexDesktopJournal{Schema: 1, Plugin: "ai", Provider: codexDesktopSystem, Phase: "prepared", LastPhase: "prepared", URL: url, Package: "chatgpt", Arch: b.arch, Trust: codexDesktopTrust}
+	rec := codexDesktopJournal{Schema: 2, Operation: operation, Baseline: before, Plugin: "ai", Provider: codexDesktopSystem, Phase: "prepared", LastPhase: "prepared", URL: url, Package: "chatgpt", Arch: b.arch, Trust: codexDesktopTrust}
 	privileged := false
 	defer func() {
 		if err == nil {
@@ -305,6 +342,51 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	if err = setPhase("metadata-verified"); err != nil {
 		return err
 	}
+	if operation == "update" {
+		order, e := compareCodexVersions(ctx, s, rec.Version, before.Version)
+		if e != nil {
+			return e
+		}
+		if order < 0 {
+			return fmt.Errorf("latest ChatGPT DEB is older than the observed package; downgrade refused")
+		}
+		if order == 0 {
+			current, e := t.packageRecord()
+			if e != nil {
+				return e
+			}
+			if current != before {
+				return fmt.Errorf("chatgpt original baseline changed before no-update result")
+			}
+			if err = ctx.Err(); err != nil {
+				return err
+			}
+			if err = cleanupCodexInput(rec.Input, inputInfo, []codexPrivateFile{{local, info}}); err != nil {
+				return err
+			}
+			current, err = t.packageRecord()
+			if err != nil {
+				return err
+			}
+			if current != before {
+				return fmt.Errorf("chatgpt original baseline changed during no-update cleanup")
+			}
+			if err = ctx.Err(); err != nil {
+				return err
+			}
+			if err = setPhase("no-update"); err != nil {
+				return err
+			}
+			// Never retry this release: a subsequent invocation may acquire the path.
+			lockReleaseAttempted = true
+			if err = os.Remove(lock); err != nil {
+				return err
+			}
+			retain = false
+			b.log(label("codex_desktop_no_update"))
+			return nil
+		}
+	}
 	if t.executable == nil {
 		return fmt.Errorf("native guard image unavailable")
 	}
@@ -378,7 +460,7 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	if v != rec.Version {
 		return fmt.Errorf("privileged ChatGPT DEB version changed")
 	}
-	guardMetadata := codexAPTGuardMetadata{Schema: 1, Stage: stage, Version: rec.Version, Arch: rec.Arch, SHA256: rec.SHA256, Size: rec.Size, HelperSHA256: rec.GuardSHA256, Nonce: rec.GuardNonce}
+	guardMetadata := codexAPTGuardMetadata{Schema: 2, Operation: operation, Baseline: before, Stage: stage, Version: rec.Version, Arch: rec.Arch, SHA256: rec.SHA256, Size: rec.Size, HelperSHA256: rec.GuardSHA256, Nonce: rec.GuardNonce}
 	configData, err := encodeCodexGuardMetadata(guardMetadata)
 	if err != nil {
 		return err
@@ -420,13 +502,13 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	if err != nil {
 		return err
 	}
-	if current.Present {
-		return fmt.Errorf("chatgpt package appeared concurrently; existing state preserved")
+	if current != before {
+		return fmt.Errorf("chatgpt original package baseline changed concurrently; existing state preserved")
 	}
 	if err = s.stage(stage); err != nil {
 		return err
 	}
-	out, err = call("apt-get", codexGuardAPTArgs(stage), true, "apt-running")
+	out, err = call("apt-get", codexTransactionAPTArgs(stage, operation), true, "apt-running")
 	if out != "" {
 		b.log("APT output (bounded): " + out)
 	}
@@ -452,7 +534,7 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 			return err
 		}
 		if out != fmt.Sprintf("%x", sha256.Sum256(ack.data))+"  "+stage+"/"+ack.name+"\n" {
-			return fmt.Errorf("APT returned without verified locked absence-guard acknowledgements")
+			return fmt.Errorf("APT returned without verified locked baseline-guard acknowledgements")
 		}
 	}
 	if err = setPhase("installed"); err != nil {
@@ -479,43 +561,7 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	if err = ctx.Err(); err != nil {
 		return err
 	}
-	if err = dirs(rec.Input, false, true); err != nil {
-		return err
-	}
-	now, err := os.Lstat(rec.Input)
-	if err != nil || !os.SameFile(inputInfo, now) {
-		return fmt.Errorf("input directory changed; retained for inspection")
-	}
-	check, err := regular(local, 0600, codexDesktopMaxDownload)
-	if err != nil {
-		return err
-	}
-	now, statErr = check.Stat()
-	closeErr = check.Close()
-	if statErr != nil || closeErr != nil || !os.SameFile(info, now) {
-		return fmt.Errorf("input file changed; retained for inspection")
-	}
-	if err = os.Remove(local); err != nil {
-		return err
-	}
-	for _, file := range []struct {
-		path string
-		info os.FileInfo
-	}{{localGuard, guardInfo}, {localConfig, configInfo}} {
-		f, e := regular(file.path, 0600, codexGuardMaxImage)
-		if e != nil {
-			return e
-		}
-		now, e := f.Stat()
-		f.Close()
-		if e != nil || !os.SameFile(file.info, now) {
-			return fmt.Errorf("native guard input changed; retained for inspection")
-		}
-		if err = os.Remove(file.path); err != nil {
-			return err
-		}
-	}
-	if err = os.Remove(rec.Input); err != nil {
+	if err = cleanupCodexInput(rec.Input, inputInfo, []codexPrivateFile{{local, info}, {localGuard, guardInfo}, {localConfig, configInfo}}); err != nil {
 		return err
 	}
 	if err = setPhase("complete"); err != nil {
@@ -524,4 +570,34 @@ func (b *backend) installCodexDesktop(ctx context.Context, o options) (err error
 	retain = false
 	b.log(label("codex_desktop_complete"))
 	return nil
+}
+
+type codexPrivateFile struct {
+	path string
+	info os.FileInfo
+}
+
+func cleanupCodexInput(dir string, original os.FileInfo, files []codexPrivateFile) error {
+	if err := dirs(dir, false, true); err != nil {
+		return err
+	}
+	now, err := os.Lstat(dir)
+	if err != nil || !os.SameFile(original, now) {
+		return fmt.Errorf("input directory changed; retained for inspection")
+	}
+	for _, file := range files {
+		f, err := regular(file.path, 0600, codexDesktopMaxDownload)
+		if err != nil {
+			return err
+		}
+		now, statErr := f.Stat()
+		closeErr := f.Close()
+		if statErr != nil || closeErr != nil || !os.SameFile(file.info, now) {
+			return fmt.Errorf("input file changed; retained for inspection")
+		}
+		if err := os.Remove(file.path); err != nil {
+			return err
+		}
+	}
+	return os.Remove(dir)
 }

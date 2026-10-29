@@ -31,6 +31,7 @@ type codexDesktopFixture struct {
 	calls                  []systemCall
 	reads, policies        int
 	cancel                 context.CancelFunc
+	guardRecord            func() (codexPackageRecord, error)
 }
 
 func newCodexDesktopFixture(t *testing.T, arch string) *codexDesktopFixture {
@@ -185,7 +186,7 @@ func newCodexDesktopFixture(t *testing.T, arch string) *codexDesktopFixture {
 			}
 			return h + "  " + args[1] + "\n", nil
 		case "apt-get":
-			if !elevated || !reflect.DeepEqual(args, codexGuardAPTArgs(codexFixtureStage)) {
+			if !elevated || !reflect.DeepEqual(args, codexTransactionAPTArgs(codexFixtureStage, f.b.req.Operation)) {
 				t.Fatal("unsafe apt-get", args)
 			}
 			guard := codexAPTGuardTools{
@@ -195,8 +196,13 @@ func newCodexDesktopFixture(t *testing.T, arch string) *codexDesktopFixture {
 					}
 					return nil
 				},
-				policy:        func(context.Context) error { return nil },
-				packageRecord: func() (codexPackageRecord, error) { return f.pkg, nil },
+				policy: func(context.Context) error { return nil },
+				packageRecord: func() (codexPackageRecord, error) {
+					if f.guardRecord != nil {
+						return f.guardRecord()
+					}
+					return f.pkg, nil
+				},
 				read: func(path string, _ os.FileMode, _ int64) ([]byte, error) {
 					data, ok := f.rootFiles[path]
 					if !ok {
@@ -226,16 +232,20 @@ func newCodexDesktopFixture(t *testing.T, arch string) *codexDesktopFixture {
 				f.pkg = codexPackageRecord{Present: true, Status: "install ok unpacked"}
 			}
 			if f.fault != "apt-noop" {
-				if err := runCodexAPTGuardPhase(ctx, codexFixtureStage, strings.NewReader(""), guard, true); err != nil {
-					return "", err
+				if f.fault != "skip-early" {
+					if err := runCodexAPTGuardPhase(ctx, codexFixtureStage, strings.NewReader(""), guard, true); err != nil {
+						return "", err
+					}
 				}
 				if f.fault == "guard-repeat" {
 					if err := runCodexAPTGuardPhase(ctx, codexFixtureStage, strings.NewReader(""), guard, true); err != nil {
 						return "", err
 					}
 				}
-				if err := runCodexAPTGuard(ctx, codexFixtureStage, strings.NewReader(target+"\n"), guard); err != nil {
-					return "", err
+				if f.fault != "skip-final" {
+					if err := runCodexAPTGuard(ctx, codexFixtureStage, strings.NewReader(target+"\n"), guard); err != nil {
+						return "", err
+					}
 				}
 			}
 			f.pkg = codexPackageRecord{true, "install ok installed", f.version, arch}

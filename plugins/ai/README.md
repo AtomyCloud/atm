@@ -18,7 +18,7 @@ supports amd64; the separate ChatGPT Desktop DEB route supports amd64 and arm64:
 | Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
-| Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation only, with explicit download and system-package consent; existing package records preserved |
+| Codex Desktop system (ChatGPT Desktop) | Official latest amd64/arm64 `chatgpt` DEB | Initial installation and separately consented update of a configured system package; no downgrade, repair or removal |
 | Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
@@ -36,8 +36,9 @@ Pending before the entire AI plugin can switch to native Go:
 - Ollama system installation, runtime/service and real GPU acceptance, drivers
   and non-ROCm add-on workflows; portable base and optional amd64 ROCm bundles
   are implemented separately below.
-- Codex Desktop update/removal, RPM/DNF and Arch package management; the Arch
-  shell bootstrap is not ported. Initial APT installation is described below.
+- Codex Desktop removal, RPM/DNF and Arch package management; the Arch
+  shell bootstrap is not ported. Initial APT installation and explicit DEB updates
+  are described below.
 - PATH registration for providers other than the owned PicoClaw, standalone
   Codex CLI, Ollama and Hermes Agent previews, including external/legacy installations, is not implemented.
 - PicoClaw WebUI/launcher support if added to the native provider scope.
@@ -751,23 +752,48 @@ directory, never recursively removes an installation.
 
 Provider ID: `codex-desktop-system`. The official Linux application is currently
 branded **ChatGPT Desktop**, includes Codex, and uses package name `chatgpt`.
-This preview supports **initial installation only** on Linux amd64/arm64 with
-APT. It downloads the architecture-specific latest DEB from the fixed official
+This preview supports **initial installation and explicit update** on Linux
+amd64/arm64 with APT. It downloads the architecture-specific latest DEB from the fixed official
 `https://persistent.oaistatic.com/codex-app-prod/linux/deb/latest/` origin.
-Custom URLs and exact version selection are refused; update, removal, RPM/DNF
-and Arch workflows remain Pending. Any existing `chatgpt` record, including held,
-incomplete and residual-configuration states, prevents installation. ATM does
-not adopt or replace it. System dependencies must already be available through
+Custom URLs and exact version selection are refused; removal, RPM/DNF and Arch
+workflows remain Pending. `install` still refuses any existing `chatgpt` record,
+including held, incomplete and residual-configuration states. Only a separately
+confirmed `update` can change an eligible installed package. System dependencies
+must already be available through
 the administrator's working APT configuration.
+
+`update` requires a fully configured `install ok installed` package with a valid
+Debian version and matching architecture. Missing, unknown, held, incomplete or
+foreign-architecture state is refused, not repaired or implicitly installed.
+The menu offers update only for eligible observed state; it does not look up a
+remote version. The exact original status/version/architecture is bound to the
+transaction and rechecked by both locked APT guards. A concurrent package change
+causes refusal rather than updating a different baseline. This explicit system
+operation can update a manually installed package, but grants no ATM ownership,
+removal authority or permission to migrate application settings.
+
+Trusted `dpkg --compare-versions` supplies Debian ordering, including epochs and
+revisions. A newer candidate is required for package changes. An equal candidate
+reports that no update was performed, without privileged commands or reinstall;
+a lower candidate or comparison error is refused. No-op does not establish
+application health. The update APT invocation is upgrade-only; it is not a general
+distribution upgrade. Existing install journals remain readable and are not
+reinterpreted as update authorization.
+
+The upstream guide recommends updates through the signed package repository.
+This ATM preview deliberately reuses the fixed latest **direct DEB** and the
+staging/transaction checks below instead. It does not refresh APT indexes or manage
+repository updates. The direct-download trust boundary is not a claim of
+independent package-signature verification.
 
 The submenu and aggregate status read bounded dpkg records without running
 applications or package managers. Missing/unreadable database evidence or pending
-dpkg updates are unknown and disable installation, rather than assuming absence.
+dpkg updates are unknown and disable installation/update, rather than assuming absence.
 The official desktop support matrix is narrower than "all APT systems"; use a
 supported Ubuntu/Debian release from the
 [official Linux guide](https://learn.chatgpt.com/docs/linux/linux-app).
 
-Installation requires CORE confirmation and **both** `--trust-download` and
+Installation and update require CORE confirmation and **both** `--trust-download` and
 `--accept-system-packages`. Native HTTP refuses redirects, encoded responses,
 missing/invalid lengths and downloads over 512 MiB. The exact received length is
 checked. No independently published checksum or signature is asserted for this
@@ -777,11 +803,13 @@ Trusted `dpkg-deb` verifies package name, Debian version and architecture withou
 executing package scripts. Root staging under `/run/atm-ai-codex-desktop-*` is
 checked again for hash and metadata before APT. A private copy of the running
 native backend, with verified hash and transaction-bound metadata, acts as an
-APT guard. An early hook checks absence before package preconfiguration; a second
-hook checks the exact staged DEB in the installation plan. Both require the
+APT guard. An early hook checks the expected package state before preconfiguration;
+a second hook checks that state again and the exact staged DEB in the plan. Install
+requires absence; update requires the exact original configured package. Both require the
 kernel's whole-file frontend lock to belong to a root ancestor running the trusted
 APT executable. Fresh root-owned acknowledgements are required after APT returns;
-a skipped hook or no-op without that evidence is not success. The exact installed
+a skipped hook or APT no-op without that evidence is not a successful package change.
+This is separate from the pre-APT equal-version no-op. The exact installed
 package version/architecture and configured state are checked afterward.
 
 As with Hermes system DEB, custom APT pins are refused and non-root execution
@@ -820,6 +848,10 @@ sudo -v
 preview_atm plugin ai install --provider codex-desktop-system \
   --trust-download --accept-system-packages
 preview_atm status ai
+
+# Separate optional update test in the same disposable VM:
+preview_atm plugin ai update --provider codex-desktop-system \
+  --trust-download --accept-system-packages
 ```
 
 Verify the package and GUI separately in the VM, then restore its snapshot.
@@ -949,6 +981,10 @@ substitutes for system commands and temporary installation directories only.
 ChatGPT Desktop tests cover HTTP length/origin constraints, Debian metadata,
 package-record ambiguity, consent, existing-state preservation, privileged copy
 checks, package postconditions and retained failure/cancellation evidence.
+Update checks additionally cover the original package baseline through both guards,
+Debian version ordering, equal-version no-op, downgrade refusal and operation-bound
+acknowledgements. Neither synthetic success nor cross-compilation proves a real
+privileged update or GUI works on a target host.
 Ollama tests use tar.zst bin/lib fixtures, library/helper preservation, legitimate
 link chains, malformed trees, exact response/hash limits, decoder bounds,
 interrupted cleanup and a compiled test ELF read only as fixture data. Parent

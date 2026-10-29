@@ -25,24 +25,27 @@ const codexGuardMaxImage = int64(64 << 20)
 
 type codexAPTGuardMetadata struct {
 	Schema                                            int
+	Operation                                         string
+	Baseline                                          codexPackageRecord
 	Stage, Version, Arch, SHA256, HelperSHA256, Nonce string
 	Size                                              int64
 }
 
 func (m codexAPTGuardMetadata) validate(stage string) error {
 	_, err := codexDesktopURL(m.Arch)
-	if m.Schema != 1 || !codexDesktopStageRE.MatchString(stage) || m.Stage != stage || err != nil || !validDEBVersion(m.Version) || !validSHA(m.SHA256) || !validSHA(m.HelperSHA256) || !validSHA(m.Nonce) || m.Size <= 0 || m.Size > codexDesktopMaxDownload {
+	if m.Schema != 2 || !codexBaselineValid(m.Operation, m.Baseline, m.Arch) || !codexDesktopStageRE.MatchString(stage) || m.Stage != stage || err != nil || !validDEBVersion(m.Version) || !validSHA(m.SHA256) || !validSHA(m.HelperSHA256) || !validSHA(m.Nonce) || m.Size <= 0 || m.Size > codexDesktopMaxDownload {
 		return fmt.Errorf("invalid transaction-bound APT guard metadata")
 	}
 	return nil
 }
 
 func codexGuardMarker(m codexAPTGuardMetadata) []byte {
-	return []byte(fmt.Sprintf("atm-codex-apt-guard-v1\n%s\n%s\n%s\n%s\n%s\n%d\n%s\n", m.Stage, m.Nonce, m.Version, m.Arch, m.SHA256, m.Size, m.HelperSHA256))
+	data, _ := json.Marshal(m)
+	return append([]byte("atm-codex-apt-guard-v2\n"), data...)
 }
 
 func codexGuardEarlyMarker(m codexAPTGuardMetadata) []byte {
-	return append([]byte("early-absence\n"), codexGuardMarker(m)...)
+	return append([]byte("early-baseline\n"), codexGuardMarker(m)...)
 }
 
 func codexGuardAPTArgs(stage string) []string {
@@ -52,6 +55,66 @@ func codexGuardAPTArgs(stage string) []string {
 	return append([]string{"-o", "DPkg::Pre-Invoke::=exec " + stage + "/" + codexGuardName + " " + codexGuardEarlyFlag,
 		"-o", "DPkg::Pre-Install-Pkgs::=" + hook,
 		"-o", "DPkg::Tools::Options::exec::Version=1", "-o", "DPkg::Tools::Options::exec::InfoFD=0"}, systemAPTArgs(stage+"/chatgpt.deb")...)
+}
+
+func codexTransactionAPTArgs(stage, operation string) []string {
+	args := codexGuardAPTArgs(stage)
+	if operation == "update" {
+		args = append([]string{"--only-upgrade",
+			"-o", "APT::Get::Fix-Broken=false", "-o", "APT::Get::Fix-Missing=false",
+			"-o", "APT::Get::ReInstall=false", "-o", "APT::Ignore-Hold=false"}, args...)
+	}
+	return args
+}
+
+func (m *codexAPTGuardMetadata) UnmarshalJSON(data []byte) error {
+	type plain codexAPTGuardMetadata
+	var v plain
+	if err := decode(data, &v, true); err != nil {
+		return err
+	}
+	if err := codexCanonicalJSON(data, v); err != nil {
+		return err
+	}
+	*m = codexAPTGuardMetadata(v)
+	return nil
+}
+
+// encoding/json accepts case aliases and omitted fields; transaction authority does not.
+func codexCanonicalJSON(data []byte, value any, optional ...string) error {
+	expected, err := json.Marshal(value)
+	if err != nil {
+		return err
+	}
+	var want, got map[string]json.RawMessage
+	if err = json.Unmarshal(expected, &want); err != nil {
+		return err
+	}
+	if err = json.Unmarshal(data, &got); err != nil {
+		return err
+	}
+	for key := range got {
+		if _, ok := want[key]; !ok {
+			return fmt.Errorf("noncanonical transaction field %q", key)
+		}
+	}
+	for key := range want {
+		if _, ok := got[key]; !ok {
+			allowed := false
+			for _, k := range optional {
+				allowed = allowed || key == k
+			}
+			if !allowed {
+				return fmt.Errorf("missing transaction field %q", key)
+			}
+		}
+	}
+	if baseline, ok := got["Baseline"]; ok {
+		if err := codexCanonicalJSON(baseline, codexPackageRecord{}); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func readCodexRootFile(path string, mode os.FileMode, limit int64) ([]byte, error) {
@@ -300,7 +363,7 @@ func runCodexAPTGuardPhase(ctx context.Context, stage string, input io.Reader, t
 			return err
 		}
 		if string(ack) != string(codexGuardEarlyMarker(m)) {
-			return fmt.Errorf("missing/mismatched early absence guard acknowledgement")
+			return fmt.Errorf("missing/mismatched early baseline guard acknowledgement")
 		}
 	}
 	_, imageHash, err := t.hash(stage+"/"+codexGuardName, 0500, codexGuardMaxImage)
@@ -356,8 +419,8 @@ func runCodexAPTGuardPhase(ctx context.Context, stage string, input io.Reader, t
 	if err != nil {
 		return err
 	}
-	if pkg.Present {
-		return fmt.Errorf("chatgpt appeared before APT acquired its frontend lock; existing record preserved")
+	if pkg != m.Baseline {
+		return fmt.Errorf("chatgpt original package baseline changed under APT lock; existing record preserved")
 	}
 	if err := ctx.Err(); err != nil {
 		return err
