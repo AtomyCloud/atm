@@ -479,6 +479,82 @@ func TestReleaseSelectionAndMetadata(t *testing.T) {
 	}
 }
 
+func TestHistoricalReleaseWithoutChecksum(t *testing.T) {
+	for _, platform := range []string{"linux-amd64", "linux-arm64"} {
+		for _, operation := range []string{"install", "latest", "update"} {
+			t.Run(platform+"/"+operation, func(t *testing.T) {
+				b := newTestBackend(t)
+				b.platform = platform
+				data := archiveBytes(t, "1.27.3", platform)
+				current := rowFor("1.27.3", platform, data)
+				historical := rowFor("1.5.2", platform, []byte("unavailable"))
+				historical.Files[0].SHA256 = ""
+				older := rowFor("1.4.2", platform, nil)
+				older.Files[0].SHA256 = ""
+				fixture(t, b, []release{current, historical, older}, map[string][]byte{current.Files[0].Filename: data})
+				choices, err := b.menu(context.Background(), []string{"--latest"})
+				if err != nil || len(choices) != 3 || choices[0].ID != "1.27.3" {
+					t.Fatal(choices, err)
+				}
+				if operation == "latest" {
+					err = action(b, "install")
+				} else {
+					if operation == "update" {
+						legacy(t, b, "1.27.2")
+						if err := action(b, "use", "1.27.2"); err != nil {
+							t.Fatal(err)
+						}
+					}
+					err = action(b, operation, "--version", "1.27.3")
+				}
+				if err != nil {
+					t.Fatal(err)
+				}
+				assertCurrent(t, b, "1.27.3")
+				if err := action(b, "install", "--version", "1.5.2"); err == nil {
+					t.Fatal("checksumless archive accepted")
+				}
+				if err := action(b, "install", "--version", "1.4.2"); err == nil {
+					t.Fatal("archive without size/checksum accepted")
+				}
+				assertCurrent(t, b, "1.27.3")
+				assertAbsent(t, filepath.Join(b.root, "1.5.2"))
+				assertAbsent(t, filepath.Join(b.root, "1.4.2"))
+			})
+		}
+	}
+}
+
+func TestChecksumlessReleaseStillValidatesMetadata(t *testing.T) {
+	for _, kind := range []string{"only-checksumless", "filename", "version", "size", "duplicate", "duplicate-with-checksum"} {
+		t.Run(kind, func(t *testing.T) {
+			b := newTestBackend(t)
+			historical := rowFor("1.5.2", b.platform, []byte("unavailable"))
+			historical.Files[0].SHA256 = ""
+			current := rowFor("1.27.3", b.platform, []byte("candidate"))
+			rows := []release{current, historical}
+			switch kind {
+			case "only-checksumless":
+				rows = []release{historical}
+			case "filename":
+				rows[1].Files[0].Filename = "../unsafe.tar.gz"
+			case "version":
+				rows[1].Files[0].Version = "go1.5.1"
+			case "size":
+				rows[1].Files[0].Size = -1
+			case "duplicate":
+				rows = append(rows, historical)
+			case "duplicate-with-checksum":
+				rows = append(rows, rowFor("1.5.2", b.platform, []byte("candidate")))
+			}
+			fixture(t, b, rows, nil)
+			if _, err := b.releases(context.Background()); err == nil {
+				t.Fatal("invalid catalog accepted", kind)
+			}
+		})
+	}
+}
+
 func TestFailedInstallPreservesSelectionAndCleansStage(t *testing.T) {
 	for _, kind := range []string{"checksum", "short", "oversize", "truncated", "VERSION", "binary", "architecture", "traversal", "link", "special", "duplicate", "reserved"} {
 		t.Run(kind, func(t *testing.T) {

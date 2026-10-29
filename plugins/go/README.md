@@ -37,6 +37,12 @@ Release metadata comes from the fixed official
 stable numeric releases with a Linux archive for the host architecture. Exact
 versions (optionally prefixed `go`, including historical two-part versions) must
 exist in that index with a valid archive filename, SHA-256, and bounded size.
+Historical entries without SHA-256 (sometimes also reporting zero size) are
+excluded from the available versions;
+they do not block installing a different verified version or listing the latest
+five. An explicit request for an entry without a checksum is refused. Malformed
+nonempty checksums, invalid identities/sizes and duplicate artifacts still fail
+validation; checksum verification is never disabled.
 Default install and Full Setup choose the latest compatible stable release;
 update refuses a downgrade from the active version, even with `--version`.
 

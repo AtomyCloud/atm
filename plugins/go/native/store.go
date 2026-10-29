@@ -264,7 +264,7 @@ func (b *backend) install(ctx context.Context, o options) error {
 			}
 		}
 		if !found {
-			return fmt.Errorf("exact version is not a compatible stable official archive")
+			return fmt.Errorf("exact version is not a compatible stable official archive with SHA-256 metadata")
 		}
 	}
 	v := spec.Version

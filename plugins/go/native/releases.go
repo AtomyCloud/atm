@@ -165,13 +165,17 @@ func (b *backend) releases(ctx context.Context) ([]artifact, error) {
 				continue
 			}
 			hash, err := hex.DecodeString(f.SHA256)
-			if f.Filename != name || f.Version != row.Version || err != nil || len(hash) != sha256.Size || f.Size <= 0 || f.Size > limits.DownloadBytes {
+			if f.Filename != name || f.Version != row.Version || f.Size < 0 || f.Size > limits.DownloadBytes || (f.SHA256 != "" && (err != nil || len(hash) != sha256.Size || f.Size == 0)) {
 				return nil, fmt.Errorf("invalid official artifact metadata for %s", v)
 			}
 			if seen[v] {
 				return nil, fmt.Errorf("duplicate official artifact for %s", v)
 			}
 			seen[v] = true
+			// Historical entries can lack SHA-256 and size; they are not installable.
+			if f.SHA256 == "" {
+				continue
+			}
 			out = append(out, artifact{install.Spec{Version: v, URL: b.base + "/" + name, SHA256: strings.ToLower(f.SHA256), Format: "tar.gz", StripPrefix: "go", Origins: []string{"https://go.dev", "https://dl.google.com"}}, f.Size})
 		}
 	}
