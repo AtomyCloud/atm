@@ -30,6 +30,7 @@ type ollamaReceipt struct {
 	Schema   int
 	Plugin   string
 	Artifact artifact
+	ROCm     *artifact `json:",omitempty"`
 	Files    map[string]ollamaEntry
 }
 
@@ -48,6 +49,34 @@ func ollamaReadReceipt(dir string) (ollamaReceipt, error) {
 		return rec, fmt.Errorf("Ollama receipt bound exceeded")
 	}
 	err = decode(data, &rec, true)
+	if err != nil {
+		return rec, err
+	}
+	// encoding/json accepts case-insensitive struct fields. Receipts use exact
+	// names so an alias cannot silently override a second artifact or its digest.
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(data, &fields); err != nil {
+		return rec, err
+	}
+	for key, value := range fields {
+		switch key {
+		case "Schema", "Plugin", "Files":
+		case "Artifact", "ROCm":
+			var artifactFields map[string]json.RawMessage
+			if err = json.Unmarshal(value, &artifactFields); err != nil {
+				return rec, err
+			}
+			for name := range artifactFields {
+				switch name {
+				case "Provider", "Version", "Arch", "URL", "SHA256", "Format", "Entry", "Size":
+				default:
+					return rec, fmt.Errorf("noncanonical Ollama artifact field")
+				}
+			}
+		default:
+			return rec, fmt.Errorf("noncanonical Ollama receipt field")
+		}
+	}
 	return rec, err
 }
 
@@ -243,8 +272,17 @@ func (b *backend) ollamaVerify(ctx context.Context, v, dir string) (ollamaReceip
 	if err != nil {
 		return rec, err
 	}
-	if rec.Schema != 1 || rec.Plugin != "ai" || rec.Artifact.Provider != "ollama" || rec.Artifact.Version != v || rec.Artifact.Arch != b.arch || rec.Artifact.validate() != nil || len(rec.Files) == 0 || len(rec.Files) > ollamaMaxEntries {
+	if rec.Plugin != "ai" || rec.Artifact.Provider != "ollama" || rec.Artifact.Version != v || rec.Artifact.Arch != b.arch || rec.Artifact.validate() != nil || len(rec.Files) == 0 || len(rec.Files) > ollamaMaxEntries {
 		return rec, fmt.Errorf("invalid Ollama bundle receipt")
+	}
+	// Schema 1 remains the base-only format. Schema 2 requires both artifacts.
+	if (rec.Schema == 1 && rec.ROCm != nil) || (rec.Schema == 2 && rec.ROCm == nil) || (rec.Schema != 1 && rec.Schema != 2) {
+		return rec, fmt.Errorf("invalid Ollama receipt variant; base and ROCm artifacts cannot be mixed or omitted")
+	}
+	if rec.ROCm != nil {
+		if err = ollamaValidateROCm(*rec.ROCm, v, b.arch); err != nil {
+			return rec, err
+		}
 	}
 	actual, err := ollamaInventory(ctx, filepath.Join(dir, "tree"))
 	if err != nil {

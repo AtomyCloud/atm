@@ -18,7 +18,7 @@ route supports Linux amd64 only:
 | Hermes Desktop portable | Official architecture-specific AppImage | Install, update, change active version, remove inactive version, uninstall owned preview versions; no PATH integration |
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
-| Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
+| Ollama portable | Official base `tar.zst` bundle, optional amd64 ROCm companion | Install, update preserving variant, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
 | Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
@@ -32,8 +32,9 @@ Pending before the entire AI plugin can switch to native Go:
 - Hermes Agent remaining installer/runtime acceptance beyond the reviewed
   source/PM contract described below. External-data migration and physical
   preparation deletion are outside the selected retention policy.
-- Ollama system installation, runtime/service acceptance and GPU add-on workflows;
-  portable base-bundle lifecycle is implemented separately below.
+- Ollama system installation, runtime/service and real GPU acceptance, drivers
+  and non-ROCm add-on workflows; portable base and optional amd64 ROCm bundles
+  are implemented separately below.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
 - PATH registration for providers other than the owned PicoClaw, standalone
   Codex CLI, Ollama and Hermes Agent previews, including external/legacy installations, is not implemented.
@@ -461,8 +462,9 @@ base bundles for amd64 and arm64. ATM resolves stable `ollama/ollama` GitHub
 releases, selecting exactly `ollama-linux-amd64.tar.zst` or
 `ollama-linux-arm64.tar.zst` with the release asset's SHA-256 digest and exact
 size. `latest` and custom stable `X.Y.Z` are supported; prereleases, older release
-formats, missing digests and alternative URLs are refused. Separate ROCm,
-JetPack and MLX assets are not selected. GitHub metadata plus its fixed HTTPS
+formats, missing digests and alternative URLs are refused. ROCm is an explicit
+amd64-only companion option described below; JetPack and MLX are not selected.
+GitHub metadata plus its fixed HTTPS
 download/storage origins is the trust boundary, not an independent signature.
 CORE confirmation and `--trust-download` are required before install/update.
 
@@ -484,9 +486,10 @@ symlink targets. Directories are private 0700; files normalize to 0600 or 0755
 when executable. ELF architecture/type validation applies to `bin/ollama` without
 execution; libraries/helpers are inventoried as data, not runtime-validated.
 
-Compressed downloads are bounded to **4 GiB**, and the entire decompressed tar
-stream (including headers/padding) to **12 GiB**, with at most 10,000 archive or
-inventory entries. Paths are at most 1024 bytes/32 separators. The dedicated
+Each compressed download is bounded to **4 GiB**. Decompressed tar streams
+(including headers/padding) share a **12 GiB** budget across the base and optional
+companion, with a combined inventory of at most 10,000 entries and a per-archive
+header limit of 10,000. Paths are at most 1024 bytes/32 separators. The dedicated
 extractor uses `github.com/klauspost/compress/zstd`, single concurrency, low-memory
 mode and a 128 MiB decoder window/memory limit. Exact response size and SHA-256
 must match before extraction; tar, zstd checksum and cancellation errors refuse
@@ -497,8 +500,9 @@ created only after checking the full graph for escapes, dangling targets, cycles
 ancestor-directory targets and links used as extraction parents.
 
 The download timeout is ten minutes, within CORE's existing fifteen-minute
-operation timeout. There is no download resume. Bounds are **per bundle**, not
-a total-operation I/O budget: mutations repeatedly rehash the store and selected
+operation timeout. There is no download resume. The two compressed archives can
+total up to **8 GiB**. These bounds are not a total-operation I/O budget:
+mutations repeatedly rehash the store and selected
 tree at validation/commit boundaries. Ollama menu/status also hash every recorded
 tree, so a large store can be slow or time out. Their verified version/selection
 claims come from receipts and inventory only; runtime remains unknown. Network
@@ -534,7 +538,47 @@ settings remain untouched. A separate explicit runtime invocation can change
 user data or conflict with an already running server; review upstream settings
 and existing servers yourself first.
 
-With the isolated `preview_atm` helper below, available commands are:
+### Optional AMD ROCm Companion
+
+On Linux amd64, the Ollama submenu also offers an explicit ROCm installation.
+This downloads the base archive plus `ollama-linux-amd64-rocm.tar.zst`, following
+the [official additional-package layout](https://docs.ollama.com/linux).
+Both artifacts come from one release-metadata response and must match the same
+stable version and architecture, each with its own exact size and SHA-256.
+There is no architecture fallback or automatic GPU detection.
+
+```bash
+preview_atm --dry-run plugin ai install --provider ollama --rocm --trust-download
+preview_atm plugin ai install --provider ollama --rocm --trust-download
+preview_atm plugin ai install --provider ollama --version X.Y.Z --rocm --trust-download
+# An installed ROCm variant remains ROCm on ordinary updates:
+preview_atm plugin ai update --provider ollama --trust-download
+# Explicitly select ROCm when updating a base installation to a newer release:
+preview_atm plugin ai update --provider ollama --rocm --trust-download
+```
+
+The pair is assembled only in unpublished private staging. The companion is
+limited to `lib/ollama/rocm_v<digits>/` trees and their parent directories, matching
+the [reviewed official packaging layout](https://github.com/ollama/ollama/blob/v0.40.13/scripts/build_linux.sh).
+Other layouts are refused. Shared directories are permitted, but files and links
+cannot replace base entries. Combined path,
+link-graph and inventory checks must pass before publication. Base-only schema-1
+receipts remain readable; ROCm uses schema 2 with a mandatory companion record.
+An older preview that does not support schema 2 refuses that version.
+
+Each version directory holds one variant. ATM refuses to convert an existing
+same-version directory in place. Prefer a newer release; switching an existing
+version's variant requires explicit removal first. Normal `use`, `remove`,
+`uninstall` and PATH integration apply to the complete recorded bundle. Status
+reports the stored variant, not whether the GPU or drivers work.
+
+This installs **application libraries, not GPU drivers**. It never runs Ollama,
+starts a service, probes hardware or downloads models. Real ROCm archive/runtime
+and hardware acceptance remain Pending; automated tests use synthetic archives
+and read-only official metadata. Large paired downloads may exceed the existing
+operation timeout on slower connections and will not publish a partial version.
+
+With the isolated `preview_atm` helper below, the base commands remain:
 
 ```bash
 preview_atm plugin ai menu ollama
@@ -813,6 +857,8 @@ go test -race ./plugins/ai/native -count=1
 go vet ./plugins/ai/native
 ATM_TEST_HERMES_PATH_TRACE=1 go test ./plugins/ai/native -run '^TestHermesPATHCompiledLifecycle$' -count=1 -v
 python3 -B tests/check_ai_hermes_launch.py /path/to/compiled/atm-ai
+# Optional network check: release metadata only, no bundle download or execution.
+ATM_TEST_AI_PUBLIC_ROCM=1 go test ./plugins/ai/native -run '^TestOfficialOllamaROCmMetadata$' -count=1 -v
 ```
 
 Normal tests use synthetic ELF/DEB bytes, in-memory HTTP fixtures, recording
@@ -821,7 +867,11 @@ Ollama tests use tar.zst bin/lib fixtures, library/helper preservation, legitima
 link chains, malformed trees, exact response/hash limits, decoder bounds,
 interrupted cleanup and a compiled test ELF read only as fixture data. Parent
 review tests independently cover modified libraries and staged selection-link
-substitution. Neither fixture binaries nor helpers are executed as providers.
+substitution. ROCm coverage includes paired release evidence, cross-archive
+collisions, shared extraction limits, schema compatibility, variant-preserving
+updates and failed updates that leave the active tree unchanged. Compiled CLI
+fixtures cover mixed base/ROCm stores, selection, PATH and guarded removal.
+Neither fixture binaries nor helpers are executed as providers.
 Discovery tests inject synthetic HOME/PATH/system roots, including broken/cyclic
 links, FIFOs, permissions, search bounds, cancellation and preview aliases.
 Integration tests use temporary profile fixtures, receipt/link corruption,

@@ -43,6 +43,17 @@ func (b *backend) ollamaStatus(ctx context.Context) error {
 		return err
 	}
 	b.log(fmt.Sprintf(label("ollama_status"), len(vs), current))
+	for _, v := range vs {
+		rec, err := ollamaReadReceipt(b.ollamaVersion(v))
+		if err != nil {
+			return err
+		}
+		variant := label("ollama_base")
+		if rec.ROCm != nil {
+			variant = label("ollama_rocm")
+		}
+		b.log(fmt.Sprintf(label("ollama_variant"), v, variant))
+	}
 	if current != "" {
 		rec, err := b.inspectIntegration("ollama", current)
 		if err != nil {
@@ -86,7 +97,14 @@ func (b *backend) ollamaInstall(ctx context.Context, o options) error {
 	if b.req.Operation == "update" && current == "" {
 		return fmt.Errorf("no selected owned Ollama version to update")
 	}
-	a, err := b.resolve(ctx, "ollama", o.version)
+	if b.req.Operation == "update" {
+		rec, err := b.ollamaVerify(ctx, current, b.ollamaVersion(current))
+		if err != nil {
+			return err
+		}
+		o.rocm = o.rocm || rec.ROCm != nil
+	}
+	a, companion, err := b.resolveOllama(ctx, o.version, o.rocm)
 	if err != nil {
 		return err
 	}
@@ -99,7 +117,10 @@ func (b *backend) ollamaInstall(ctx context.Context, o options) error {
 		if err != nil {
 			return err
 		}
-		if rec.Artifact != a {
+		if (rec.ROCm != nil) != (companion != nil) {
+			return fmt.Errorf("Ollama same-version variant mismatch; existing version preserved. Choose a newer release, or explicitly remove this version (uninstall if selected) before installing the other variant")
+		}
+		if rec.Artifact != a || !reflect.DeepEqual(rec.ROCm, companion) {
 			return fmt.Errorf("Ollama artifact metadata changed; existing version preserved")
 		}
 		return b.ollamaActivate(ctx, a.Version)
@@ -111,36 +132,24 @@ func (b *backend) ollamaInstall(ctx context.Context, o options) error {
 		return err
 	}
 	defer os.RemoveAll(stage)
-	archive := filepath.Join(stage, "bundle.tar.zst")
-	f, err := os.OpenFile(archive, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
+	artifacts := []artifact{a}
+	if companion != nil {
+		artifacts = append(artifacts, *companion)
 	}
-	h := sha256.New()
-	err = b.fetch(ctx, "ollama", a.URL, io.MultiWriter(f, h), a.Size)
-	if err == nil {
-		info, e := f.Stat()
-		err = e
-		if err == nil && (info.Size() != a.Size || hex.EncodeToString(h.Sum(nil)) != a.SHA256) {
-			err = fmt.Errorf("Ollama compressed size/checksum mismatch")
+	archives := make([]string, 0, len(artifacts))
+	for i, item := range artifacts {
+		archive := filepath.Join(stage, fmt.Sprintf("bundle-%d.tar.zst", i))
+		if err = b.ollamaDownload(ctx, item, archive); err != nil {
+			return err
 		}
-	}
-	if err == nil {
-		err = f.Sync()
-	}
-	ce := f.Close()
-	if err != nil {
-		return err
-	}
-	if ce != nil {
-		return ce
+		archives = append(archives, archive)
 	}
 	versionDir := filepath.Join(stage, "version")
 	tree := filepath.Join(versionDir, "tree")
 	if err = os.MkdirAll(tree, 0700); err != nil {
 		return err
 	}
-	if err = ollamaExtract(ctx, archive, tree); err != nil {
+	if err = ollamaExtractBundles(ctx, tree, archives...); err != nil {
 		return err
 	}
 	if err = validateELF(filepath.Join(tree, "bin", "ollama"), b.arch, false); err != nil {
@@ -150,7 +159,10 @@ func (b *backend) ollamaInstall(ctx context.Context, o options) error {
 	if err != nil {
 		return err
 	}
-	rec := ollamaReceipt{Schema: 1, Plugin: "ai", Artifact: a, Files: files}
+	rec := ollamaReceipt{Schema: 1, Plugin: "ai", Artifact: a, ROCm: companion, Files: files}
+	if companion != nil {
+		rec.Schema = 2
+	}
 	if err = ollamaWriteReceipt(versionDir, rec); err != nil {
 		return err
 	}
@@ -182,6 +194,30 @@ func (b *backend) ollamaInstall(ctx context.Context, o options) error {
 		return fmt.Errorf("Ollama version published inactive; selection not committed: %w", err)
 	}
 	return b.ollamaActivate(ctx, a.Version)
+}
+
+func (b *backend) ollamaDownload(ctx context.Context, a artifact, archive string) error {
+	f, err := os.OpenFile(archive, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
+	if err != nil {
+		return err
+	}
+	h := sha256.New()
+	err = b.fetch(ctx, "ollama", a.URL, io.MultiWriter(f, h), a.Size)
+	if err == nil {
+		info, e := f.Stat()
+		err = e
+		if err == nil && (info.Size() != a.Size || hex.EncodeToString(h.Sum(nil)) != a.SHA256) {
+			err = fmt.Errorf("Ollama compressed size/checksum mismatch")
+		}
+	}
+	if err == nil {
+		err = f.Sync()
+	}
+	ce := f.Close()
+	if err != nil {
+		return err
+	}
+	return ce
 }
 
 func (b *backend) ollamaActivate(ctx context.Context, v string) error {

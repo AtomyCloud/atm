@@ -142,6 +142,62 @@ func ollamaCheckLinks(files map[string]ollamaEntry) error {
 }
 
 func ollamaExtract(ctx context.Context, archive, tree string) error {
+	return ollamaExtractBundles(ctx, tree, archive)
+}
+
+func ollamaROCmPath(name string) bool {
+	if !ollamaPath(name) || !strings.HasPrefix(name, "lib/ollama/rocm_v") {
+		return false
+	}
+	version, _, _ := strings.Cut(strings.TrimPrefix(name, "lib/ollama/rocm_v"), "/")
+	if len(version) == 0 || len(version) > 6 {
+		return false
+	}
+	for _, c := range version {
+		if c < '0' || c > '9' {
+			return false
+		}
+	}
+	return true
+}
+
+func ollamaExtractBundles(ctx context.Context, tree string, archives ...string) error {
+	if len(archives) < 1 || len(archives) > 2 {
+		return fmt.Errorf("Ollama requires a base bundle and at most one companion")
+	}
+	files := map[string]ollamaEntry{}
+	remaining := ollamaMaxExpanded + 1
+	for i, archive := range archives {
+		if err := ollamaExtractPart(ctx, archive, tree, files, &remaining, i > 0); err != nil {
+			return err
+		}
+		if files["bin/ollama"].Mode != 0755 || !os.FileMode(files["lib/ollama"].Mode).IsDir() {
+			return fmt.Errorf("incomplete Ollama bin/lib base bundle")
+		}
+	}
+	if err := ollamaCheckLinks(files); err != nil {
+		return err
+	}
+	r, err := os.OpenRoot(tree)
+	if err != nil {
+		return err
+	}
+	defer r.Close()
+	// Links are created only after both archives pass the combined graph checks.
+	for name, e := range files {
+		if err = ctx.Err(); err != nil {
+			return err
+		}
+		if e.Link != "" {
+			if err = r.Symlink(e.Link, name); err != nil {
+				return err
+			}
+		}
+	}
+	return ctx.Err()
+}
+
+func ollamaExtractPart(ctx context.Context, archive, tree string, files map[string]ollamaEntry, remaining *int64, rocm bool) error {
 	f, err := regular(archive, 0600, ollamaMaxDownload)
 	if err != nil {
 		return err
@@ -152,7 +208,8 @@ func ollamaExtract(ctx context.Context, archive, tree string) error {
 		return err
 	}
 	defer zr.Close()
-	limited := &io.LimitedReader{R: contextReader{ctx, zr}, N: ollamaMaxExpanded + 1}
+	limited := &io.LimitedReader{R: contextReader{ctx, zr}, N: *remaining}
+	defer func() { *remaining = limited.N }()
 	tr := tar.NewReader(limited)
 	r, err := os.OpenRoot(tree)
 	if err != nil {
@@ -160,8 +217,8 @@ func ollamaExtract(ctx context.Context, archive, tree string) error {
 	}
 	defer r.Close()
 	seen := map[string]bool{}
-	files := map[string]ollamaEntry{}
 	var total int64
+	var payload bool
 	addParents := func(name string) error {
 		for parent := path.Dir(name); parent != "."; parent = path.Dir(parent) {
 			if e, ok := files[parent]; ok && !os.FileMode(e.Mode).IsDir() {
@@ -201,6 +258,12 @@ func ollamaExtract(ctx context.Context, archive, tree string) error {
 		}
 		if !ollamaPath(name) || seen[name] || h.Mode&07000 != 0 {
 			return fmt.Errorf("unsafe or duplicate Ollama archive path/mode")
+		}
+		if rocm && !ollamaROCmPath(name) && !(h.Typeflag == tar.TypeDir && (name == "lib" || name == "lib/ollama")) {
+			return fmt.Errorf("unsupported Ollama ROCm layout; expected lib/ollama/rocm_v<digits>/")
+		}
+		if rocm && ollamaROCmPath(name) && strings.Count(name, "/") == 2 && h.Typeflag != tar.TypeDir {
+			return fmt.Errorf("Ollama ROCm version root must be a directory")
 		}
 		seen[name] = true
 		if h.Size < 0 || h.Size > ollamaMaxExpanded-total {
@@ -260,6 +323,7 @@ func ollamaExtract(ctx context.Context, archive, tree string) error {
 				return closeErr
 			}
 			files[name] = ollamaEntry{Mode: uint32(mode)}
+			payload = payload || h.Size > 0
 		case tar.TypeSymlink:
 			if !strings.HasPrefix(name, "lib/ollama/") || !ollamaLinkText(h.Linkname) {
 				return fmt.Errorf("unsafe Ollama library symlink")
@@ -291,21 +355,8 @@ func ollamaExtract(ctx context.Context, archive, tree string) error {
 			return err
 		}
 	}
-	if files["bin/ollama"].Mode != 0755 || !os.FileMode(files["lib/ollama"].Mode).IsDir() {
-		return fmt.Errorf("incomplete Ollama bin/lib bundle")
-	}
-	if err = ollamaCheckLinks(files); err != nil {
-		return err
-	}
-	for name, e := range files {
-		if err = ctx.Err(); err != nil {
-			return err
-		}
-		if e.Link != "" {
-			if err = r.Symlink(e.Link, name); err != nil {
-				return err
-			}
-		}
+	if rocm && !payload {
+		return fmt.Errorf("empty Ollama ROCm companion")
 	}
 	return ctx.Err()
 }

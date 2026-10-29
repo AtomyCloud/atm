@@ -41,6 +41,7 @@ type options struct {
 	refreshLauncher   bool
 	keepPreparation   bool
 	acceptPM          bool
+	rocm              bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -85,6 +86,11 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 		seen[key] = true
 		switch key {
+		case "--rocm":
+			if eq || (op != "install" && op != "update") {
+				return o, fmt.Errorf("--rocm is a bare opt-in for Ollama install/update only")
+			}
+			o.rocm = true
 		case "--keep-preparation":
 			if eq || op != "uninstall" {
 				return o, fmt.Errorf("--keep-preparation applies only to Hermes deactivation via uninstall")
@@ -144,6 +150,9 @@ func parseOptions(op string, args []string) (options, error) {
 	if _, ok := providers[o.provider]; !ok {
 		return o, fmt.Errorf("explicit supported --provider required")
 	}
+	if o.rocm && o.provider != "ollama" {
+		return o, fmt.Errorf("--rocm requires explicit --provider ollama")
+	}
 	if o.acceptPM && o.provider != hermesAgent {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
 	}
@@ -184,6 +193,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 	}
 	if err = ctx.Err(); err != nil {
 		return nil, err
+	}
+	if o.rocm && b.arch != "amd64" {
+		return nil, fmt.Errorf("Ollama ROCm companion requires Linux amd64; hardware compatibility is not checked")
 	}
 	switch b.req.Operation {
 	case "menu":

@@ -111,11 +111,19 @@ type release struct {
 }
 
 func (b *backend) resolve(ctx context.Context, id, version string) (artifact, error) {
+	r, v, err := b.releaseMetadata(ctx, id, version)
+	if err != nil {
+		return artifact{}, err
+	}
+	return releaseArtifact(r, id, v, b.arch, false)
+}
+
+func (b *backend) releaseMetadata(ctx context.Context, id, version string) (release, string, error) {
 	p := providers[id]
 	endpoint := "https://api.github.com/repos/" + p.repo + "/releases/latest"
 	if version != "latest" {
 		if !versionRE.MatchString(version) {
-			return artifact{}, fmt.Errorf("invalid version")
+			return release{}, "", fmt.Errorf("invalid version")
 		}
 		endpoint = "https://api.github.com/repos/" + p.repo + "/releases/tags/" + p.tagPrefix + version
 	}
@@ -123,22 +131,32 @@ func (b *backend) resolve(ctx context.Context, id, version string) (artifact, er
 	defer cancel()
 	var buf bytes.Buffer
 	if err := b.fetch(ctx, id, endpoint, &buf, 4<<20); err != nil {
-		return artifact{}, err
+		return release{}, "", err
 	}
 	var r release
 	if err := decode(buf.Bytes(), &r, false); err != nil {
-		return artifact{}, err
+		return release{}, "", err
 	}
 	v := strings.TrimPrefix(r.Tag, p.tagPrefix)
 	if !versionRE.MatchString(v) || r.Tag != p.tagPrefix+v || r.Draft == nil || *r.Draft || r.Prerelease == nil || *r.Prerelease || (version != "latest" && version != v) {
-		return artifact{}, fmt.Errorf("stable exact release required")
+		return release{}, "", fmt.Errorf("stable exact release required")
 	}
-	name, entry, format, err := artifactNames(id, v, b.arch)
+	return r, v, nil
+}
+
+func releaseArtifact(r release, id, v, arch string, rocm bool) (artifact, error) {
+	name, entry, format, err := artifactNames(id, v, arch)
 	if err != nil {
 		return artifact{}, err
 	}
+	if rocm {
+		if id != "ollama" || arch != "amd64" {
+			return artifact{}, fmt.Errorf("Ollama ROCm companion requires amd64")
+		}
+		name, entry = ollamaROCmName, "lib/ollama"
+	}
 	found := 0
-	a := artifact{Provider: id, Version: v, Arch: b.arch, Entry: entry, Format: format}
+	a := artifact{Provider: id, Version: v, Arch: arch, Entry: entry, Format: format}
 	for _, asset := range r.Assets {
 		if asset.Name != name {
 			continue
@@ -153,7 +171,39 @@ func (b *backend) resolve(ctx context.Context, id, version string) (artifact, er
 	if found != 1 {
 		return artifact{}, fmt.Errorf("expected one exact architecture asset; found %d", found)
 	}
+	if rocm {
+		return a, ollamaValidateROCm(a, v, arch)
+	}
 	return a, a.validate()
+}
+
+const ollamaROCmName = "ollama-linux-amd64-rocm.tar.zst"
+
+func ollamaValidateROCm(a artifact, v, arch string) error {
+	want := "https://github.com/ollama/ollama/releases/download/v" + v + "/" + ollamaROCmName
+	if !versionRE.MatchString(v) || arch != "amd64" || a.Provider != "ollama" || a.Version != v || a.Arch != arch || a.URL != want || a.Entry != "lib/ollama" || a.Format != "tar.zst" || !validSHA(a.SHA256) || a.Size <= 0 || a.Size > ollamaMaxDownload {
+		return fmt.Errorf("invalid pinned Ollama ROCm companion")
+	}
+	return nil
+}
+
+func (b *backend) resolveOllama(ctx context.Context, version string, rocm bool) (artifact, *artifact, error) {
+	if rocm && b.arch != "amd64" {
+		return artifact{}, nil, fmt.Errorf("Ollama ROCm companion requires amd64")
+	}
+	r, v, err := b.releaseMetadata(ctx, "ollama", version)
+	if err != nil {
+		return artifact{}, nil, err
+	}
+	a, err := releaseArtifact(r, "ollama", v, b.arch, false)
+	if err != nil || !rocm {
+		return a, nil, err
+	}
+	c, err := releaseArtifact(r, "ollama", v, b.arch, true)
+	if err != nil {
+		return artifact{}, nil, err
+	}
+	return a, &c, nil
 }
 func storageHost(h string) bool {
 	return h == "release-assets.githubusercontent.com" || h == "objects.githubusercontent.com" || h == "github-releases.githubusercontent.com"

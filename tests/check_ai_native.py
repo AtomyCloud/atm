@@ -155,6 +155,40 @@ def check(executable, backend):
             run("--yes", "plugin", "ai", "install", "--provider", provider,
                 "--provider", provider, "--trust-download", success=False)
             run("--yes", "plugin", "ai", "menu", provider, "--trust-download", success=False)
+        # ROCm is an explicit portable companion, never a driver installer.
+        ollama_menu = run("--yes", "plugin", "ai", "menu", "ollama")
+        ollama_choices = json.loads(ollama_menu.stdout.splitlines()[-1])["choices"]
+        rocm_choices = [c for c in ollama_choices if "--rocm" in c.get("arguments", [])]
+        if host_target() == "linux/amd64":
+            assert rocm_choices, "ROCm install choice missing on amd64"
+            assert all(c["operation"] in ("install", "update") and
+                       "--trust-download" in c["arguments"] for c in rocm_choices)
+        else:
+            assert not rocm_choices, "ROCm offered on unsupported architecture"
+        for operation in ("install", "update"):
+            run("--yes", "plugin", "ai", operation, "--provider", "ollama",
+                "--rocm", success=False)  # Download consent remains mandatory.
+            plan = json.loads(run("--dry-run", "plugin", "ai", operation,
+                                  "--provider", "ollama", "--rocm",
+                                  "--trust-download", started=False).stdout)
+            assert plan["dry_run"] and plan["executor"] == "native"
+            run("plugin", "ai", operation, "--provider", "ollama", "--rocm",
+                "--trust-download", success=False, started=False)
+        for operation in ("use", "remove", "uninstall", "integrate", "status"):
+            run("--yes", "plugin", "ai", operation, "--provider", "ollama",
+                "--rocm", success=False)
+        for provider in ("picoclaw", "codex-cli", "hermes-desktop",
+                         "hermes-desktop-system", "hermes-agent"):
+            run("--yes", "plugin", "ai", "install", "--provider", provider,
+                "--rocm", "--trust-download", success=False)
+        for flags in (("--rocm=true",), ("--rocm", "--rocm"),
+                      ("--rocm", "--version", "../outside"),
+                      ("--rocm", "--accept-system-packages"),
+                      ("--rocm", "--accept-dependency-execution")):
+            run("--yes", "plugin", "ai", "install", "--provider", "ollama",
+                "--trust-download", *flags, success=False)
+        run("--yes", "plugin", "ai", "install", "--rocm", "--trust-download",
+            success=False)
         system = "hermes-desktop-system"
         submenu = run("--yes", "plugin", "ai", "menu", system)
         assert json.loads(submenu.stdout.splitlines()[-1])["choices"], "system review menu empty"
@@ -461,6 +495,38 @@ def check(executable, backend):
                     "lib/ollama/libfixture.so": {"mode": (1 << 27) | 0o777, "link": "libfixture.so.1"},
                 },
             })
+        # Exercise a mixed base/schema-2 store through the real compiled backend.
+        # This fixture is not a provider binary and is never executed.
+        if arch == "amd64":
+            rocm_version = ollama / "versions/0.2.0"
+            rocm_dir = rocm_version / "tree/lib/ollama/rocm_v7"
+            rocm_dir.mkdir(mode=0o700)
+            rocm_data = b"synthetic ROCm shared library\n"
+            (rocm_dir / "libhip.so.7").write_bytes(rocm_data)
+            (rocm_dir / "libhip.so.7").chmod(0o600)
+            (rocm_dir / "libhip.so").symlink_to("libhip.so.7")
+            rocm_receipt = json.loads((rocm_version / "receipt.json").read_bytes())
+            rocm_receipt["Schema"] = 2
+            rocm_receipt["ROCm"] = {
+                "Provider": "ollama", "Version": "0.2.0", "Arch": arch,
+                "URL": "https://github.com/ollama/ollama/releases/download/v0.2.0/ollama-linux-amd64-rocm.tar.zst",
+                "SHA256": "b" * 64, "Format": "tar.zst", "Entry": "lib/ollama", "Size": 100,
+            }
+            rocm_receipt["Files"].update({
+                "lib/ollama/rocm_v7": {"mode": (1 << 31) | 0o700},
+                "lib/ollama/rocm_v7/libhip.so.7": {"mode": 0o600, "size": len(rocm_data),
+                                                 "sha256": hashlib.sha256(rocm_data).hexdigest()},
+                "lib/ollama/rocm_v7/libhip.so": {"mode": (1 << 27) | 0o777, "link": "libhip.so.7"},
+            })
+            state_file(rocm_version / "receipt.json", rocm_receipt)
+            assert "base + ROCm" in messages(run("status", "ai"))
+            for field, value in (("Version", "0.1.0"), ("Arch", "arm64"), ("SHA256", "invalid")):
+                modified = json.loads(json.dumps(rocm_receipt))
+                modified["ROCm"][field] = value
+                state_file(rocm_version / "receipt.json", modified)
+                run("--yes", "plugin", "ai", "use", "--provider", "ollama",
+                    "--version", "0.2.0", success=False)
+            state_file(rocm_version / "receipt.json", rocm_receipt)
         ollama_current = ollama / "current"
         ollama_current.symlink_to("versions/0.1.0/tree")
         run("status", "ai")

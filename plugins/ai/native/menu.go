@@ -69,6 +69,12 @@ func (b *backend) menu(ctx context.Context, id string) ([]choice, error) {
 		{ID: "custom", Label: label("custom"), Operation: "install", Arguments: append(append([]string{}, base...), "--trust-download", "--version"), Prompt: label("version_prompt")},
 		{ID: "update", Label: label("update"), Operation: "update", Arguments: append(append([]string{}, base...), "--trust-download")},
 	}
+	if id == "ollama" && b.arch == "amd64" {
+		out = append(out,
+			choice{ID: "install-rocm", Label: label("ollama_install_rocm"), Operation: "install", Arguments: []string{"--provider", id, "--trust-download", "--rocm"}},
+			choice{ID: "update-rocm", Label: label("ollama_update_rocm"), Operation: "update", Arguments: []string{"--provider", id, "--trust-download", "--rocm"}},
+		)
+	}
 	if len(vs) > 45 {
 		return nil, fmt.Errorf("too many installed versions for menu; use explicit CLI version")
 	}

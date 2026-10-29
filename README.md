@@ -797,7 +797,10 @@ real shell/provider acceptance are still pending; see the guide for isolated tes
 
 Portable Ollama keeps the official `bin/ollama` and `lib/ollama` layout together
 under `~/Apps/ai/ollama/native-v1`, with explicit version selection and guarded
-removal. It downloads pinned stable base archives with SHA-256 verification and
+removal. Linux amd64 also offers an explicit `--rocm` companion from the same
+release, with both SHA-256 digests checked; updates preserve the installed variant.
+An existing same-version directory is never converted in place. It downloads
+pinned stable archives with SHA-256 verification and
 does not run the upstream installer or the application. It does not configure
 services, GPU drivers or models, and leaves existing installations untouched.
 PATH registration is a separate explicit action; its stable command link retains

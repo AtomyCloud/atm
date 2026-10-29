@@ -121,7 +121,13 @@ Ollama portable installation preserves the official executable/library tree unde
 and guarded removal. Native Zstandard decoding uses a pinned Go dependency;
 archives require exact release origins, size and SHA-256. Models, external
 installations and services are not adopted, stopped or removed. No provider
-execution, shell installer, implicit profile edits or GPU add-on installation occurs.
+execution, shell installer or implicit profile edits occurs. Linux amd64 offers
+an explicit optional ROCm companion: one release response pins both artifacts,
+each with size/digest verification, collision-safe unpublished assembly and a
+combined inventory. Base receipts remain compatible; ROCm receipts require both
+artifacts. Updates preserve the variant; same-version variant replacement is
+refused. No GPU driver, service, hardware probe or model operation is performed.
+Real ROCm bundle/runtime acceptance remains Pending.
 Separate explicit PATH registration uses an owned command link into the selected
 Ollama bundle; switching versions retains that link and the sibling-library layout.
 Uninstall detaches exact owned profile blocks before deselection or deletion;
