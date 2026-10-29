@@ -797,12 +797,13 @@ guarantee exclusion against other package frontends. Explicit RPM removal requir
 system-package consent without download trust, binds the original installed
 identity and permits only that package's removal, with dependency cleanup off.
 ATM does not delete personal data; privileged package scripts may have side effects.
-An optional initial-install mode, `--accept-dependencies`, permits up to 64 new
+Optional install/update modes, `--accept-dependencies`, permit up to 64 new
 hard dependencies from configured repositories, but no replacements or upgrades.
 It requires administrator-enabled local RPM signature checks and already trusted
 keys; unsigned or untrusted RPMs (including `chatgpt`) are refused. Stored files
-and every dependency's installed state are verified. Dependency upgrades,
-dependency-enabled updates, DNF4, Arch and real Fedora acceptance remain
+and every dependency's installed state are verified. Update binds the original
+installed target; an identical candidate does not reinstall or repair dependencies.
+Dependency upgrades/replacements, DNF4, Arch and real Fedora acceptance remain
 Pending. Ollama uses a separately consented user service for the
 portable bundle, not the root-based upstream service. See the [AI plugin guide](plugins/ai/README.md) for preview
 scope, isolated testing and ownership boundaries.

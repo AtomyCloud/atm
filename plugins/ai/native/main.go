@@ -146,8 +146,8 @@ func parseOptions(op string, args []string) (options, error) {
 			}
 			o.acceptSystem = true
 		case "--accept-dependencies":
-			if eq || op != "install" {
-				return o, fmt.Errorf("dependency package consent is a bare initial-install-only flag")
+			if eq || (op != "install" && op != "update") {
+				return o, fmt.Errorf("dependency package consent is a bare install/update-only flag")
 			}
 			o.acceptDependencies = true
 		case "--provider", "--version":
@@ -206,7 +206,7 @@ func parseOptions(op string, args []string) (options, error) {
 		return o, fmt.Errorf("--rocm requires explicit --provider ollama")
 	}
 	if o.acceptDependencies && o.provider != codexDesktopRPM {
-		return o, fmt.Errorf("dependency package consent applies only to initial Codex RPM installation")
+		return o, fmt.Errorf("dependency package consent applies only to Codex RPM install/update")
 	}
 	if o.acceptPM && o.provider != hermesAgent {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")

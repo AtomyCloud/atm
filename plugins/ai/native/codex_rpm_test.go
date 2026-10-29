@@ -295,10 +295,12 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 		if baseline.Epoch != "0" {
 			version = baseline.Epoch + ":" + version
 		}
+		dependencies := p["rpms"].([]any)[1:]
 		p["rpms"] = []any{
 			map[string]string{"nevra": "chatgpt-1.2026.100-1." + arch, "action": "Upgrade", "reason": "User", "repo_id": r.repo, "package_path": "./packages/chatgpt.rpm"},
 			map[string]string{"nevra": "chatgpt-" + version + "-" + baseline.Release + "." + arch, "action": "Replaced", "reason": "User", "repo_id": "@System"},
 		}
+		p["rpms"] = append(p["rpms"].([]any), dependencies...)
 	}
 	d, e := json.Marshal(p)
 	if e != nil {

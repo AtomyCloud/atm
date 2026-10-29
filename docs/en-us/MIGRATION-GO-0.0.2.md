@@ -207,19 +207,22 @@ stores exactly one original `Remove` from `@System`, disables dependency cleanup
 and verifies absence after replay. Artifact-free schema3 removal journals retain
 schema1/2 read compatibility. ATM does not delete personal data or old preparations;
 privileged package scripts may still have system side effects.
-Optional initial installation with `--accept-dependencies` permits configured
+Optional installation/update with `--accept-dependencies` permits configured
 repositories during store and at most 64 new hard dependency installs. It rejects
 replacement/removal/upgrade/weak/group actions, verifies absence before replay,
 stored hashes/headers and exact installed metadata afterwards. Replay disables
-external repositories. Schema4 records this mode and dependency count, retaining
-schema1/2/3 readability. Because stored repositories become command-line sources,
+external repositories. Initial installation uses schema4; update uses schema5,
+recording the original target baseline and dependency count with schema1/2/3/4
+read compatibility. Updates require the exact target Upgrade/Replaced pair and
+new dependency Installs only; an identical target is a no-op, not dependency repair.
+Because stored repositories become command-line sources,
 the mode requires administrator-enabled `localpkg_gpgcheck=true/1` and already
 trusted RPM signing keys. Unsigned or untrusted target/dependency RPMs are refused;
 metadata-key imports and downloads may occur during store before plan validation.
 No automatic signature bypass or package-key provisioning is performed.
 Dependency plans require wrapped stored-repository IDs; older raw-ID DNF5 plans
 are refused because replay can reuse a different configured signature policy.
-Dependency upgrades/replacements, dependency-enabled updates, DNF4, Arch and real Fedora/package/GUI/arm64
+Dependency upgrades/replacements, DNF4, Arch and real Fedora/package/GUI/arm64
 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 

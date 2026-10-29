@@ -30,7 +30,7 @@ func TestCodexRPMDependenciesLifecycle(t *testing.T) {
 		t.Run(arch, func(t *testing.T) {
 			r := newRPMDependenciesFixture(t, arch)
 			choices, err := r.f.b.codexRPMMenu(context.Background())
-			if err != nil || len(choices) != 5 || len(r.calls) != 0 {
+			if err != nil || len(choices) != 6 || len(r.calls) != 0 {
 				t.Fatal(choices, err, r.calls)
 			}
 			if err = r.run(); err != nil {
@@ -78,7 +78,10 @@ func TestCodexRPMDependenciesConsent(t *testing.T) {
 	if _, err := parseOptions("install", base); err != nil {
 		t.Fatal(err)
 	}
-	for _, op := range []string{"update", "uninstall", "use", "remove", "integrate"} {
+	if _, err := parseOptions("update", base); err != nil {
+		t.Fatal(err)
+	}
+	for _, op := range []string{"uninstall", "use", "remove", "integrate"} {
 		if _, err := parseOptions(op, base); err == nil {
 			t.Fatal("accepted dependencies for", op)
 		}
@@ -115,9 +118,19 @@ func TestCodexRPMDependenciesConsent(t *testing.T) {
 }
 
 func TestCodexRPMDependenciesRefusals(t *testing.T) {
+	for _, operation := range []string{"install", "update"} {
+		t.Run(operation, func(t *testing.T) { testCodexRPMDependenciesRefusals(t, operation) })
+	}
+}
+
+func testCodexRPMDependenciesRefusals(t *testing.T, operation string) {
 	for _, kind := range []string{"already-installed", "query-error", "changed-before-replay", "changed-at-last-check", "post-missing", "post-mismatch", "header-mismatch", "file-missing", "file-link", "hash-changed", "extra-file", "plan-upgrade", "plan-remove", "replay-error", "cancel"} {
 		t.Run(kind, func(t *testing.T) {
 			r := newRPMDependenciesFixture(t, "amd64")
+			if operation == "update" {
+				r.updating, r.present = true, true
+				r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			}
 			dep := r.dependencies[0]
 			if kind == "already-installed" {
 				r.installedDependencies[dep.Package.Name] = "existing\n"
@@ -229,9 +242,19 @@ func TestCodexRPMDependenciesJournal(t *testing.T) {
 }
 
 func TestCodexRPMDependenciesRequireLocalSignatures(t *testing.T) {
+	for _, operation := range []string{"install", "update"} {
+		t.Run(operation, func(t *testing.T) { testCodexRPMDependenciesRequireLocalSignatures(t, operation) })
+	}
+}
+
+func testCodexRPMDependenciesRequireLocalSignatures(t *testing.T, operation string) {
 	for _, value := range []string{"false", "0", "", "unknown"} {
 		t.Run(value, func(t *testing.T) {
 			r := newRPMDependenciesFixture(t, "amd64")
+			if operation == "update" {
+				r.updating, r.present = true, true
+				r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			}
 			r.policy = strings.Replace(r.policy, "localpkg_gpgcheck = 1", "localpkg_gpgcheck = "+value, 1)
 			if err := r.run(); err == nil || r.replays != 0 {
 				t.Fatal("unsigned replay permitted", err)
@@ -256,15 +279,167 @@ func TestCodexRPMDependenciesRequireLocalSignatures(t *testing.T) {
 }
 
 func TestCodexRPMDependenciesRejectLegacyRepositoryIDs(t *testing.T) {
+	for _, operation := range []string{"install", "update"} {
+		t.Run(operation, func(t *testing.T) { testCodexRPMDependenciesRejectLegacyRepositoryIDs(t, operation) })
+	}
+}
+
+func testCodexRPMDependenciesRejectLegacyRepositoryIDs(t *testing.T, operation string) {
 	for _, repo := range []string{"fedora", "updates"} {
 		t.Run(repo, func(t *testing.T) {
 			r := newRPMDependenciesFixture(t, "amd64")
+			if operation == "update" {
+				r.updating, r.present = true, true
+				r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			}
 			r.dependencies[0].Repo = repo
 			if err := r.run(); err == nil || r.replays != 0 {
 				t.Fatal("legacy repository plan accepted for dependency replay", err)
 			}
 			if _, err := os.Stat(r.f.b.root(codexDesktopRPM) + ".lock"); err != nil {
 				t.Fatal("uncertain plan evidence not retained", err)
+			}
+		})
+	}
+}
+
+func TestCodexRPMUpdateDependenciesLifecycle(t *testing.T) {
+	for _, arch := range []string{"amd64", "arm64"} {
+		t.Run(arch, func(t *testing.T) {
+			r := newRPMDependenciesFixture(t, arch)
+			r.updating, r.present = true, true
+			r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			baseline, _ := parseCodexRPMMetadata(r.installed, arch)
+			if err := r.run(); err != nil {
+				t.Fatal(err)
+			}
+			j, err := r.f.b.rpmJournal()
+			if err != nil || j.Schema != 5 || j.Operation != "update" || j.Baseline != baseline || j.Phase != "complete" || j.DependencyCount != 2 || r.replays != 1 {
+				t.Fatal(j, err, r.replays)
+			}
+			integrationMissing(t, r.f.b.root(codexDesktopRPM)+".lock")
+			for _, dep := range r.dependencies {
+				if err := parseRPMDependencyMetadata(r.installedDependencies[dep.Package.Name], dep.Package); err != nil {
+					t.Fatal(err)
+				}
+			}
+			// A repeat only records a no-op, never repairs missing dependencies.
+			r.installedDependencies = map[string]string{}
+			r.calls = nil
+			if err := r.run(); err != nil {
+				t.Fatal(err)
+			}
+			j, err = r.f.b.rpmJournal()
+			if err != nil || j.Schema != 5 || j.Phase != "unchanged" || j.DependencyCount != 0 || j.Stage != "" || j.PlanSHA256 != "" || r.replays != 1 || len(r.installedDependencies) != 0 {
+				t.Fatal(j, err)
+			}
+			for _, call := range r.calls {
+				if !strings.HasPrefix(call, "rpm ") && call != "dnf5 --version" {
+					t.Fatal("no-op performed privileged work", call)
+				}
+				if strings.HasSuffix(call, "lib-example") || strings.HasSuffix(call, "example-data") {
+					t.Fatal("no-op queried dependencies", call)
+				}
+			}
+			j.DependencyCount = 1
+			if err := r.f.b.saveRPMJournal(*j); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := r.f.b.rpmJournal(); err == nil {
+				t.Fatal("no-op with dependency evidence accepted")
+			}
+		})
+	}
+}
+
+func TestCodexRPMUpdateDependenciesBaseline(t *testing.T) {
+	for _, point := range []string{"initial-absent", "initial-ambiguous", "codex-rpm-before-stage", "codex-rpm-before-store", "codex-rpm-before-replay", "codex-rpm-before-unchanged", "codex-rpm-after-replay"} {
+		t.Run(point, func(t *testing.T) {
+			r := newRPMDependenciesFixture(t, "amd64")
+			r.updating, r.present = true, true
+			r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			if point == "initial-absent" {
+				r.present = false
+			}
+			if point == "initial-ambiguous" {
+				r.installed += r.installed
+			}
+			if point == "codex-rpm-before-unchanged" {
+				r.installed = r.metadata()
+			}
+			r.f.b.checkpoint = func(got string) error {
+				if got == point {
+					r.present = false
+				}
+				return nil
+			}
+			if err := r.run(); err == nil {
+				t.Fatal("changed/unknown target accepted")
+			}
+			want := 0
+			if point == "codex-rpm-after-replay" {
+				want = 1
+			}
+			if r.replays != want {
+				t.Fatal("unexpected replay", r.replays)
+			}
+		})
+	}
+}
+
+func TestCodexRPMUpdateDependenciesHistory(t *testing.T) {
+	for _, schema := range []int{1, 2, 3, 4, 5} {
+		t.Run(string(rune('0'+schema)), func(t *testing.T) {
+			r := newRPMDependenciesFixture(t, "amd64")
+			r.dependencies = nil
+			r.dependencyMode = schema == 4 || schema == 5
+			if schema == 5 {
+				r.updating, r.present = true, true
+				r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			}
+			if err := r.run(); err != nil {
+				t.Fatal(err)
+			}
+			j, err := r.f.b.rpmJournal()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if schema == 1 {
+				j.Schema, j.Operation = 1, ""
+				if err := r.f.b.saveRPMJournal(*j); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if schema == 3 {
+				r.removing = true
+				if err := r.run(); err != nil {
+					t.Fatal(err)
+				}
+				r.removing = false
+			}
+			r.dependencyMode, r.updating, r.present = true, true, true
+			r.installed = strings.Replace(r.metadata(), "1.2026.100", "1.2026.99", 1)
+			if err := r.run(); err != nil {
+				t.Fatal("history refused", err)
+			}
+			j, err = r.f.b.rpmJournal()
+			if err != nil || j.Schema != 5 || j.Phase != "complete" || j.DependencyCount != 0 {
+				t.Fatal(j, err)
+			}
+			for _, mutate := range []func(*codexRPMJournal){
+				func(j *codexRPMJournal) { j.Operation = "install" },
+				func(j *codexRPMJournal) { j.Baseline = codexRPMMetadata{} },
+				func(j *codexRPMJournal) { j.Schema = 4 },
+				func(j *codexRPMJournal) { j.PlanSHA256 = "" },
+			} {
+				bad := *j
+				mutate(&bad)
+				if err := r.f.b.saveRPMJournal(bad); err != nil {
+					t.Fatal(err)
+				}
+				if _, err := r.f.b.rpmJournal(); err == nil {
+					t.Fatal("malformed update history accepted")
+				}
 			}
 		})
 	}

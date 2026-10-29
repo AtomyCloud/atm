@@ -174,3 +174,84 @@ func validateCodexRPMDependencyPlan(data []byte, target codexRPMMetadata) ([]cod
 	}
 	return deps, nil
 }
+
+// Update dependencies are new hard installs only. The caller must independently
+// establish their absence and pin/recheck the original plan and package files.
+func validateCodexRPMUpdateDependencyPlan(data []byte, candidate, baseline codexRPMMetadata) ([]codexRPMDependency, error) {
+	if len(data) == 0 || len(data) > 64<<10 {
+		return nil, fmt.Errorf("invalid stored transaction size")
+	}
+	var p codexRPMPlan
+	if err := decode(data, &p, true); err != nil {
+		return nil, err
+	}
+	if p.Version != "1.0" || len(p.RPMs) < 2 || len(p.RPMs) > 66 {
+		return nil, fmt.Errorf("DNF5 dependency update requires two ChatGPT RPMs and at most 64 dependencies")
+	}
+	// Validate the original bytes before partitioning or reencoding: struct
+	// decoding alone would erase case aliases and turn null strings into empty.
+	var object map[string]any
+	if err := json.Unmarshal(data, &object); err != nil {
+		return nil, err
+	}
+	if len(object) != 2 || object["version"] != "1.0" {
+		return nil, fmt.Errorf("noncanonical DNF5 dependency update fields")
+	}
+	items, ok := object["rpms"].([]any)
+	if !ok {
+		return nil, fmt.Errorf("DNF5 dependency update RPM array required")
+	}
+	for _, item := range items {
+		fields, ok := item.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("DNF5 dependency update RPM object required")
+		}
+		for key, value := range fields {
+			switch key {
+			case "nevra", "action", "reason", "repo_id", "package_path":
+			default:
+				return nil, fmt.Errorf("noncanonical DNF5 dependency update RPM field")
+			}
+			if _, ok := value.(string); !ok {
+				return nil, fmt.Errorf("DNF5 dependency update RPM fields must be strings")
+			}
+		}
+		for _, key := range []string{"nevra", "action", "reason", "repo_id", "package_path"} {
+			if _, ok := fields[key]; !ok && !(key == "package_path" && fields["action"] == "Replaced") {
+				return nil, fmt.Errorf("DNF5 dependency update RPM field missing")
+			}
+		}
+	}
+	update := codexRPMPlan{Version: p.Version}
+	installs := codexRPMPlan{Version: p.Version}
+	for _, r := range p.RPMs {
+		switch r.Action {
+		case "Upgrade", "Replaced":
+			update.RPMs = append(update.RPMs, r)
+		case "Install":
+			installs.RPMs = append(installs.RPMs, r)
+		default:
+			return nil, fmt.Errorf("DNF5 dependency update contains an unsupported RPM action")
+		}
+	}
+	updateData, err := json.Marshal(update)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateCodexRPMUpdatePlan(updateData, candidate, baseline); err != nil {
+		return nil, err
+	}
+	// Only the validated candidate is projected as an initial User install.
+	// All dependency fields remain intact for the existing strict validator.
+	for _, r := range update.RPMs {
+		if r.Action == "Upgrade" {
+			r.Action, r.Reason = "Install", "User"
+			installs.RPMs = append(installs.RPMs, r)
+		}
+	}
+	installData, err := json.Marshal(installs)
+	if err != nil {
+		return nil, err
+	}
+	return validateCodexRPMDependencyPlan(installData, candidate)
+}
