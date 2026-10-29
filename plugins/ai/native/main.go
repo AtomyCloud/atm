@@ -38,16 +38,17 @@ type backend struct {
 	ollamaLifecycleLock os.FileInfo
 }
 type options struct {
-	provider, version string
-	trust             bool
-	acceptSystem      bool
-	removePath        bool
-	refreshLauncher   bool
-	keepPreparation   bool
-	acceptPM          bool
-	rocm              bool
-	serviceAction     string
-	acceptService     bool
+	provider, version  string
+	trust              bool
+	acceptSystem       bool
+	acceptDependencies bool
+	removePath         bool
+	refreshLauncher    bool
+	keepPreparation    bool
+	acceptPM           bool
+	rocm               bool
+	serviceAction      string
+	acceptService      bool
 }
 
 func newBackend(req protocol.Request, log func(string)) (*backend, error) {
@@ -144,6 +145,11 @@ func parseOptions(op string, args []string) (options, error) {
 				return o, fmt.Errorf("system package consent is only applicable to supported install/update/uninstall operations")
 			}
 			o.acceptSystem = true
+		case "--accept-dependencies":
+			if eq || op != "install" {
+				return o, fmt.Errorf("dependency package consent is a bare initial-install-only flag")
+			}
+			o.acceptDependencies = true
 		case "--provider", "--version":
 			if !eq {
 				i++
@@ -199,6 +205,9 @@ func parseOptions(op string, args []string) (options, error) {
 	if o.rocm && o.provider != "ollama" {
 		return o, fmt.Errorf("--rocm requires explicit --provider ollama")
 	}
+	if o.acceptDependencies && o.provider != codexDesktopRPM {
+		return o, fmt.Errorf("dependency package consent applies only to initial Codex RPM installation")
+	}
 	if o.acceptPM && o.provider != hermesAgent {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
 	}
@@ -230,7 +239,7 @@ func parseOptions(op string, args []string) (options, error) {
 			return o, fmt.Errorf("RPM install/update requires latest, --trust-download and --accept-system-packages")
 		}
 		for key := range seen {
-			if key != "--provider" && key != "--version" && key != "--trust-download" && key != "--accept-system-packages" {
+			if key != "--provider" && key != "--version" && key != "--trust-download" && key != "--accept-system-packages" && key != "--accept-dependencies" {
 				return o, fmt.Errorf("inapplicable RPM option")
 			}
 		}

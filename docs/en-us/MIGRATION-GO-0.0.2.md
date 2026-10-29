@@ -196,7 +196,7 @@ the candidate Upgrade and original Replaced records, bound to the installed
 package baseline. Identical metadata is a verified no-op before elevation.
 Missing/unknown packages, changed baselines, downgrade, reinstall and extra
 package actions are refused. Schema2 operation/baseline journals retain schema1
-read compatibility. Repositories remain disabled and dependencies must already
+read compatibility. By default repositories remain disabled and dependencies must already
 be satisfied; no dependency changes or unrelated removals. DNF5 replay
 and before/after checks are the approved coordination boundary, not exclusion
 against other package managers. Administrator signature policy is preserved,
@@ -207,7 +207,19 @@ stores exactly one original `Remove` from `@System`, disables dependency cleanup
 and verifies absence after replay. Artifact-free schema3 removal journals retain
 schema1/2 read compatibility. ATM does not delete personal data or old preparations;
 privileged package scripts may still have system side effects.
-Dependency-changing RPM workflows, DNF4, Arch and real Fedora/package/GUI/arm64
+Optional initial installation with `--accept-dependencies` permits configured
+repositories during store and at most 64 new hard dependency installs. It rejects
+replacement/removal/upgrade/weak/group actions, verifies absence before replay,
+stored hashes/headers and exact installed metadata afterwards. Replay disables
+external repositories. Schema4 records this mode and dependency count, retaining
+schema1/2/3 readability. Because stored repositories become command-line sources,
+the mode requires administrator-enabled `localpkg_gpgcheck=true/1` and already
+trusted RPM signing keys. Unsigned or untrusted target/dependency RPMs are refused;
+metadata-key imports and downloads may occur during store before plan validation.
+No automatic signature bypass or package-key provisioning is performed.
+Dependency plans require wrapped stored-repository IDs; older raw-ID DNF5 plans
+are refused because replay can reuse a different configured signature policy.
+Dependency upgrades/replacements, dependency-enabled updates, DNF4, Arch and real Fedora/package/GUI/arm64
 acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 

@@ -17,20 +17,23 @@ import (
 )
 
 type rpmFixture struct {
-	f         *fixture
-	files     map[string][]byte
-	dirs      map[string]bool
-	stats     map[string]string
-	policy    string
-	repo      string
-	present   bool
-	installed string
-	updating  bool
-	removing  bool
-	replays   int
-	stages    int
-	calls     []string
-	fault     func(string, []string) error
+	f                     *fixture
+	files                 map[string][]byte
+	dirs                  map[string]bool
+	stats                 map[string]string
+	policy                string
+	repo                  string
+	present               bool
+	installed             string
+	updating              bool
+	removing              bool
+	dependencyMode        bool
+	dependencies          []codexRPMDependency
+	installedDependencies map[string]string
+	replays               int
+	stages                int
+	calls                 []string
+	fault                 func(string, []string) error
 }
 
 func newRPMFixture(t *testing.T, arch string) *rpmFixture {
@@ -77,6 +80,15 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 					queryFile = true
 				}
 			}
+			for _, dep := range r.dependencies {
+				if queryFile && strings.HasSuffix(args[len(args)-1], "/"+filepath.Base(dep.Path)) {
+					m := dep.Package
+					return strings.Join([]string{m.Name, m.Epoch, m.Version, m.Release, m.Arch}, "\t") + "\n", nil
+				}
+				if !queryFile && args[len(args)-1] == dep.Package.Name {
+					return r.installedDependencies[dep.Package.Name], nil
+				}
+			}
 			if !queryFile && r.present && r.installed != "" {
 				return r.installed, nil
 			}
@@ -89,6 +101,9 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 				return "dnf5 version 5.2.17.0\n", nil
 			}
 			dnfOptions := rpmDNFOptions()
+			if r.dependencyMode {
+				dnfOptions = append(dnfOptions[:1:1], dnfOptions[2:]...)
+			}
 			if r.removing {
 				dnfOptions = append(dnfOptions, "--setopt=clean_requirements_on_remove=False")
 			}
@@ -96,6 +111,14 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 				t.Fatalf("unsafe DNF options %q", args)
 			}
 			args = args[len(dnfOptions):]
+			if r.dependencyMode && args[0] == "--disable-repo=*" {
+				args = args[1:]
+				if args[0] != "replay" {
+					t.Fatal("dependency store must use configured repos")
+				}
+			} else if r.dependencyMode && args[0] == "replay" {
+				t.Fatal("dependency replay must disable external repos")
+			}
 			switch args[0] {
 			case "--dump-main-config":
 				return r.policy, nil
@@ -109,6 +132,12 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 				tx := strings.TrimPrefix(args[1], "--store=")
 				r.dirs[tx] = true
 				r.files[tx+"/transaction.json"] = r.plan(t)
+				if len(r.dependencies) > 0 {
+					r.dirs[tx+"/packages"] = true
+					for _, dep := range r.dependencies {
+						r.files[filepath.Join(tx, dep.Path)] = []byte("synthetic dependency " + dep.Package.Name)
+					}
+				}
 				return "stored", nil
 			case "remove":
 				m, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
@@ -125,6 +154,13 @@ func newRPMFixture(t *testing.T, arch string) *rpmFixture {
 				return "stored", nil
 			case "replay":
 				r.replays++
+				if r.dependencyMode {
+					r.installedDependencies = map[string]string{}
+					for _, dep := range r.dependencies {
+						m := dep.Package
+						r.installedDependencies[m.Name] = strings.Join([]string{m.Name, m.Epoch, m.Version, m.Release, m.Arch}, "\t") + "\n"
+					}
+				}
 				r.present = !r.removing
 				if r.removing {
 					r.installed = ""
@@ -231,6 +267,14 @@ func (r *rpmFixture) plan(t *testing.T) []byte {
 	t.Helper()
 	arch, _ := codexRPMArch(r.f.b.arch)
 	p := map[string]any{"version": "1.0", "rpms": []any{map[string]string{"nevra": "chatgpt-1.2026.100-1." + arch, "action": "Install", "reason": "User", "repo_id": r.repo, "package_path": "./packages/chatgpt.rpm"}}}
+	for _, dep := range r.dependencies {
+		m := dep.Package
+		version := m.Version
+		if m.Epoch != "0" {
+			version = m.Epoch + ":" + version
+		}
+		p["rpms"] = append(p["rpms"].([]any), map[string]string{"nevra": m.Name + "-" + version + "-" + m.Release + "." + m.Arch, "action": "Install", "reason": "Dependency", "repo_id": dep.Repo, "package_path": dep.Path})
+	}
 	if r.removing {
 		m, err := parseCodexRPMMetadata(r.installed, r.f.b.arch)
 		if err != nil {
@@ -269,6 +313,9 @@ func (r *rpmFixture) run() error {
 	}
 	if r.updating {
 		op = "update"
+	}
+	if r.dependencyMode {
+		return r.f.run(context.Background(), op, "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies")
 	}
 	return r.f.run(context.Background(), op, "--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages")
 }

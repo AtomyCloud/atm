@@ -210,6 +210,10 @@ def check(executable, backend):
         rpm_menu = run("--yes", "plugin", "ai", "menu", rpm)
         rpm_choices = json.loads(rpm_menu.stdout.splitlines()[-1])["choices"]
         assert rpm_choices, "native RPM review menu missing"
+        dependency_choices = [c for c in rpm_choices if c["id"] == "install-dependencies"]
+        assert len(dependency_choices) == 1
+        assert dependency_choices[0]["operation"] == "install"
+        assert dependency_choices[0]["arguments"] == ["--provider", rpm, "--trust-download", "--accept-system-packages", "--accept-dependencies"]
         for choice in rpm_choices:
             assert choice["operation"] in ("menu", "install", "update", "uninstall", "status")
             if choice["operation"] in ("install", "update"):
@@ -233,6 +237,23 @@ def check(executable, backend):
         plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", rpm,
                              "--trust-download", "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
+        # Dependency mode never executes live: test only refusals and CORE dry-run.
+        dep_flags = ["--trust-download", "--accept-system-packages", "--accept-dependencies"]
+        run("plugin", "ai", "install", "--provider", rpm, *dep_flags, success=False, started=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", rpm,
+                             *dep_flags, started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
+        for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
+            run("--yes", "plugin", "ai", "install", "--provider", rpm,
+                "--accept-dependencies", *flags, success=False)
+        for operation in ("update", "uninstall", "remove", "use", "integrate"):
+            run("--yes", "plugin", "ai", operation, "--provider", rpm, *dep_flags, success=False)
+        for flags in (("--accept-dependencies", "--accept-dependencies"),
+                      ("--accept-dependencies=true",)):
+            run("--yes", "plugin", "ai", "install", "--provider", rpm,
+                "--trust-download", "--accept-system-packages", *flags, success=False)
+        for provider in ("codex-cli", "codex-desktop-system", "hermes-agent", "hermes-desktop-system", "ollama", "picoclaw"):
+            run("--yes", "plugin", "ai", "install", "--provider", provider, *dep_flags, success=False)
         for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
             run("--yes", "plugin", "ai", "update", "--provider", rpm, *flags, success=False)
         for flags in (("--version", "1.2.3"), ("--version", "../../outside"),

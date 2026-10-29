@@ -25,6 +25,7 @@ type codexRPMJournal struct {
 	Package                                                        codexRPMMetadata
 	Operation                                                      string
 	Baseline                                                       codexRPMMetadata
+	DependencyCount                                                int
 }
 
 type codexRPMPlan struct {
@@ -67,6 +68,10 @@ func validateCodexRPMPlan(data []byte, m codexRPMMetadata) error {
 }
 
 func codexRPMPolicy(output string, removing bool) error {
+	return codexRPMPolicyWithDependencies(output, removing, false)
+}
+
+func codexRPMPolicyWithDependencies(output string, removing, dependencies bool) error {
 	if len(output) == 0 || len(output) > 64<<10 {
 		return fmt.Errorf("invalid DNF5 configuration size")
 	}
@@ -105,6 +110,11 @@ func codexRPMPolicy(output string, removing bool) error {
 	case "true", "false", "1", "0":
 	default:
 		return fmt.Errorf("unknown local RPM signature policy")
+	}
+	// Stored repositories are recreated as COMMANDLINE, not with their source
+	// repo's signature policy. Never replay dependencies with local checks off.
+	if dependencies && !strings.EqualFold(values["localpkg_gpgcheck"], "true") && values["localpkg_gpgcheck"] != "1" {
+		return fmt.Errorf("dependency mode requires administrator-enabled localpkg_gpgcheck and already trusted package signing keys; unsigned RPMs are refused")
 	}
 	// Older DNF5 does not expose this option. When exposed, native locking
 	// must remain enabled; do not silently override administrator policy.
@@ -181,8 +191,26 @@ func (b *backend) rpmJournal() (*codexRPMJournal, error) {
 		return nil, err
 	}
 	u, err := codexRPMURL(b.arch)
-	if err != nil || (r.Schema != 1 && r.Schema != 2 && r.Schema != 3) || r.Plugin != "ai" || r.Provider != codexDesktopRPM {
+	if err != nil || (r.Schema != 1 && r.Schema != 2 && r.Schema != 3 && r.Schema != 4) || r.Plugin != "ai" || r.Provider != codexDesktopRPM {
 		return nil, fmt.Errorf("invalid RPM journal")
+	}
+	if r.DependencyCount < 0 || r.DependencyCount > 64 || r.Schema != 4 && r.DependencyCount != 0 {
+		return nil, fmt.Errorf("invalid RPM dependency count")
+	}
+	if r.Schema == 4 {
+		if r.Operation != "install" || r.Phase == "unchanged" || r.Baseline != (codexRPMMetadata{}) {
+			return nil, fmt.Errorf("dependency RPM journal requires initial installation")
+		}
+		switch r.Phase {
+		case "prepared", "downloaded", "metadata-verified", "root-staged":
+			if r.DependencyCount != 0 || r.PlanSHA256 != "" {
+				return nil, fmt.Errorf("premature RPM dependency evidence")
+			}
+		case "plan-verified", "replaying", "complete":
+			if r.Stage == "" || !validSHA(r.PlanSHA256) || r.Package.Name == "" || r.Input == "" || r.Size == 0 {
+				return nil, fmt.Errorf("missing RPM dependency plan evidence")
+			}
+		}
 	}
 	removal := r.Schema == 3
 	if removal {
@@ -319,6 +347,7 @@ func (b *backend) codexRPMMenu(ctx context.Context) ([]choice, error) {
 	}
 	return []choice{
 		{ID: "install", Label: label("codex_rpm_install"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
+		{ID: "install-dependencies", Label: label("codex_rpm_install_dependencies"), Operation: "install", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages", "--accept-dependencies"}},
 		{ID: "update", Label: label("codex_rpm_update"), Operation: "update", Arguments: []string{"--provider", codexDesktopRPM, "--trust-download", "--accept-system-packages"}},
 		{ID: "uninstall", Label: label("codex_rpm_uninstall"), Operation: "uninstall", Arguments: []string{"--provider", codexDesktopRPM, "--accept-system-packages"}},
 		back,
@@ -357,10 +386,16 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	op := b.req.Operation
 	updating := op == "update"
 	removing := op == "uninstall"
+	if o.acceptDependencies && op != "install" {
+		return fmt.Errorf("RPM dependency consent requires initial installation")
+	}
 	if (op != "install" && !updating && !removing) || o.provider != codexDesktopRPM || o.version != "latest" || o.trust == removing || !o.acceptSystem || o.acceptPM || o.rocm || o.removePath || o.keepPreparation || o.refreshLauncher || o.serviceAction != "" || o.acceptService {
 		return fmt.Errorf("explicit RPM operation consent required; removal accepts no download trust")
 	}
 	b.log(label("codex_rpm_scope"))
+	if o.acceptDependencies {
+		b.log(label("codex_rpm_dependencies_scope"))
+	}
 	s := b.rpmTools()
 	url, err := codexRPMURL(b.arch)
 	if err != nil {
@@ -502,6 +537,9 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 		return out, checkState()
 	}
 	r := codexRPMJournal{Schema: 2, Plugin: "ai", Provider: codexDesktopRPM, Phase: "prepared", URL: url, Operation: op, Baseline: baseline}
+	if o.acceptDependencies {
+		r.Schema = 4
+	}
 	if removing {
 		r.Schema = 3
 	}
@@ -653,6 +691,10 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 		}
 	}
 	dnfOptions := rpmDNFOptions()
+	if o.acceptDependencies {
+		// Only the explicitly consented store uses administrator-enabled repos.
+		dnfOptions = append(dnfOptions[:1:1], dnfOptions[2:]...)
+	}
 	if removing {
 		dnfOptions = append(dnfOptions, "--setopt=clean_requirements_on_remove=False")
 	}
@@ -663,7 +705,7 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	if err != nil {
 		return err
 	}
-	if err = codexRPMPolicy(policy, removing); err != nil {
+	if err = codexRPMPolicyWithDependencies(policy, removing, o.acceptDependencies); err != nil {
 		return err
 	}
 	db, err := call("rpm", []string{"--eval", "%{_dbpath}"})
@@ -734,7 +776,10 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	if err != nil {
 		return err
 	}
-	if removing {
+	var dependencies []codexRPMDependency
+	if o.acceptDependencies {
+		dependencies, err = validateCodexRPMDependencyPlan(plan, r.Package)
+	} else if removing {
 		err = validateCodexRPMRemovePlan(plan, baseline)
 	} else if updating {
 		err = validateCodexRPMUpdatePlan(plan, r.Package, baseline)
@@ -745,6 +790,36 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 		return err
 	}
 	r.PlanSHA256 = fmt.Sprintf("%x", sha256.Sum256(plan))
+	r.DependencyCount = len(dependencies)
+	checkDependencies := func(installed bool) error {
+		for _, dep := range dependencies {
+			if err := ctx.Err(); err != nil {
+				return err
+			}
+			if s.quietRun == nil {
+				return fmt.Errorf("dependency queries require diagnostic-aware execution")
+			}
+			ex, e := s.resolve("rpm")
+			if e != nil {
+				return e
+			}
+			out, e := s.quietRun(ctx, ex, []string{"-qa", "--queryformat", codexRPMQueryFormat, "--", dep.Package.Name})
+			if e != nil {
+				return fmt.Errorf("RPM dependency query unknown: %w", e)
+			}
+			if installed {
+				if e := parseRPMDependencyMetadata(out, dep.Package); e != nil {
+					return e
+				}
+			} else if out != "" {
+				return fmt.Errorf("RPM dependency %s already installed or changed; no replacement permitted", dep.Package.Name)
+			}
+		}
+		return ctx.Err()
+	}
+	if err = checkDependencies(false); err != nil {
+		return err
+	}
 	checkStored := checkTransaction
 	if !removing {
 		if err = boundary("codex-rpm-before-populate"); err != nil {
@@ -790,8 +865,26 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 			return err
 		}
 		stored := packages + "/chatgpt.rpm"
-		switch names {
-		case "":
+		expectedNames := map[string]bool{"chatgpt.rpm": true}
+		for _, dep := range dependencies {
+			expectedNames[filepath.Base(dep.Path)] = true
+		}
+		seenNames := map[string]bool{}
+		for _, name := range strings.Split(strings.TrimSuffix(names, "\n"), "\n") {
+			if name == "" {
+				continue
+			}
+			if !expectedNames[name] || seenNames[name] {
+				return fmt.Errorf("unexpected stored RPM package entries")
+			}
+			seenNames[name] = true
+		}
+		for _, dep := range dependencies {
+			if !seenNames[filepath.Base(dep.Path)] {
+				return fmt.Errorf("stored RPM dependency missing")
+			}
+		}
+		if !seenNames["chatgpt.rpm"] {
 			if _, err = identity(target, false); err != nil {
 				return err
 			}
@@ -801,9 +894,41 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 			if _, err = call("install", []string{"-T", "-m", "0600", "--", target, stored}); err != nil {
 				return err
 			}
-		case "chatgpt.rpm\n": // DNF5 versions which already copied it: verify, never overwrite.
-		default:
-			return fmt.Errorf("unexpected stored RPM package entries")
+		}
+		dependencyHashes := map[string]string{}
+		checkDependencyFiles := func(record bool) error {
+			for _, dep := range dependencies {
+				path := filepath.Join(tx, dep.Path)
+				before, e := identity(path, false)
+				if e != nil {
+					return e
+				}
+				out, e := call("sha256sum", []string{"--", path})
+				hash, suffix, ok := strings.Cut(out, "  ")
+				if e != nil || !ok || !validSHA(hash) || suffix != path+"\n" {
+					return fmt.Errorf("invalid stored dependency digest: %v", e)
+				}
+				if record {
+					dependencyHashes[path] = hash
+				} else if dependencyHashes[path] != hash {
+					return fmt.Errorf("stored dependency bytes changed")
+				}
+				out, e = call("rpm", []string{"-qp", "--queryformat", codexRPMQueryFormat, "--", path})
+				if e != nil {
+					return e
+				}
+				if e = parseRPMDependencyMetadata(out, dep.Package); e != nil {
+					return e
+				}
+				after, e := identity(path, false)
+				if e != nil || before != after {
+					return fmt.Errorf("stored dependency identity changed: %v", e)
+				}
+			}
+			return nil
+		}
+		if err = checkDependencyFiles(true); err != nil {
+			return err
 		}
 		checkStored = func() error {
 			if e := checkTransaction(); e != nil {
@@ -816,7 +941,10 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 			if _, e = identity(stored, false); e != nil {
 				return e
 			}
-			return checkHash(stored)
+			if e = checkHash(stored); e != nil {
+				return e
+			}
+			return checkDependencyFiles(false)
 		}
 	}
 	if err = checkStored(); err != nil {
@@ -856,7 +984,15 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 	if err = checkBaseline(); err != nil {
 		return err
 	}
-	if _, err = dnf("replay", tx); err != nil {
+	if err = checkDependencies(false); err != nil {
+		return err
+	}
+	// Replay uses only the stored packages, never resolves additional repo input.
+	replayArgs := []string{"replay", tx}
+	if o.acceptDependencies {
+		replayArgs = append([]string{"--disable-repo=*"}, replayArgs...)
+	}
+	if _, err = dnf(replayArgs...); err != nil {
 		return err
 	}
 	if err = boundary("codex-rpm-after-replay"); err != nil {
@@ -868,6 +1004,9 @@ func (b *backend) manageCodexRPM(ctx context.Context, o options) (result error) 
 		return fmt.Errorf("RPM post-state not verified: %v", err)
 	}
 	if err = ctx.Err(); err != nil {
+		return err
+	}
+	if err = checkDependencies(true); err != nil {
 		return err
 	}
 	if err = phase("complete"); err != nil {
