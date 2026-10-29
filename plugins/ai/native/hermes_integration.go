@@ -265,6 +265,12 @@ func (b *backend) changeHermesIntegration(ctx context.Context, remove bool) (res
 	if err := os.Mkdir(lock, 0700); err != nil {
 		return fmt.Errorf("AI profiles locked/interrupted; inspect %s: %w", lock, err)
 	}
+	return b.changeHermesIntegrationHeld(ctx, remove, home, lock, nil, nil, true)
+}
+
+// The caller holds both locks. Deactivation supplies its original changes and
+// authority guard so detach cannot adopt evidence from a later lifecycle phase.
+func (b *backend) changeHermesIntegrationHeld(ctx context.Context, remove bool, home, lock string, changes []pathChange, guard func() error, releaseLock bool) (result error) {
 	lockInfo, err := os.Lstat(lock)
 	if err != nil {
 		return err
@@ -285,7 +291,7 @@ func (b *backend) changeHermesIntegration(ctx context.Context, remove bool) (res
 				retain = true
 			}
 		}
-		if !retain && os.Remove(lock) != nil {
+		if !retain && releaseLock && os.Remove(lock) != nil {
 			retain = true
 		}
 		if retain {
@@ -303,9 +309,11 @@ func (b *backend) changeHermesIntegration(ctx context.Context, remove bool) (res
 	if err != nil {
 		return err
 	}
-	changes, err := b.integrationChanges(hermesAgent, home, rec, remove)
-	if err != nil {
-		return err
+	if changes == nil {
+		changes, err = b.integrationChanges(hermesAgent, home, rec, remove)
+		if err != nil {
+			return err
+		}
 	}
 	root := b.root(hermesAgent)
 	pinned, err := hermesSelectionSnapshot(ctx, root)
@@ -317,6 +325,11 @@ func (b *backend) changeHermesIntegration(ctx context.Context, remove bool) (res
 		return err
 	}
 	checkSelection := func() error {
+		if guard != nil {
+			if err := guard(); err != nil {
+				return err
+			}
+		}
 		if err := pinned.verify(ctx, root); err != nil {
 			return err
 		}

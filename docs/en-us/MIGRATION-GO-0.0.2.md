@@ -141,7 +141,12 @@ the verified copy and provider data. Reenrollment reuses that copy, never silent
 refreshes it. A separate explicit launcher-refresh action replaces the owned copy
 from the running AI backend while preserving enrollment, profiles, selection and
 provider data. It never downloads or executes Hermes; uncertain exchange/cleanup
-retains locks and manual-inspection evidence. Full Hermes removal remains Pending.
+retains locks and manual-inspection evidence. Explicit deactivation removes only
+the owned launcher, PATH blocks and selection while retaining the whole prepared
+version at its original path. Unchanged preparations can be reselected and
+reenrolled without rerunning PM. Physical preparation deletion is outside the
+user-approved retention policy; interrupted deactivation may leave partial
+activation changes with retained locks, not a whole-operation rollback.
 The alias requires valid enrollment and explicit runtime consent. Real provider and shell
 acceptance remain Pending.
 No upstream shell installer, root execution or automatic privilege elevation;

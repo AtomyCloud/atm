@@ -19,7 +19,7 @@ route supports Linux amd64 only:
 | Codex CLI standalone | Official architecture-specific musl `tar.gz` | Same lifecycle and explicit user PATH integration as PicoClaw |
 | Hermes Desktop system | Official amd64 DEB | Install latest or exact stable version with explicit system-package consent |
 | Ollama portable | Official architecture-specific base `tar.zst` bundle | Install, update, change active version, remove inactive version, uninstall owned preview versions, explicit user PATH integration |
-| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach and native launcher refresh; reviewed contract only |
+| Hermes Agent | Pinned official source and official PM | Explicit dependency preparation, local launcher publication, completed-preparation selection, consented native terminal bridge, explicit PATH enrollment/detach, native launcher refresh and deactivation preserving the entire preparation; reviewed contract only |
 
 For PicoClaw and Codex portable archives, only the standalone executable is installed.
 PicoClaw's
@@ -29,8 +29,9 @@ Codex CLI uses the standalone release binary, not npm in this preview.
 
 Pending before the entire AI plugin can switch to native Go:
 
-- Hermes Agent full lifecycle, data migration, removal and real
-  runtime acceptance. The narrower reviewed source/PM preparation is described below.
+- Hermes Agent remaining installer/runtime acceptance beyond the reviewed
+  source/PM contract described below. External-data migration and physical
+  preparation deletion are outside the selected retention policy.
 - Ollama system installation, runtime/service acceptance and GPU add-on workflows;
   portable base-bundle lifecycle is implemented separately below.
 - Codex Desktop Linux package management; the Arch shell bootstrap is not ported.
@@ -49,8 +50,10 @@ This route prepares CLI dependencies using the **official Hermes PM**, then
 publishes its official local launchers. It does not run the upstream shell
 installer or reimplement Python dependency resolution. This is not full installer
 parity: frontend builds, services, optional browser/computer-use tools, user data
-migration and removal remain outside it. Explicit local selection and separate
-native PATH registration are available for completed owned preparations.
+migration remain outside it. Explicit local selection, separate native PATH
+registration and controlled deactivation are available for completed owned
+preparations. Deactivation preserves all prepared code, dependencies and data;
+physical deletion is not part of that operation.
 
 Only the reviewed `0.22.5` contract at source commit
 `bf0203a794a07aac3ff764972ab9087baa4e4f4e` is enabled. `latest` resolves upstream
@@ -227,8 +230,8 @@ Detach removes only the enrolled blocks and `path.json`. It retains the verified
 native copy and its independent receipt; execution through the detached alias is
 refused. Reenrollment reuses that copy without silently updating it. Upgrading the
 AI backend does **not** automatically refresh an existing Hermes bridge. Use the
-separate explicit action below to replace that owned copy. Full Hermes uninstall
-remains Pending.
+separate explicit action below to replace that owned copy. Controlled deactivation
+can remove the bridge while retaining the entire preparation, as described below.
 
 Failures may leave the bridge, staging, HOME/provider locks and
 `hermes-bridge.json` evidence for manual inspection, even when profile changes
@@ -274,6 +277,51 @@ automatic rollback or crash recovery is promised**. Never clear retained locks
 while processes may still be using the installation. Large binaries are not
 serialized into the profile journal. Linux arm64 execution and real provider
 acceptance remain Pending.
+
+### Deactivate and Retain Preparation
+
+The Hermes submenu offers **Deactivate Hermes (keep preparation and data)**.
+The CLI uses an explicit retention flag on the generic uninstall operation:
+
+```bash
+preview_atm --dry-run plugin ai uninstall --provider hermes-agent --keep-preparation
+preview_atm plugin ai uninstall --provider hermes-agent --keep-preparation
+
+# Reactivate an unchanged retained preparation without rerunning PM:
+preview_atm plugin ai use --provider hermes-agent --version 0.22.5
+preview_atm plugin ai integrate --provider hermes-agent
+```
+
+CORE confirmation and `--keep-preparation` are required. This is **deactivation,
+not deletion of the installation**: source, Python, PM tools, dependencies, settings
+and conversations stay under `native-v1/versions/0.22.5/` at their original paths.
+It does not reclaim their disk space, migrate data or remove an external Hermes
+installation. Do not delete the retained tree as a supposed cache. Repeating an
+already completed and verified deactivation is a no-op.
+
+The operation detaches only exact ATM-owned profile blocks, removes the owned
+native launcher and its receipt, and clears `current.json`. Foreign commands,
+unrelated profile text and the entire preparation are preserved. Enrollment is
+not required: a selected preparation with a detached or absent bridge can also
+be deactivated. Missing, incomplete, modified, foreign or locked preparations are
+refused without adopting or repairing them. Runtime consent is still required
+after reactivation; selection and enrollment do not execute Hermes or PM.
+
+Both provider and HOME PATH locks remain held throughout the operation. Original
+selection, preparation receipts, directory identities, bridge and profile state
+are checked across phases. It neither stops external processes/services nor runs
+the upstream uninstaller. A Hermes process launched through ATM holds the provider
+lock and blocks deactivation; this is not detection of every external process.
+
+On detach-phase failure, the existing profile transaction may restore only its
+own unchanged writes. There is **no whole-deactivation rollback**: after later
+failure, PATH, launcher or selection may already be removed. Locks, remaining
+staging and `native-v1.lock/hermes-deactivate*.json` evidence are retained for
+manual inspection, with the phase reported. The preparation remains in place.
+No automatic recovery, arbitrary journal-driven cleanup or crash-consistency
+guarantee is provided. Physical preparation deletion is deliberately outside the
+selected retention policy. Real provider and other-platform acceptance remain
+Pending.
 
 ## Existing Installation Discovery
 
@@ -788,6 +836,9 @@ The compiled PATH lifecycle builds two distinct real multi-MiB native images,
 enrolls and refreshes both enrolled and detached copies only in a temporary HOME,
 checks verified same-image no-op and exact preservation of profiles/selection,
 and rejects actual launch through a detached alias before upstream execution.
+It also exercises enrolled, detached and bridge-free deactivation, repeated no-op
+and offline reactivation while checking every synthetic prepared file, directory
+and link for unchanged bytes, mode, identity and modification time.
 Its optional trace check requires `strace` and verifies no child/network activity
 for those operations. Unit checks also reject a mismatched running executable,
 interrupted HOME PATH operations and altered enrollment profiles.

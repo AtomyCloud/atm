@@ -39,6 +39,7 @@ type options struct {
 	acceptSystem      bool
 	removePath        bool
 	refreshLauncher   bool
+	keepPreparation   bool
 	acceptPM          bool
 }
 
@@ -84,6 +85,11 @@ func parseOptions(op string, args []string) (options, error) {
 		}
 		seen[key] = true
 		switch key {
+		case "--keep-preparation":
+			if eq || op != "uninstall" {
+				return o, fmt.Errorf("--keep-preparation applies only to Hermes deactivation via uninstall")
+			}
+			o.keepPreparation = true
 		case "--refresh-launcher":
 			if eq || op != "integrate" {
 				return o, fmt.Errorf("launcher refresh applies only to integrate")
@@ -141,8 +147,14 @@ func parseOptions(op string, args []string) (options, error) {
 	if o.acceptPM && o.provider != hermesAgent {
 		return o, fmt.Errorf("dependency execution consent applies only to Hermes Agent")
 	}
-	if o.provider == hermesAgent && op != "install" && op != "update" && op != "use" {
-		return o, fmt.Errorf("Hermes Agent preview supports install/update, exact completed selection and explicit PATH; removal remains Pending")
+	if o.keepPreparation && o.provider != hermesAgent {
+		return o, fmt.Errorf("--keep-preparation requires explicit --provider hermes-agent")
+	}
+	if o.provider == hermesAgent && op == "uninstall" && !o.keepPreparation {
+		return o, fmt.Errorf("Hermes deactivation requires --keep-preparation; physical removal is outside this retention policy")
+	}
+	if o.provider == hermesAgent && op != "install" && op != "update" && op != "use" && op != "uninstall" {
+		return o, fmt.Errorf("Hermes Agent preview supports install/update, exact completed selection, explicit PATH and deactivation with --keep-preparation; physical removal is outside this retention policy")
 	}
 	if o.provider == hermesAgent && op == "use" && (!seen["--version"] || o.version != hermesPMVersion) {
 		return o, fmt.Errorf("Hermes selection requires reviewed exact --version %s", hermesPMVersion)
@@ -192,6 +204,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 		return nil, b.installHermesSystem(ctx, o)
 	}
 	if o.provider == hermesAgent {
+		if b.req.Operation == "uninstall" {
+			return nil, b.deactivateHermesAgent(ctx)
+		}
 		if b.req.Operation == "use" {
 			return nil, b.useHermesAgent(ctx, o.version)
 		}

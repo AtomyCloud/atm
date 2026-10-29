@@ -237,10 +237,92 @@ func TestHermesPATHCompiledLifecycle(t *testing.T) {
 		t.Fatal("refresh implicitly reenrolled the detached alias", err, string(output))
 	}
 	wire("integrate", "--provider", hermesAgent)
+	prepared := hermesFixtureTreeSnapshot(t, filepath.Join(root, "versions"))
+	deactivate := func() {
+		t.Helper()
+		wire("uninstall", "--provider", hermesAgent, "--keep-preparation")
+		wire("uninstall", "--provider", hermesAgent, "--keep-preparation")
+		for _, path := range []string{"current.json", "path.json", "bin"} {
+			integrationMissing(t, filepath.Join(root, path))
+		}
+		for _, name := range profileNames {
+			path := filepath.Join(home, name)
+			info, err := os.Lstat(path)
+			if err != nil || !bytes.Equal(integrationRead(t, path), originals[name]) || info.Mode().Perm() != 0640 {
+				t.Fatal("deactivation did not preserve original profile", name, err)
+			}
+		}
+		if !bytes.Equal(integrationRead(t, external), before) {
+			t.Fatal("deactivation modified foreign command")
+		}
+		hermesFixtureTreeUnchanged(t, filepath.Join(root, "versions"), prepared)
+		wire("status")
+		wire("menu", hermesAgent)
+		integrationMissing(t, root+".lock")
+		integrationMissing(t, filepath.Join(home, ".atm-ai-path.lock"))
+	}
+	deactivate()
+	// The retained preparation can be selected offline without running PM.
+	wire("use", "--provider", hermesAgent, "--version", hermesPMVersion)
+	deactivate() // Selected preparation without an enrolled or dormant bridge.
+	wire("use", "--provider", hermesAgent, "--version", hermesPMVersion)
+	wire("integrate", "--provider", hermesAgent)
 	wire("integrate", "--provider", hermesAgent, "--remove-path")
+	deactivate() // Dormant native bridge is removed without changing preparation.
 	integrationMissing(t, root+".lock")
 	integrationMissing(t, filepath.Join(home, ".atm-ai-path.lock"))
-	t.Log(fmt.Sprintf("two-image native bridge refresh/enrollment %d bytes; provider never executed; trace=%t", i.Size(), tracer != ""))
+	t.Log(fmt.Sprintf("native bridge refresh/deactivation/reactivation %d bytes; prepared tree unchanged; provider never executed; trace=%t", i.Size(), tracer != ""))
+}
+
+type hermesFixtureTreeEntry struct {
+	info os.FileInfo
+	data []byte
+	link string
+}
+
+// Only called on the synthetic fixture's versions tree. Walk never follows
+// symlinks, so PM-style links are compared without reading their targets.
+func hermesFixtureTreeSnapshot(t *testing.T, root string) map[string]hermesFixtureTreeEntry {
+	t.Helper()
+	result := map[string]hermesFixtureTreeEntry{}
+	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
+		if err != nil {
+			return err
+		}
+		entry := hermesFixtureTreeEntry{info: info}
+		switch {
+		case info.Mode().IsRegular():
+			entry.data, err = os.ReadFile(path)
+		case info.Mode()&os.ModeSymlink != 0:
+			entry.link, err = os.Readlink(path)
+		case info.IsDir():
+		default:
+			return fmt.Errorf("unexpected special file in fixture: %s", path)
+		}
+		if err != nil {
+			return err
+		}
+		result[path] = entry
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return result
+}
+
+func hermesFixtureTreeUnchanged(t *testing.T, root string, before map[string]hermesFixtureTreeEntry) {
+	t.Helper()
+	after := hermesFixtureTreeSnapshot(t, root)
+	if len(before) != len(after) {
+		t.Fatal("prepared inventory changed", len(before), len(after))
+	}
+	for path, old := range before {
+		now, ok := after[path]
+		if !ok || !os.SameFile(old.info, now.info) || old.info.Mode() != now.info.Mode() || !old.info.ModTime().Equal(now.info.ModTime()) || old.link != now.link || !bytes.Equal(old.data, now.data) {
+			t.Fatal("prepared file, directory or link changed", path)
+		}
+	}
 }
 
 func TestHermesAliasAuthorityRefusals(t *testing.T) {

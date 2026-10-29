@@ -774,6 +774,9 @@ guarded detach that preserves the copy and application data. The alias still
 requires runtime consent; reenrollment never silently refreshes an old copy.
 An explicit launcher-refresh action replaces that copy with the running AI backend
 without changing profiles, enrollment, selection or provider data.
+Controlled deactivation removes only ATM's launcher, PATH blocks and active
+selection; the complete preparation and personal data remain at their original
+paths and can be reactivated without rerunning PM.
 Full lifecycle and real provider/runtime
 acceptance remain Pending. Ollama system/service workflows and Codex Desktop
 remain Pending. See the [AI plugin guide](plugins/ai/README.md) for preview

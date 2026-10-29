@@ -249,6 +249,27 @@ def check(executable, backend):
                 "--refresh-launcher", success=False)
         for provider in ("hermes-desktop", system, "codex-desktop"):
             run("--yes", "plugin", "ai", "integrate", "--provider", provider, success=False)
+        run("--dry-run", "plugin", "ai", "uninstall", "--provider", agent,
+            "--keep-preparation", started=False)
+        run("plugin", "ai", "uninstall", "--provider", agent,
+            "--keep-preparation", started=False, success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", agent,
+            "--keep-preparation", success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", agent, success=False)
+        for flags in (("--keep-preparation",), ("--remove-path",), ("--refresh-launcher",),
+                      ("--version", "0.22.5"), ("--trust-download",),
+                      ("--accept-dependency-execution",), ("--accept-system-packages",)):
+            run("--yes", "plugin", "ai", "uninstall", "--provider", agent,
+                "--keep-preparation", *flags, success=False)
+        for provider in ("picoclaw", "codex-cli", "ollama", "hermes-desktop", system):
+            run("--yes", "plugin", "ai", "uninstall", "--provider", provider,
+                "--keep-preparation", success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--keep-preparation", success=False)
+        run("--yes", "plugin", "ai", "uninstall", "--provider", agent,
+            "--keep-preparation=true", success=False)
+        for operation in ("install", "update", "use", "remove", "integrate"):
+            run("--yes", "plugin", "ai", operation, "--provider", agent,
+                "--keep-preparation", success=False)
         run("install", "ai", success=False, started=False)
         run("--yes", "plugin", "ai", "status", "--unexpected", success=False)
         run("--yes", "plugin", "ai", "menu", "unknown-view", success=False)

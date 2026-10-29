@@ -208,6 +208,7 @@ func (b *backend) hermesMenu(ctx context.Context) ([]choice, error) {
 				return nil, err
 			}
 			if active != "" {
+				choices = append(choices, choice{ID: "deactivate", Label: label("hermes_deactivate"), Operation: "uninstall", Arguments: []string{"--provider", hermesAgent, "--keep-preparation"}})
 				choices = append(choices, choice{ID: "integrate", Label: label("path_integrate"), Operation: "integrate", Arguments: []string{"--provider", hermesAgent}})
 				rec, err := b.inspectIntegrationContext(ctx, hermesAgent, active)
 				if err != nil {
