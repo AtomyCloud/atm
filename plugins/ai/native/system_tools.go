@@ -24,6 +24,7 @@ const hermesSystem = "hermes-desktop-system"
 type systemTools struct {
 	resolve   func(string) (string, error)
 	run       func(context.Context, string, []string) (string, error)
+	quietRun  func(context.Context, string, []string) (string, error)
 	uid       func() int
 	stage     func(string) error
 	installed func() (string, string, error)
@@ -31,12 +32,12 @@ type systemTools struct {
 }
 
 func defaultSystemTools() *systemTools {
-	return &systemTools{resolve: systemCommand, run: runSystemCommand, uid: os.Geteuid, stage: checkSystemStage, installed: installedHermes, policy: checkAPTPreferences}
+	return &systemTools{resolve: systemCommand, run: runSystemCommand, quietRun: runQuietSystemCommand, uid: os.Geteuid, stage: checkSystemStage, installed: installedHermes, policy: checkAPTPreferences}
 }
 
 func systemCommand(name string) (string, error) {
 	switch name {
-	case "apt-get", "apt-config", "dpkg", "dpkg-deb", "env", "sudo", "mktemp", "install", "sha256sum", "rm", "rmdir":
+	case "apt-get", "apt-config", "dpkg", "dpkg-deb", "rpm", "dnf5", "cat", "stat", "ls", "env", "sudo", "mktemp", "install", "sha256sum", "rm", "rmdir":
 	default:
 		return "", fmt.Errorf("unsupported system tool")
 	}
@@ -126,6 +127,15 @@ func (w *systemOutput) Write(p []byte) (int, error) {
 }
 
 func runSystemCommand(ctx context.Context, path string, args []string) (string, error) {
+	return runSystemCommandChecked(ctx, path, args, false)
+}
+
+// Installed RPM queries must not turn successful exits with diagnostics into absence.
+func runQuietSystemCommand(ctx context.Context, path string, args []string) (string, error) {
+	return runSystemCommandChecked(ctx, path, args, true)
+}
+
+func runSystemCommandChecked(ctx context.Context, path string, args []string, rejectStderr bool) (string, error) {
 	cmd := exec.CommandContext(ctx, path, args...)
 	cmd.Env = []string{"PATH=/usr/sbin:/usr/bin:/sbin:/bin", "HOME=/", "LANG=C.UTF-8", "LC_ALL=C.UTF-8", "DEBIAN_FRONTEND=noninteractive", "TERM=dumb"}
 	cmd.Dir = "/"
@@ -142,6 +152,9 @@ func runSystemCommand(ctx context.Context, path string, args []string) (string, 
 	}
 	if out.overflow || stderr.overflow {
 		return "", fmt.Errorf("system command output exceeded bound")
+	}
+	if rejectStderr && stderr.String() != "" {
+		return "", fmt.Errorf("%s query emitted diagnostics: %s", filepath.Base(path), stderr.String())
 	}
 	return out.String(), nil
 }

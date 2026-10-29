@@ -30,6 +30,9 @@ func TestSystemRunnerHelper(t *testing.T) {
 		fmt.Print(strings.Repeat("x", 70<<10))
 	case "stderr-overflow":
 		fmt.Fprint(os.Stderr, strings.Repeat("x", 70<<10))
+	case "rpm-diagnostic":
+		fmt.Fprintln(os.Stderr, "error: rpmdb: damaged header skipped")
+	case "rpm-empty":
 	case "wait":
 		time.Sleep(time.Minute)
 	default:
@@ -77,6 +80,31 @@ func TestSystemRunnerEnvironmentBoundsAndCancellation(t *testing.T) {
 	defer cancel()
 	if _, err = runSystemCommand(ctx, ex, args("wait")); !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("cancellation not returned: %v", err)
+	}
+}
+
+func TestRPMInstalledQueryRejectsSuccessfulDiagnostics(t *testing.T) {
+	ex, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, mode := range []string{"rpm-empty", "rpm-diagnostic"} {
+		t.Run(mode, func(t *testing.T) {
+			args := []string{"-test.run=^TestSystemRunnerHelper$", "--", "atm-system-runner-fixture", mode}
+			s := defaultSystemTools()
+			s.resolve = func(string) (string, error) { return ex, nil }
+			quiet := s.quietRun
+			s.quietRun = func(ctx context.Context, path string, _ []string) (string, error) {
+				return quiet(ctx, path, args)
+			}
+			m, present, err := installedCodexRPM(context.Background(), s, "amd64")
+			if present || m != (codexRPMMetadata{}) || (err != nil) != (mode == "rpm-diagnostic") {
+				t.Fatalf("query result %+v present=%t err=%v", m, present, err)
+			}
+			if out, err := runSystemCommand(context.Background(), ex, args); err != nil || out != "" {
+				t.Fatalf("ordinary system command behavior changed: %q %v", out, err)
+			}
+		})
 	}
 }
 

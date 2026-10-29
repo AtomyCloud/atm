@@ -188,8 +188,16 @@ system effects and retained evidence, not rollback. Separate confirmed uninstall
 with system-package consent supports nonpurge removal of an eligible configured
 package, including manual installations, without adopting ownership. Native guards
 pin the original baseline and require a single-package, architecture-qualified APT
-removal plan; no autoremove, repair or personal-data cleanup. RPM/DNF,
-Arch and real package/GUI/arm64 acceptance remain Pending. This does not change
+removal plan; no autoremove, repair or personal-data cleanup.
+The separate `codex-desktop-rpm` preview supports initial DNF5 installation only,
+with download/system-package consent and CORE confirmation. It validates one
+stored `chatgpt` Install action, disables repositories and requires dependencies
+to be satisfied already; no dependency changes, upgrades or removals. DNF5 replay
+and before/after checks are the approved coordination boundary, not exclusion
+against other package managers. Administrator signature policy is preserved,
+and root transaction/input evidence is retained. Default views never query RPM.
+RPM update/removal/dependency workflows, DNF4, Arch and real Fedora/package/GUI/arm64
+acceptance remain Pending. This does not change
 the AI production manifest or the 13/16 native count.
 
 Brave uses explicit system-operation consent, pinned official signing-key bytes,

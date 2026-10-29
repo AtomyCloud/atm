@@ -30,6 +30,7 @@ type backend struct {
 	checkpoint          func(string) error
 	system              *systemTools
 	codexDesktop        *codexDesktopTools
+	codexRPM            *systemTools
 	discovery           *discoveryConfig
 	hermes              *hermesTools
 	hermesAlias         string
@@ -220,6 +221,15 @@ func parseOptions(op string, args []string) (options, error) {
 		if op == "uninstall" && !o.acceptSystem {
 			return o, fmt.Errorf("ChatGPT Desktop uninstall requires --accept-system-packages")
 		}
+	} else if o.provider == codexDesktopRPM {
+		if op != "install" || o.version != "latest" || !o.trust || !o.acceptSystem {
+			return o, fmt.Errorf("RPM initial install requires latest, --trust-download and --accept-system-packages; update/removal remain Pending")
+		}
+		for key := range seen {
+			if key != "--provider" && key != "--version" && key != "--trust-download" && key != "--accept-system-packages" {
+				return o, fmt.Errorf("inapplicable RPM option")
+			}
+		}
 	} else if o.provider == hermesSystem {
 		if op != "install" {
 			return o, fmt.Errorf("Hermes Desktop system preview supports install only; use the system package manager for administration")
@@ -269,6 +279,9 @@ func (b *backend) execute(ctx context.Context) ([]choice, error) {
 			return nil, b.removeCodexDesktop(ctx, o)
 		}
 		return nil, b.installCodexDesktop(ctx, o)
+	}
+	if o.provider == codexDesktopRPM {
+		return nil, b.installCodexRPM(ctx, o)
 	}
 	if o.provider == hermesSystem {
 		if !o.acceptSystem {

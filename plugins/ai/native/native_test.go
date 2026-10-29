@@ -530,8 +530,14 @@ func TestServeProtocolOffline(t *testing.T) {
 			t.Fatal(err)
 		}
 	}
-	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 8 {
+	if stream.Result == nil || stream.Result.Status != "success" || len(stream.Result.Choices) != 9 {
 		t.Fatalf("unexpected result %+v", stream.Result)
+	}
+	wantIDs := []string{"picoclaw", "hermes-desktop", "codex-cli", hermesSystem, codexDesktopSystem, codexDesktopRPM, "ollama", hermesAgent, "status"}
+	for i, id := range wantIDs {
+		if stream.Result.Choices[i].ID != id {
+			t.Fatalf("choice %d: got %q, want %q", i, stream.Result.Choices[i].ID, id)
+		}
 	}
 	if _, err := os.Lstat(req.AppsDir); !os.IsNotExist(err) {
 		t.Fatal("protocol menu writes")

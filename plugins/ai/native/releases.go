@@ -23,6 +23,7 @@ var versionRE = regexp.MustCompile(`^(0|[1-9][0-9]{0,5})\.(0|[1-9][0-9]{0,5})\.(
 type provider struct{ name, path, repo, tagPrefix, docs string }
 
 var providers = map[string]provider{
+	codexDesktopRPM:    {"ChatGPT Desktop with Codex (DNF5 RPM)", "ai/codex-desktop-rpm", "", "", "https://learn.chatgpt.com/docs/linux/linux-app"},
 	codexDesktopSystem: {"ChatGPT Desktop with Codex (system DEB)", "ai/codex-desktop-system", "", "", "https://learn.chatgpt.com/docs/linux/linux-app"},
 	hermesAgent:        {"Hermes Agent (official PM)", "ai/hermes-agent", "NousResearch/hermes-agent", "v", "https://hermes-agent.nousresearch.com/docs/reference/package-management"},
 	"ollama":           {"Ollama (portable bundle)", "ai/ollama", "ollama/ollama", "v", "https://docs.ollama.com/linux"},

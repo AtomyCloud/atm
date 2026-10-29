@@ -206,6 +206,31 @@ def check(executable, backend):
         plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", system,
                              "--trust-download", "--accept-system-packages", started=False).stdout)
         assert plan["dry_run"] and plan["executor"] == "native"
+        rpm = "codex-desktop-rpm"
+        rpm_menu = run("--yes", "plugin", "ai", "menu", rpm)
+        rpm_choices = json.loads(rpm_menu.stdout.splitlines()[-1])["choices"]
+        assert rpm_choices, "native RPM review menu missing"
+        for choice in rpm_choices:
+            assert choice["operation"] in ("menu", "install", "status")
+            if choice["operation"] == "install":
+                assert {"--trust-download", "--accept-system-packages"} <= set(choice["arguments"])
+        for flags in ((), ("--trust-download",), ("--accept-system-packages",)):
+            run("--yes", "plugin", "ai", "install", "--provider", rpm, *flags, success=False)
+        for operation in ("update", "use", "remove", "uninstall", "integrate"):
+            run("--yes", "plugin", "ai", operation, "--provider", rpm,
+                "--trust-download", "--accept-system-packages", success=False)
+        for flags in (("--version", "1.2.3"), ("--version", "../../outside"),
+                      ("--rocm",), ("--accept-dependency-execution",),
+                      ("--accept-system-packages",), ("--remove-path",),
+                      ("--trust-download=true",)):
+            run("--yes", "plugin", "ai", "install", "--provider", rpm,
+                "--trust-download", "--accept-system-packages", *flags, success=False)
+        # Never execute a consented live RPM installation, even if DNF5 is absent.
+        run("plugin", "ai", "install", "--provider", rpm,
+            "--trust-download", "--accept-system-packages", success=False, started=False)
+        plan = json.loads(run("--dry-run", "plugin", "ai", "install", "--provider", rpm,
+                             "--trust-download", "--accept-system-packages", started=False).stdout)
+        assert plan["dry_run"] and plan["executor"] == "native"
         desktop = "codex-desktop-system"
         desktop_menu = run("--yes", "plugin", "ai", "menu", desktop)
         desktop_choices = json.loads(desktop_menu.stdout.splitlines()[-1])["choices"]
