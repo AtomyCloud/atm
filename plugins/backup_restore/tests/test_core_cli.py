@@ -15,6 +15,10 @@ class CoreTests(unittest.TestCase):
             home = root / "homes" / "alpha"
             (home / "Documents").mkdir(parents=True)
             (home / "Documents" / "file").write_text("test")
+            (home / "Apps" / "atm").mkdir(parents=True)
+            (home / "Apps" / "atm" / "fixture").write_text("ATM fixture")
+            external = root / "external"
+            external.mkdir()
             # The host's Brave --version wrapper creates MIME files; isolate it.
             tools = root / "tools"
             tools.mkdir()
@@ -52,11 +56,20 @@ class CoreTests(unittest.TestCase):
             menu = run([], "14\nq\n")
             self.assertIn("1) 📦 Create backup", menu)
             self.assertIn("2) 🔄 Restore backup", menu)
+            self.assertIn("3) Backup ATM / Apps", menu)
             self.assertIn("Version: 0.0.1", menu)
             flow = run([], "14\n1\n0\n3\n0\nxq\n")
             self.assertIn("Choose user option [q]:", flow)
             self.assertIn('"user": "alpha"', flow)
             self.assertIn('"dry_run": true', flow)
+            apps_plan = run(["install", "backup_restore", "--action", "backup-apps",
+                             "--destination", str(external)])
+            self.assertIn('"required_bytes"', apps_plan)
+            self.assertIn('"available_bytes"', apps_plan)
+            self.assertIn('"dry_run": true', apps_plan)
+            apps_flow = run([], f"14\n3\nm\n{external}\nxq\n")
+            self.assertIn('"source_bytes"', apps_flow)
+            self.assertNotIn("[missing:ATM_PLUGIN_BACKUP_RESTORE_APPS", apps_flow)
             self.assertEqual(before, snapshot())
 
 

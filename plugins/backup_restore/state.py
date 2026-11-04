@@ -526,7 +526,8 @@ def list_backups(destination):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("backup", "restore", "list", "verify", "users", "devices", "backup-users"))
+    parser.add_argument("action", choices=("backup", "restore", "list", "verify", "users", "devices", "backup-users",
+                                          "apps-size", "backup-apps"))
     parser.add_argument("--home", default=str(Path.home()))
     parser.add_argument("--destination")
     parser.add_argument("--home-base", default="/home")
@@ -544,6 +545,17 @@ def main():
     args = parser.parse_args()
     os.umask(0o077)
     try:
+        if args.action in ("apps-size", "backup-apps"):
+            import apps_backup
+            if args.user or args.all_users or args.path or args.source or args.target:
+                raise ValueError("Apps backup uses only the current configured home/Apps.")
+            if args.action == "apps-size":
+                result = apps_backup.measure(args.home)
+            else:
+                result = apps_backup.backup(args.home, args.destination, args.media_root,
+                                            args.mountinfo, args.mount_id, args.dry_run)
+            print(json.dumps(result, indent=2))
+            return 0
         if args.user and args.all_users:
             raise ValueError("Choose --user or --all-users, not both.")
         if args.action in ("users", "backup-users"):

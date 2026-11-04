@@ -23,6 +23,7 @@ Version: 0.0.1
 =========
 1) 📦 Create backup
 2) 🔄 Restore backup
+3) Backup ATM / Apps (.tar.gz)
 0) Back
 q) Exit
 Choose option [0]:
@@ -56,6 +57,51 @@ concurrent changes while copying. This is a file-level backup, not a filesystem
 snapshot; live databases and changing application files may be inconsistent.
 
 ## Storage
+
+### ATM / Apps Archive
+
+Option **3** backs up the current user's entire `~/Apps` directory, including
+hidden files and existing `Apps/Backups` contents. It first measures logical file
+sizes (including sparse-file sizes), then lists mounted devices using the same
+Linux device discovery below. Select a device or an **existing** manual directory
+outside `~/Apps`. Enter defaults to Cancel. `~/Apps/Backups` is not offered for
+this action, and destinations inside the source or through symlinks are refused.
+The source follows `ATM_BACKUP_RESTORE_HOME/Apps`, not the checkout location.
+
+Before confirmation, the plan shows source size, required space, and available
+space in bytes/GiB. Required space includes TAR padding/headers, 1% allowance and
+a 16 MiB reserve. No compression savings are assumed. Insufficient space aborts
+before creating output. Space and mount identity are checked again before writing;
+mount identity is also checked before publishing. Changing files or a disk filling
+during compression may still cause failure; this is not a reservation or snapshot.
+
+GNU `tar` and `gzip` stream directly into a private destination directory:
+
+```text
+DESTINATION/atm-apps-YYYY-MM-DD_HHMMSS-ID/Apps.tar.gz
+```
+
+No intermediate copy of Apps is made. A `.part` file is renamed only after tar
+succeeds; ordinary failures clean up the partial output. Disconnects or forced
+termination can leave a partial directory to review after reconnecting. Nothing
+is automatically mounted, formatted, deleted from the source, or run with sudo.
+Symlinks are archived without following targets; hard-linked files are stored as
+independent contents. Special files (sockets, FIFOs, devices) block preflight:
+close the associated applications first. Close all applications and stop other
+backup operations to avoid inconsistent live data. Archives are unencrypted,
+with directory/file permissions 0700/0600 where the destination supports them.
+ACLs/xattrs and a complete operating-system image are not included.
+
+This is a **separate TAR archive**, not an atool snapshot. The existing Restore,
+List and Verify actions do not consume it. Extract into a new, empty directory
+for inspection, never directly over a running ATM installation:
+
+```bash
+mkdir -m 700 "$HOME/Restored-Apps"
+tar -xzf /media/USER/DEVICE/atm-apps-DATE-ID/Apps.tar.gz -C "$HOME/Restored-Apps"
+```
+
+### Existing Home Snapshots
 
 The default is **`~/Apps/Backups`** (`$ATM_APPS_DIR/Backups`), independent of
 the ATM checkout. Choose `0` or press Enter in the destination picker to use
@@ -146,6 +192,7 @@ Explicit actions are also available (Backup and Restore still ask for confirmati
 
 ```bash
 atm install backup_restore --action backup --type safe
+atm install backup_restore --action backup-apps --destination "/media/$USER/USB Disk"
 atm install backup_restore --action backup --user alice --type safe
 atm install backup_restore --action backup --all-users --type safe
 atm install backup_restore --action backup --type custom --path Documents --path .zshrc

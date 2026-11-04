@@ -41,3 +41,7 @@ ATM_PLUGIN_BACKUP_RESTORE_NO_BACKUPS="No successful backups found. You can enter
 ATM_PLUGIN_BACKUP_RESTORE_UNSUPPORTED="This built-in utility has no installable versions. Backups are never deleted by remove/uninstall."
 ATM_PLUGIN_BACKUP_RESTORE_ARGS="Invalid arguments. See plugins/backup_restore/README.md."
 ATM_PLUGIN_BACKUP_RESTORE_USER_ONLY="Run ATM as your normal user, not through sudo."
+ATM_PLUGIN_BACKUP_RESTORE_APPS="Backup ATM / Apps (.tar.gz)"
+ATM_PLUGIN_BACKUP_RESTORE_APPS_MEASURE="Measuring ~/Apps before listing devices (file bytes plus TAR/GZIP safety margin)..."
+ATM_PLUGIN_BACKUP_RESTORE_APPS_CHOICE="Choose destination [q]:"
+ATM_PLUGIN_BACKUP_RESTORE_APPS_CREATING="Rechecking size and free space, then compressing Apps with tar. This may take a while; keep the destination connected."

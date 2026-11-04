@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# English defaults precede the selected plugin locale loaded by the core.
+source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
+
 atm_backup_restore_state() {
     atm_require_commands python3
     PYTHONDONTWRITEBYTECODE=1 python3 "${BASH_SOURCE[0]%/*}/state.py" "$@" \
@@ -33,7 +36,7 @@ atm_backup_restore_run() {
     fi
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then dry_args=(--dry-run); fi
     case "$action" in
-        backup|restore)
+        backup|restore|backup-apps)
             printf '%s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_WARNING)"
             if [[ "$action" == restore ]]; then
                 printf '%s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_RESTORE_WARNING)"
@@ -49,11 +52,14 @@ atm_backup_restore_run() {
         list|verify) ;;
         *) atm_warn "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_ARGS)"; return 1 ;;
     esac
+    if [[ "$action" == backup-apps ]]; then
+        atm_info "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_CREATING)"
+    fi
     if ! atm_backup_restore_state "$action" "$@" "${dry_args[@]}"; then
         atm_warn "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_FAILED)"
         return 1
     fi
-    if [[ "$action" == backup || "$action" == restore ]]; then
+    if [[ "$action" == backup || "$action" == restore || "$action" == backup-apps ]]; then
         atm_success "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_DONE)"
     fi
 }
@@ -155,6 +161,7 @@ atm_backup_restore_select_type() {
 }
 
 atm_backup_restore_select_destination() {
+    local mode="${1:-snapshot}"
     local rows="" path="" source="" fstype="" free="" mount_id="" writable="" choice="" idx=1 marker=""
     local paths=() mount_ids=() writable_flags=()
     ATM_BACKUP_RESTORE_DESTINATION_ARGS=()
@@ -165,7 +172,9 @@ atm_backup_restore_select_destination() {
     done <<< "$rows"
     while true; do
         printf '\n%s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_DESTINATION_SELECTION)"
-        printf '0) %s: %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_ATM_PATH)" "$ATM_BACKUP_RESTORE_DIR"
+        if [[ "$mode" != apps ]]; then
+            printf '0) %s: %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_ATM_PATH)" "$ATM_BACKUP_RESTORE_DIR"
+        fi
         idx=1
         while IFS=$'\t' read -r path source fstype free mount_id writable; do
             [[ -n "$path" ]] || continue
@@ -176,10 +185,16 @@ atm_backup_restore_select_destination() {
         done <<< "$rows"
         printf 'm) %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_MANUAL_PATH)"
         printf 'q) %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_CANCEL)"
-        printf '%s ' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_DESTINATION_CHOICE)"
+        if [[ "$mode" == apps ]]; then
+            printf '%s ' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_CHOICE)"
+        else
+            printf '%s ' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_DESTINATION_CHOICE)"
+        fi
         read -r choice || return 1
         case "$choice" in
-            ''|0) ATM_BACKUP_RESTORE_DESTINATION_ARGS=(--destination "$ATM_BACKUP_RESTORE_DIR"); return 0 ;;
+            ''|0)
+                [[ "$mode" != apps ]] || return 1
+                ATM_BACKUP_RESTORE_DESTINATION_ARGS=(--destination "$ATM_BACKUP_RESTORE_DIR"); return 0 ;;
             q|Q) return 1 ;;
             m|M)
                 printf '%s ' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_DESTINATION)"
@@ -198,6 +213,17 @@ atm_backup_restore_select_destination() {
         done
         atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"
     done
+}
+
+atm_backup_restore_prompt_apps() {
+    if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != root ]]; then
+        atm_warn "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_USER_ONLY)"
+        return 1
+    fi
+    printf '\n%s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_MEASURE)"
+    atm_backup_restore_state apps-size || return 1
+    atm_backup_restore_select_destination apps || return 1
+    atm_backup_restore_run backup-apps "${ATM_BACKUP_RESTORE_DESTINATION_ARGS[@]}"
 }
 
 atm_backup_restore_prompt_backup() {
@@ -254,6 +280,7 @@ atm_backup_restore_menu() {
         printf '%s\n=========\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_MAIN_MENU)"
         printf '1) %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_CREATE)"
         printf '2) %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_RESTORE)"
+        printf '3) %s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS)"
         printf '0) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_MAIN_CHOICE)"
@@ -261,6 +288,7 @@ atm_backup_restore_menu() {
         case "$choice" in
             1) atm_backup_restore_prompt_backup || continue ;;
             2) atm_backup_restore_prompt_source restore || continue ;;
+            3) atm_backup_restore_prompt_apps || continue ;;
             ''|0|b|B) return 0 ;;
             q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; continue ;;
