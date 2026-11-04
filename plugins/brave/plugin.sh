@@ -1,5 +1,8 @@
 #!/usr/bin/env bash
 
+# English defaults are loaded before the plugin loader applies the selected locale.
+source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
+
 atm_brave_manifest_file() {
     printf '%s\n' "${ATM_BRAVE_MANIFEST_FILE:-$ATM_MANIFEST_DIR/brave.manifest}"
 }
@@ -312,6 +315,24 @@ atm_brave_backup_bookmarks() {
     atm_success "$(atm_t ATM_PLUGIN_BRAVE_BOOKMARKS_CREATED): $archive_file"
 }
 
+atm_brave_full_backup() {
+    local args=()
+    if [[ "${EUID:-$(id -u)}" == 0 && -n "${SUDO_USER:-}" && "$SUDO_USER" != root ]]; then
+        atm_fail "$(atm_t ATM_PLUGIN_BRAVE_FULL_RUN_AS_USER)"
+    fi
+    atm_require_commands python3
+    [[ "${ATM_DRY_RUN:-0}" != 1 ]] || args+=(--dry-run)
+    atm_warn "$(atm_t ATM_PLUGIN_BRAVE_FULL_WARNING)"
+    if ! python3 "${BASH_SOURCE[0]%/*}/full_backup.py" \
+        --home "$HOME" --standard-profile "$(atm_brave_profile_dir)" \
+        --backups "${ATM_BRAVE_FULL_BACKUP_DIR:-$HOME/Apps/Backups}" "${args[@]}"; then
+        atm_fail "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_FAILED)"
+    fi
+    if [[ "${ATM_DRY_RUN:-0}" != 1 ]]; then
+        atm_success "$(atm_t ATM_PLUGIN_BRAVE_FULL_CREATED)"
+    fi
+}
+
 atm_brave_list_backups() {
     local backup_dir=""
 
@@ -392,6 +413,7 @@ atm_brave_backup_menu() {
         printf '2) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_LIST)"
         printf '3) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_RESTORE_LATEST)"
         printf '4) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_BOOKMARKS)"
+        printf '5) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_FULL_BACKUP)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -402,6 +424,7 @@ atm_brave_backup_menu() {
             2) atm_brave_list_backups ;;
             3) atm_brave_restore_latest_backup ;;
             4) atm_brave_backup_bookmarks ;;
+            5) atm_brave_full_backup ;;
             b|B) return 0 ;;
             q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
@@ -439,6 +462,7 @@ atm_brave_menu() {
         printf '3) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_SHOW_COMMANDS)"
         printf '4) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_MENU)"
         printf '5) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_BOOKMARKS)"
+        printf '6) %s\n' "$(atm_t ATM_PLUGIN_BRAVE_FULL_BACKUP)"
         printf 'b) %s\n' "$(atm_t ATM_MENU_BACK)"
         printf 'q) %s\n' "$(atm_t ATM_MENU_EXIT)"
         printf '%s ' "$(atm_t ATM_MENU_SELECT_OPTION)"
@@ -450,6 +474,7 @@ atm_brave_menu() {
             3) atm_brave_show_commands ;;
             4) atm_brave_backup_menu ;;
             5) atm_brave_backup_bookmarks ;;
+            6) atm_brave_full_backup ;;
             b|B) return 0 ;;
             q|Q) exit 0 ;;
             *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
