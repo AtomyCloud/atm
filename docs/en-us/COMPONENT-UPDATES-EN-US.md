@@ -1,8 +1,11 @@
 # CORE And Plugin Updates
 
 These actions update ATM's own code, not Node, Docker, REA or other applications
-installed by plugins. The source is fixed to `AtomyCloud/atm`, branch `main`;
-plugin downloads always use its `plugins/` directory.
+installed by plugins. The repository is fixed to `AtomyCloud/atm`. Legacy CORE
+updates use **`v0.0.1` only**; plugin updates/downloads continue using `main/plugins`.
+There is no fallback to `main` or `v0.0.2` for CORE, including on network errors or
+a missing/invalid legacy branch. Repository/branch configuration cannot override
+this policy. Existing configuration files are not rewritten.
 
 ## Update Center
 
@@ -41,7 +44,8 @@ then ATM restarted before plugins requiring its newer API can be updated.
 
 ## Independent Detection
 
-Each check pins one official main commit and compares file paths, Git blob
+Each check pins one official `v0.0.1` commit for CORE and one `main` commit for
+plugins, retaining the appropriate revision per row/action, and compares file paths, Git blob
 hashes and executable modes for each component. A plugin-only commit does not
 mark CORE or unchanged plugins as outdated. Plugin version `0.0.1` is descriptive,
 not the update detector; version bumps are not required for detection.
@@ -85,11 +89,16 @@ copies stay Unverified; the detector never invents an old baseline. When the
 original commit is known, explicitly verify it:
 
 ```bash
-atm updates verify core <official-main-commit>
+atm updates verify core <official-v0.0.1-commit>
 atm updates verify brave <official-main-commit>
 ```
 
-Verification requires confirmation, official main ancestry and matching owned
+Old CORE caches from `main` are discarded. Old CORE origins/receipts labelled
+`main` are not silently relabelled: they report Unknown until explicitly verified
+against a matching commit in the official `v0.0.1` history. Plugin origins remain
+unchanged. If files do not match, reconcile them manually; no force-adoption exists.
+
+Verification requires confirmation, ancestry in the component's official branch and matching owned
 files. It changes only the receipt, not component files. Custom tracked settings
 must be reconciled manually; verification does not bypass file matching.
 
@@ -139,8 +148,11 @@ runtime with verified origins, or update a Git installation as a whole:
 atm self-update --git
 ```
 
-That explicit legacy action retains configured repository/branch and fast-forward
-behavior and can update CORE and plugins together. It is not CORE-only. ATM
+That explicit legacy action pulls only `https://github.com/AtomyCloud/atm.git`
+branch `v0.0.1`, using fast-forward-only behavior, and can update CORE and plugins
+together. It refuses other local branches/detached HEAD rather than switching
+branches automatically. Stale `ATM_SELF_UPDATE_BRANCH=main` and custom
+`ATM_REPO_URL` values are ignored for CORE. It is not CORE-only. ATM
 does not remove `.git`, reset local work, or migrate an installation automatically.
 After development, commit/publish the patch and update other Git installations
 through their normal workflow. Do not copy uncommitted updater files into another

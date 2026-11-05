@@ -285,7 +285,11 @@ Main menu actions:
 `u) Updates` detects CORE and plugin updates separately by official file hashes,
 even while plugin versions remain `0.0.1`. Changed plugins show a blue `Update`
 badge; plugin-only commits do not flag unchanged CORE files. Checks use a pinned
-official `AtomyCloud/atm/main` snapshot and a five-minute cache. Offline or
+official snapshots and a five-minute cache. The legacy CORE is pinned exclusively
+to [AtomyCloud/atm/v0.0.1](https://github.com/AtomyCloud/atm/tree/v0.0.1);
+plugin updates/catalog downloads continue to use `main/plugins`. Each component
+uses its own channel's commit; old CORE caches/receipts from `main` are not trusted.
+Offline or
 unverified installations are reported explicitly, not assumed current.
 
 ```bash
@@ -304,7 +308,11 @@ installed plugins only (including disabled ones); it does not download new
 plugins or update CORE implicitly. Restart ATM after successful changes.
 
 Selective updates refuse Git checkouts. `atm self-update --git` remains an explicit
-whole-repository fast-forward action, not a CORE-only update. Non-Git runtimes
+whole-repository fast-forward action, not a CORE-only update. It only pulls the
+official `v0.0.1` branch and refuses other local branches or detached HEAD. Old
+`ATM_SELF_UPDATE_BRANCH=main` or custom repository settings cannot redirect the
+legacy CORE; runtime configuration enforces the official legacy channel without
+rewriting your configuration file. Non-Git runtimes
 use verified installation receipts; older copies can verify a known official
 baseline. `atm self-update --check` aliases the independent component check.
 See the [update and recovery guide](docs/en-us/COMPONENT-UPDATES-EN-US.md) for

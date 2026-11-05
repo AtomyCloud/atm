@@ -21,7 +21,8 @@ from plugin_catalog import API, SOURCE, ID, SHA, MAX_FILE, MAX_TOTAL, Catalog, c
 
 
 SCHEMA = 1
-UPDATES_SOURCE = "https://github.com/AtomyCloud/atm/tree/main"
+CORE_BRANCH = "v0.0.1"
+UPDATES_SOURCE = "https://github.com/AtomyCloud/atm/tree/" + CORE_BRANCH
 CORE_UNITS = ("bin", "lib", "lang", "core-api.json")
 STATES = {"current", "available", "modified", "unknown", "unmanaged", "removed", "blocked", "ahead", "diverged"}
 UUID = re.compile(r"[0-9a-f]{32}\Z")
@@ -29,6 +30,19 @@ UUID = re.compile(r"[0-9a-f]{32}\Z")
 
 def component_source(component):
     return UPDATES_SOURCE if component == "core" else SOURCE
+
+
+def component_branch(component):
+    return CORE_BRANCH if component == "core" else "main"
+
+
+class LegacyCoreCatalog(Catalog):
+    def __init__(self):
+        self.token = os.environ.get("GITHUB_TOKEN", "")
+        revision = self.json(API + "/commits/" + CORE_BRANCH).get("sha", "")
+        if not isinstance(revision, str) or not SHA.fullmatch(revision):
+            raise ValueError("Invalid official v0.0.1 revision; no fallback is allowed")
+        super().__init__(revision)
 
 
 def read_json(path):
@@ -177,12 +191,12 @@ def git_manifest(root, component):
         if kind != "blob":
             raise ValueError("Git component includes a submodule")
         files[name] = {"mode": mode, "sha": sha}
-    return {"schema": SCHEMA, "source": component_source(component), "branch": "main", "commit": revision,
+    return {"schema": SCHEMA, "source": component_source(component), "branch": component_branch(component), "commit": revision,
             "component": component, "files": manifest(files, component)}
 
 
 class Updates:
-    def __init__(self, home, plugins, state, cache, factory=Catalog):
+    def __init__(self, home, plugins, state, cache, factory=Catalog, core_factory=LegacyCoreCatalog):
         self.home = Path(home).absolute()
         self.plugins = Path(plugins).absolute()
         if self.home.is_symlink() or self.plugins.is_symlink():
@@ -200,6 +214,7 @@ class Updates:
                for destination in (self.state, self.cache) for root in protected):
             raise ValueError("Update state/cache must be outside replaceable component directories")
         self.factory = factory
+        self.core_factory = core_factory
         self.catalogs = {}
         self.relations = {}
 
@@ -248,7 +263,7 @@ class Updates:
             if not os.path.lexists(path):
                 continue
             data = read_json(path)
-            if data.get("source") != component_source(component) or data.get("branch") != "main" or not SHA.fullmatch(str(data.get("commit", ""))):
+            if data.get("source") != component_source(component) or data.get("branch") != component_branch(component) or not SHA.fullmatch(str(data.get("commit", ""))):
                 raise ValueError("Unverified component origin")
             recorded = data.get("component", "plugin:" + str(data.get("plugin", "")))
             if recorded != component:
@@ -263,7 +278,7 @@ class Updates:
         if remote is not None:
             files = self.remote_files(remote, component)
             if files and self.clean(component, files) and self.inventory(component) == files:
-                data = {"schema": SCHEMA, "source": component_source(component), "branch": "main", "commit": remote.revision,
+                data = {"schema": SCHEMA, "source": component_source(component), "branch": component_branch(component), "commit": remote.revision,
                         "component": component, "files": files}
                 atomic_json(local, data)
                 return data
@@ -346,7 +361,7 @@ class Updates:
             return "current", "Component files match"
         relation = self.relationship(remote, base["commit"])
         if relation in ("behind", "diverged"):
-            return ("ahead" if relation == "behind" else "diverged"), "Local origin is not behind official main"
+            return ("ahead" if relation == "behind" else "diverged"), "Local origin is not behind official " + component_branch(component)
         root = self.root(component)
         for name in latest.keys() - base["files"].keys():
             path = root / name
@@ -372,21 +387,27 @@ class Updates:
             except (OSError, ValueError):
                 pass
         rows = []
-        revision = ""
-        try:
-            remote = self.factory()
-            revision = remote.revision
-            self.catalogs[revision] = remote
-            for component in self.components():
+        # CORE and plugins deliberately resolve different branches. A failure in
+        # either channel must not hide the other channel's independent result.
+        groups = ((["core"], self.core_factory), (self.components()[1:], self.factory))
+        for components, factory in groups:
+            if not components:
+                continue
+            try:
+                remote = factory()
+                self.catalogs[remote.revision] = remote
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                rows.extend({"component": name, "status": "unknown", "detail": str(error), "revision": ""}
+                            for name in components)
+                continue
+            for component in components:
                 try:
                     status, detail = self.status(component, remote)
                 except (OSError, ValueError, subprocess.SubprocessError) as error:
                     status, detail = "unknown", str(error)
-                rows.append({"component": component, "status": status, "detail": detail})
-        except (OSError, ValueError, subprocess.SubprocessError) as error:
-            rows = [{"component": name, "status": "unknown", "detail": str(error)} for name in self.components()]
+                rows.append({"component": component, "status": status, "detail": detail, "revision": remote.revision})
         data = {"schema": SCHEMA, "home": str(self.home), "plugins": str(self.plugins), "source": UPDATES_SOURCE,
-                "revision": revision, "checked_at": time.time(), "rows": rows}
+                "checked_at": time.time(), "rows": rows}
         atomic_json(self.cache, data)
         return data
 
@@ -405,6 +426,8 @@ class Updates:
             component_id(row["component"])
             if row.get("status") not in STATES or not isinstance(row.get("detail"), str):
                 raise ValueError("Invalid cached status")
+            if not isinstance(row.get("revision"), str) or (row["revision"] and not SHA.fullmatch(row["revision"])):
+                raise ValueError("Invalid cached component revision")
         return data
 
     def units(self, component):
@@ -535,7 +558,7 @@ class Updates:
                         compile(target.read_bytes(), str(target), "exec")
                     except SyntaxError:
                         raise ValueError("Python syntax validation failed: " + name) from None
-            receipt = {"schema": SCHEMA, "source": component_source(component), "branch": "main", "commit": remote.revision,
+            receipt = {"schema": SCHEMA, "source": component_source(component), "branch": component_branch(component), "commit": remote.revision,
                        "component": component, "files": latest}
             if component != "core":
                 atomic_json(stage_root / ".atm-origin.json", dict(receipt, plugin=component[7:]))
@@ -598,6 +621,11 @@ class Updates:
             raise ValueError("CORE recovery is pending; no component updates are permitted")
         if not SHA.fullmatch(revision):
             raise ValueError("A checked, pinned official revision is required")
+        if "core" in targets:
+            # A manually supplied SHA or old main cache cannot bypass the channel.
+            latest = self.core_factory()
+            if self.relationship(latest, revision) not in ("ahead", "identical"):
+                raise ValueError("CORE revision must be on the official v0.0.1 history")
         remote = self.catalog(revision)
         results = []
         with self.lock():
@@ -628,14 +656,14 @@ class Updates:
         component_id(component)
         if component not in self.components() or not SHA.fullmatch(revision):
             raise ValueError("An installed component and exact official commit are required")
-        latest = self.factory()
+        latest = self.core_factory() if component == "core" else self.factory()
         if self.relationship(latest, revision) not in ("ahead", "identical"):
-            raise ValueError("Baseline must be on the official main history")
+            raise ValueError("Baseline must be on the official " + component_branch(component) + " history")
         remote = self.catalog(revision)
         files = self.remote_files(remote, component)
         if files is None or not self.clean(component, files):
             raise ValueError("Installed files do not match the selected official baseline; no receipt was changed")
-        data = {"schema": SCHEMA, "source": component_source(component), "branch": "main", "commit": revision,
+        data = {"schema": SCHEMA, "source": component_source(component), "branch": component_branch(component), "commit": revision,
                 "component": component, "files": files}
         with self.lock():
             if os.path.lexists(self.home / ".atm-core-update-pending"):
@@ -646,11 +674,14 @@ class Updates:
 
     def changes(self):
         data = self.read_cache()
-        if data is None or not SHA.fullmatch(data.get("revision", "")):
+        if data is None:
             raise ValueError("Run an update check first")
-        remote = self.catalog(data["revision"])
         changes = []
-        for component in self.components():
+        for row in data["rows"]:
+            component = row["component"]
+            if not row["revision"]:
+                continue
+            remote = self.catalog(row["revision"])
             base = self.baseline(component)
             latest = self.remote_files(remote, component)
             if base is None or latest is None:
@@ -664,7 +695,7 @@ class Updates:
 
 def rows(data):
     for row in data["rows"]:
-        fields = (row["component"], row["status"], data.get("revision") or "-", row["detail"])
+        fields = (row["component"], row["status"], row.get("revision") or "-", row["detail"])
         print("\t".join(clean(field) for field in fields))
 
 

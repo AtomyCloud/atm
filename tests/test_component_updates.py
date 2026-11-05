@@ -71,6 +71,8 @@ class UpdateTests(unittest.TestCase):
 
     def fetch(self, url, limit, token=""):
         self.requests.append(url)
+        if url == catalog.API + "/commits/v0.0.1":
+            return json.dumps({"sha": getattr(self, "core_remote", self.remote)}).encode()
         if url == catalog.API + "/commits/main":
             return json.dumps({"sha": self.remote}).encode()
         for revision in (A, B):
@@ -111,6 +113,81 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(self.requests.count(catalog.API + "/commits/main"), 1)
         self.assertFalse(self.marker.exists())
         self.assertIn(("plugin:alpha", "changed", "plugin.sh"), self.engine.changes())
+
+    def test_distinct_core_and_plugin_branches_keep_independent_revisions(self):
+        self.bootstrap()
+        self.advance({"lib/atm_core.sh": "ATM_CORE_PLUGIN_API=1\n# main only\n",
+                      "plugins/alpha/plugin.sh": "#!/bin/bash\n# plugin update\n"})
+        self.core_remote = A
+        data = self.engine.check()
+        rows = {row["component"]: row for row in data["rows"]}
+        self.assertEqual((rows["core"]["status"], rows["core"]["revision"]), ("current", A))
+        self.assertEqual((rows["plugin:alpha"]["status"], rows["plugin:alpha"]["revision"]), ("available", B))
+        self.assertFalse(any(component == "core" for component, _, _ in self.engine.changes()))
+        self.assertEqual(self.engine.apply(["plugin:alpha"], B)[0]["result"], "updated")
+        self.assertEqual((self.home / "lib/atm_core.sh").read_bytes(), self.files["lib/atm_core.sh"][0])
+
+    def test_core_only_legacy_commit_uses_legacy_receipt_and_leaves_plugins(self):
+        self.bootstrap()
+        self.advance({"lib/atm_core.sh": "ATM_CORE_PLUGIN_API=1\n# legacy update\n"})
+        self.core_remote, self.remote = B, A
+        self.assertEqual(self.statuses(), {"core": "available", "plugin:alpha": "current", "plugin:beta": "current"})
+        plugins = updates.snapshot(self.plugins)
+        self.assertEqual(self.engine.apply(["core"], B)[0]["result"], "updated")
+        receipt = updates.read_json(self.engine.receipt_file("core"))
+        self.assertEqual(receipt["branch"], "v0.0.1")
+        self.assertEqual(receipt["source"], updates.UPDATES_SOURCE)
+        self.assertEqual(updates.snapshot(self.plugins), plugins)
+
+    def test_core_apply_and_verify_refuse_commit_outside_legacy_history(self):
+        self.bootstrap()
+        self.core_remote, self.remote, self.relationship = A, B, "behind"
+        before = updates.snapshot(self.home)
+        with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
+            self.engine.apply(["core"], B)
+        with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
+            self.engine.verify("core", B)
+        self.assertEqual(updates.snapshot(self.home), before)
+
+    def test_old_main_cache_and_core_receipt_require_revalidation(self):
+        self.bootstrap()
+        data = updates.read_json(self.engine.cache)
+        data["source"] = "https://github.com/AtomyCloud/atm/tree/main"
+        updates.atomic_json(self.engine.cache, data)
+        self.assertIsNone(self.engine.read_cache())
+        path = self.engine.receipt_file("core")
+        receipt = updates.read_json(path)
+        receipt.update(source=data["source"], branch="main")
+        updates.atomic_json(path, receipt)
+        self.assertEqual(self.statuses()["core"], "unknown")
+        self.engine.verify("core", A)
+        self.assertEqual(self.statuses()["core"], "current")
+
+    def test_missing_or_malformed_legacy_branch_never_falls_back_to_main(self):
+        for value in (None, "", "main", 123):
+            with patch.object(catalog, "get_bytes", return_value=json.dumps({"sha": value}).encode()) as fetch:
+                with self.assertRaisesRegex(ValueError, "no fallback"):
+                    updates.LegacyCoreCatalog()
+                self.assertEqual(fetch.call_count, 1)
+                self.assertEqual(fetch.call_args.args[0], catalog.API + "/commits/v0.0.1")
+        with patch.object(self.engine, "core_factory", side_effect=ValueError("legacy branch unavailable")):
+            self.assertEqual(self.statuses(), {"core": "unknown", "plugin:alpha": "current", "plugin:beta": "current"})
+
+    def test_stale_config_cannot_override_core_channel_and_is_not_rewritten(self):
+        config = self.root / "config.sh"
+        config.write_text('ATM_SELF_UPDATE_BRANCH="main"\nATM_REPO_URL="https://example.invalid/other"\n')
+        before = config.read_bytes()
+        script = '''set -Eeuo pipefail
+source "$1/lib/atm_config.sh"
+ATM_HOME="$2/home" ATM_LANG_DIR="$2/lang" ATM_PLUGIN_DIR="$2/plugins"
+ATM_CONFIG_FILE="$2/config.sh" ATM_PLUGINS_CONFIG_FILE="$2/plugins.conf" ATM_DRY_RUN=1
+atm_debug() { :; }
+atm_config_init
+[[ "$ATM_SELF_UPDATE_BRANCH" == v0.0.1 ]]
+[[ "$ATM_REPO_URL" == https://github.com/AtomyCloud/atm.git ]]
+'''
+        subprocess.run(["bash", "-c", script, "test", str(REPO), str(self.root)], check=True, capture_output=True)
+        self.assertEqual(config.read_bytes(), before)
 
     def test_single_update_preserves_other_components_and_unknown_user_files(self):
         self.bootstrap()
@@ -287,7 +364,8 @@ class UpdateTests(unittest.TestCase):
         data = updates.read_json(self.engine.cache)
         data["checked_at"] -= 301
         updates.atomic_json(self.engine.cache, data)
-        with patch.object(self.engine, "factory", side_effect=catalog.CatalogError("offline")):
+        with patch.object(self.engine, "factory", side_effect=catalog.CatalogError("offline")), \
+                patch.object(self.engine, "core_factory", side_effect=catalog.CatalogError("offline")):
             self.assertEqual(set(self.statuses().values()), {"unknown"})
         self.assertEqual({row["status"] for row in self.engine.read_cache()["rows"]}, {"unknown"})
         receipt = self.engine.receipt_file("plugin:alpha")

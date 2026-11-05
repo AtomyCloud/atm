@@ -23,8 +23,8 @@ ATM_CACHE_DIR="$ATM_CACHE_DIR"
 ATM_STATE_DIR="$ATM_STATE_DIR"
 ATM_LANG=""
 ATM_PLUGIN_SORT_ORDER="default"
-ATM_REPO_URL="$ATM_REPO_URL"
-ATM_SELF_UPDATE_BRANCH="main"
+ATM_REPO_URL="https://github.com/AtomyCloud/atm.git"
+ATM_SELF_UPDATE_BRANCH="v0.0.1"
 ATM_SELF_UPDATE_MODE="git"
 EOF
         fi
@@ -47,6 +47,10 @@ EOF
 
     # shellcheck source=/dev/null
     [[ -f "$ATM_PLUGINS_CONFIG_FILE" ]] && source "$ATM_PLUGINS_CONFIG_FILE"
+
+    # The legacy CORE has a fixed official update channel, including old configs.
+    ATM_REPO_URL="https://github.com/AtomyCloud/atm.git"
+    ATM_SELF_UPDATE_BRANCH="v0.0.1"
 
     # ATM_HOME is runtime-owned by bin/atm. Never let stale config point to
     # an old checkout such as ~/Downloads/atm.

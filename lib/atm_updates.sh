@@ -72,7 +72,8 @@ atm_updates_menu_label() {
 
 atm_updates_show() {
     local component="" status="" revision="" detail=""
-    printf '%s\n%s\n' "$(atm_updates_t ATM_UPDATES_TITLE)" 'https://github.com/AtomyCloud/atm/tree/main'
+    printf '%s\nCORE: %s\nPlugins: %s\n' "$(atm_updates_t ATM_UPDATES_TITLE)" \
+        'https://github.com/AtomyCloud/atm/tree/v0.0.1' 'https://github.com/AtomyCloud/atm/tree/main/plugins'
     if [[ -z "${ATM_UPDATES_ROWS:-}" ]]; then atm_info "$(atm_updates_t ATM_UPDATES_UNKNOWN)"; return 0; fi
     while IFS=$'\t' read -r component status revision detail; do
         [[ -n "$component" ]] || continue
@@ -88,7 +89,13 @@ atm_updates_apply() {
     fi
     atm_updates_refresh --force
     atm_updates_show
-    while IFS=$'\t' read -r component status revision detail; do [[ "$revision" == - ]] || break; done <<< "${ATM_UPDATES_ROWS:-}"
+    local candidate=""
+    while IFS=$'\t' read -r component status candidate detail; do
+        if [[ "$component" == "$target" || ( "$target" == all-plugins && "$component" == plugin:* ) ]]; then
+            revision="$candidate"
+            break
+        fi
+    done <<< "${ATM_UPDATES_ROWS:-}"
     [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || { atm_warn "$(atm_updates_t ATM_UPDATES_UNKNOWN)"; return 1; }
     printf '%s\n%s\n%s %s\n%s ' "$(atm_updates_t ATM_UPDATES_TRUST)" "$(atm_updates_t ATM_UPDATES_SCOPE)" \
         "$(atm_updates_t ATM_UPDATES_TARGET)" "$target@$revision" "$(atm_updates_t ATM_UPDATES_CONFIRM)"

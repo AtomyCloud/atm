@@ -51,6 +51,21 @@ grep -q 'apply plugin:alpha --revision bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
 grep -q 'Updated; backup:' "$temp/update"
 printf 'PASS pinned single-plugin apply and required restart\n'
 
+(
+    ATM_UPDATES_ROWS=$'core\tavailable\taaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\tLegacy\nplugin:alpha\tavailable\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tMain'
+    saved="$ATM_UPDATES_ROWS"
+    atm_updates_apply core <<< y > "$temp/core-channel"
+    ATM_UPDATES_ROWS="$saved"
+    atm_updates_apply plugin:alpha <<< y > "$temp/plugin-channel"
+    ATM_UPDATES_ROWS="$saved"
+    if atm_updates_apply all-plugins <<< y > "$temp/all-channel"; then exit 1; fi
+    grep -q 'apply core --revision aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' "$temp/actions"
+    grep -q 'apply plugin:alpha --revision bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' "$temp/actions"
+    grep -q 'apply all-plugins --revision bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' "$temp/actions"
+    grep -q 'CORE: https://github.com/AtomyCloud/atm/tree/v0.0.1' "$temp/core-channel"
+)
+printf 'PASS per-target CORE/plugin/all revision selection across different channels\n'
+
 ATM_UPDATES_RESTART_REQUIRED=0
 ATM_UPDATES_ROWS=$'core\tcurrent\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tCurrent\nplugin:alpha\tavailable\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tChanged'
 if atm_updates_cli all <<< y > "$temp/batch"; then exit 1; fi

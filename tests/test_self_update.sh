@@ -11,24 +11,40 @@ export PYTHONDONTWRITEBYTECODE=1
 ATM_HOME="$temp/installed"
 ATM_LANG_DIR="$repo/lang"
 ATM_REPO_URL="$temp/remote.git"
-ATM_SELF_UPDATE_BRANCH=main
+ATM_SELF_UPDATE_BRANCH=v0.0.1
 SECONDS=120
 source "$repo/lib/atm_core.sh"
 source "$repo/lib/atm_i18n.sh"
 source "$repo/lib/atm_self_update.sh"
 source "$repo/lib/atm_ui.sh"
 source "$repo/lang/en-us.lang"
-git init --bare --initial-branch=main "$ATM_REPO_URL" >/dev/null
-git init --initial-branch=main "$temp/author" >/dev/null
+git init --bare --initial-branch=v0.0.1 "$ATM_REPO_URL" >/dev/null
+git init --initial-branch=v0.0.1 "$temp/author" >/dev/null
 git -C "$temp/author" commit --allow-empty -qm first
 git -C "$temp/author" remote add origin "$ATM_REPO_URL"
-git -C "$temp/author" push -q origin main
+git -C "$temp/author" push -q origin v0.0.1
 git clone -q "$ATM_REPO_URL" "$ATM_HOME"
 log="$temp/lookups"
 touch "$log"
+fixture_remote="$temp/remote.git"
+# Production URLs remain fixed. Test transports redirect only that exact URL
+# into a disposable local Git repository; no public network is used.
+git() {
+    local arg args=()
+    for arg in "$@"; do
+        [[ "$arg" != https://github.com/AtomyCloud/atm.git ]] || arg="$fixture_remote"
+        args+=("$arg")
+    done
+    command git "${args[@]}"
+}
 timeout() {
     printf 'lookup\n' >> "$log"
-    command timeout "$@"
+    local arg args=()
+    for arg in "$@"; do
+        [[ "$arg" != https://github.com/AtomyCloud/atm.git ]] || arg="$fixture_remote"
+        args+=("$arg")
+    done
+    command timeout "${args[@]}"
 }
 snapshot() {
     python3 -B -c 'import hashlib, pathlib, sys
@@ -52,7 +68,7 @@ atm_self_update_refresh
 printf 'PASS identical commit, in-memory cache/expiry, and unchanged Git/worktree files\n'
 
 git -C "$temp/author" commit --allow-empty -qm second
-git -C "$temp/author" push -q origin main
+git -C "$temp/author" push -q origin v0.0.1
 remote="$(git -C "$temp/author" rev-parse HEAD)"
 before="$(snapshot)"
 atm_self_update_refresh --force
@@ -73,12 +89,12 @@ printf 'PASS latest remote commit without fetch/pull, blue ANSI/reset, plain out
 git -C "$ATM_HOME" fetch -q origin
 atm_self_update_refresh --force
 [[ "$ATM_SELF_UPDATE_STATUS" == available ]]
-git -C "$ATM_HOME" merge -q --ff-only origin/main
+git -C "$ATM_HOME" merge -q --ff-only origin/v0.0.1
 git -C "$ATM_HOME" commit --allow-empty -qm local
 atm_self_update_refresh
 [[ "$ATM_SELF_UPDATE_STATUS" == ahead && "$(atm_self_update_menu_label)" == Self-update ]]
 git -C "$temp/author" commit --allow-empty -qm divergent
-git -C "$temp/author" push -q origin main
+git -C "$temp/author" push -q origin v0.0.1
 git -C "$ATM_HOME" fetch -q origin
 before="$(snapshot)"
 atm_self_update_refresh --force
@@ -99,7 +115,7 @@ printf 'PASS behind/ahead/diverged detection and fast-forward refusal preserves 
     [[ "$output" == *'Could not check'* && "$output" != *'up to date'* ]]
 )
 (
-    timeout() { printf 'not-a-commit\trefs/heads/main\n'; }
+    timeout() { printf 'not-a-commit\trefs/heads/v0.0.1\n'; }
     atm_self_update_refresh --force
     [[ "$ATM_SELF_UPDATE_STATUS" == unknown ]]
 )
@@ -110,13 +126,20 @@ printf 'PASS behind/ahead/diverged detection and fast-forward refusal preserves 
 )
 (
     ATM_SELF_UPDATE_BRANCH=missing
+    ATM_REPO_URL=https://example.invalid/untrusted.git
+    timeout() {
+        printf '%s\n' "$*" > "$temp/channel-request"
+        return 2
+    }
     atm_self_update_refresh --force
     [[ "$ATM_SELF_UPDATE_STATUS" == unknown ]]
+    grep -q 'https://github.com/AtomyCloud/atm.git refs/heads/v0.0.1$' "$temp/channel-request"
     ATM_SELF_UPDATE_BRANCH='../invalid'
     atm_self_update_refresh --force
     [[ "$ATM_SELF_UPDATE_STATUS" == unknown ]]
+    grep -q 'https://github.com/AtomyCloud/atm.git refs/heads/v0.0.1$' "$temp/channel-request"
 )
-printf 'PASS timeout/offline, malformed/foreign refs, missing/invalid branch, and stale badge clearing\n'
+printf 'PASS timeout/offline, malformed refs, ignored branch/repository overrides, no fallback and stale badge clearing\n'
 
 (
     timeout() { printf 'UNEXPECTED_NETWORK\n' >&2; return 99; }
@@ -125,8 +148,9 @@ printf 'PASS timeout/offline, malformed/foreign refs, missing/invalid branch, an
     [[ "$ATM_SELF_UPDATE_STATUS" == dry_run && -z "$ATM_SELF_UPDATE_REMOTE_COMMIT" ]]
     output="$(ATM_DRY_RUN=1 atm_self_update_cli --check 2>&1)"
     [[ "$output" == *'Network lookup skipped'* && "$output" != *UNEXPECTED_NETWORK* ]]
-    output="$(ATM_DRY_RUN=1 atm_self_update_cli --git)"
+    output="$(ATM_REPO_URL=https://example.invalid/other ATM_SELF_UPDATE_BRANCH=main ATM_DRY_RUN=1 atm_self_update_cli --git)"
     [[ "$output" == *'DRY-RUN: git'* && "$output" == *'pull --ff-only'* ]]
+    [[ "$output" == *'https://github.com/AtomyCloud/atm.git v0.0.1'* ]]
     [[ "$(snapshot)" == "$before" ]]
 )
 (
@@ -152,7 +176,7 @@ printf 'PASS network-free/no-write dry-run, non-clone, linked worktree, and wron
     git clone -q "$ATM_REPO_URL" "$ATM_HOME"
     printf 'user notes\n' > "$ATM_HOME/local-notes"
     git -C "$temp/author" commit --allow-empty -qm next
-    git -C "$temp/author" push -q origin main
+    git -C "$temp/author" push -q origin v0.0.1
     atm_self_update_refresh --force
     [[ "$ATM_SELF_UPDATE_STATUS" == available ]]
     atm_self_update_cli --git > "$temp/update-result" 2>&1
