@@ -33,7 +33,7 @@ atm_brave_run_elevated() {
     local command_text="$1"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: %s\n' "$command_text"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_BRAVE_DRY_RUN)" "$command_text"
         return 0
     fi
 
@@ -200,7 +200,7 @@ atm_brave_uninstall() {
     package_manager="$(atm_brave_package_manager)"
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_BRAVE_UNINSTALL_WARNING)"
-    printf 'Continue? [y/N]: '
+    printf '%s ' "$(atm_t ATM_PLUGIN_BRAVE_CONFIRM)"
     read -r answer
 
     case "$answer" in
@@ -225,9 +225,9 @@ atm_brave_show_commands() {
 
     package_manager="$(atm_brave_package_manager)"
 
-    printf '%s\n' "# Install"
+    printf '# %s\n' "$(atm_t ATM_PLUGIN_BRAVE_COMMANDS_INSTALL)"
     atm_brave_install_commands "$package_manager"
-    printf '%s\n' "# Uninstall"
+    printf '# %s\n' "$(atm_t ATM_PLUGIN_BRAVE_COMMANDS_UNINSTALL)"
     atm_brave_remove_commands "$package_manager"
 }
 
@@ -255,8 +255,8 @@ atm_brave_backup_profile() {
     atm_brave_require_profile_closed
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: mkdir -p %s\n' "$backup_dir"
-        printf 'DRY-RUN: tar -czf %s -C %s %s\n' "$backup_file" "$profile_parent" "$profile_name"
+        printf '%s: mkdir -p %s\n' "$(atm_t ATM_PLUGIN_BRAVE_DRY_RUN)" "$backup_dir"
+        printf '%s: tar -czf %s -C %s %s\n' "$(atm_t ATM_PLUGIN_BRAVE_DRY_RUN)" "$backup_file" "$profile_parent" "$profile_name"
         return 0
     fi
 
@@ -323,7 +323,7 @@ atm_brave_full_backup() {
     atm_require_commands python3
     [[ "${ATM_DRY_RUN:-0}" != 1 ]] || args+=(--dry-run)
     atm_warn "$(atm_t ATM_PLUGIN_BRAVE_FULL_WARNING)"
-    if ! python3 "${BASH_SOURCE[0]%/*}/full_backup.py" \
+    if ! ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/full_backup.py" \
         --home "$HOME" --standard-profile "$(atm_brave_profile_dir)" \
         --backups "${ATM_BRAVE_FULL_BACKUP_DIR:-$HOME/Apps/Backups}" "${args[@]}"; then
         atm_fail "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_FAILED)"
@@ -368,7 +368,7 @@ atm_brave_restore_latest_backup() {
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_BRAVE_RESTORE_WARNING)"
     printf '%s: %s\n' "$(atm_t ATM_PLUGIN_BRAVE_BACKUP_FILE)" "$archive_file"
-    printf 'Continue? [y/N]: '
+    printf '%s ' "$(atm_t ATM_PLUGIN_BRAVE_CONFIRM)"
     read -r answer
 
     case "$answer" in
@@ -380,9 +380,9 @@ atm_brave_restore_latest_backup() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: mkdir -p %s\n' "$profile_parent"
-        [[ -e "$profile_dir" ]] && printf 'DRY-RUN: mv %s %s\n' "$profile_dir" "$safety_backup"
-        printf 'DRY-RUN: tar -xzf %s -C %s\n' "$archive_file" "$profile_parent"
+        printf '%s: mkdir -p %s\n' "$(atm_t ATM_PLUGIN_BRAVE_DRY_RUN)" "$profile_parent"
+        [[ -e "$profile_dir" ]] && printf '%s: mv %s %s\n' "$(atm_t ATM_PLUGIN_BRAVE_DRY_RUN)" "$profile_dir" "$safety_backup"
+        printf '%s: tar -xzf %s -C %s\n' "$(atm_t ATM_PLUGIN_BRAVE_DRY_RUN)" "$archive_file" "$profile_parent"
         return 0
     fi
 

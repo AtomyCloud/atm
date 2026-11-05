@@ -120,6 +120,7 @@ atm_i18n_init() {
     fi
 
     ATM_LANG="$(atm_i18n_normalize "$ATM_LANG")"
+    export ATM_LANG
 
     if ! atm_i18n_exists "$ATM_LANG"; then
         if [[ -t 0 ]]; then
@@ -148,10 +149,15 @@ atm_t() {
 
 atm_i18n_load_plugin_lang() {
     local plugin_id="$1"
-    local plugin_lang_file="$ATM_PLUGIN_DIR/$plugin_id/lang/$ATM_LANG.lang"
+    local default_file="$ATM_PLUGIN_DIR/$plugin_id/lang/en-us.lang"
+    local plugin_lang_file="$ATM_PLUGIN_DIR/$plugin_id/lang/${ATM_LANG:-en-us}.lang"
 
-    [[ -f "$plugin_lang_file" ]] || return 0
-    atm_i18n_load_file "$plugin_lang_file"
+    [[ ! -f "$default_file" ]] || atm_i18n_load_file "$default_file"
+    if [[ "$plugin_lang_file" != "$default_file" && -f "$plugin_lang_file" ]]; then
+        atm_i18n_load_file "$plugin_lang_file"
+    fi
+    export ATM_LANG
+    return 0
 }
 
 atm_i18n_select_cli() {
@@ -205,6 +211,7 @@ atm_i18n_cli() {
 
             atm_config_set_key "$ATM_CONFIG_FILE" "ATM_LANG" "$locale"
             ATM_LANG="$locale"
+            export ATM_LANG
             atm_success "Language set to: $locale"
             ;;
         select|choose|menu|change)

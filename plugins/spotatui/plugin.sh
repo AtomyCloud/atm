@@ -86,7 +86,7 @@ atm_spotatui_local_version() {
     elif [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
         atm_t ATM_PLUGIN_SPOTATUI_NOT_PROBED; return 0
     elif command -v python3 >/dev/null 2>&1; then
-        version="$(python3 -B "${BASH_SOURCE[0]%/*}/release.py" installed-version "$ATM_SPOTATUI_LOCAL_ENTRY")" || true
+        version="$(ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" installed-version "$ATM_SPOTATUI_LOCAL_ENTRY")" || true
     fi
     printf '%s\n' "${version:-$(atm_t ATM_PLUGIN_SPOTATUI_UNKNOWN)}"
 }
@@ -143,7 +143,7 @@ atm_spotatui_location_call() {
         ATM_SPOTATUI_MANIFEST_FILE="$ATM_MANIFEST_DIR/spotatui_local.manifest"
         if [[ ( "$action" == install || "$action" == use ) && "${ATM_DRY_RUN:-0}" != 1 ]]; then
             command -v python3 >/dev/null 2>&1 || { atm_spotatui_dependency_help; return 1; }
-            ATM_SPOTATUI_LOCAL_EXPECTED="$(python3 -B "${BASH_SOURCE[0]%/*}/release.py" fingerprint "$ATM_SPOTATUI_LOCAL_ENTRY")" || return 1
+            ATM_SPOTATUI_LOCAL_EXPECTED="$(ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" fingerprint "$ATM_SPOTATUI_LOCAL_ENTRY")" || return 1
             if [[ "$ATM_SPOTATUI_LOCAL_EXPECTED" != missing ]] && ! atm_spotatui_local_entry_owned; then
                 printf '%s ' "$(atm_t ATM_PLUGIN_SPOTATUI_REPLACE)"
                 read -r choice || return 0
@@ -179,7 +179,7 @@ atm_spotatui_dependency_info() {
     if ! command -v python3 >/dev/null 2>&1; then
         atm_warn "$(atm_t ATM_PLUGIN_SPOTATUI_DEP_FAILED)"; return 1
     fi
-    python3 -B "${BASH_SOURCE[0]%/*}/release.py" dependencies
+    ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" dependencies
 }
 
 atm_spotatui_check_dependencies() {
@@ -199,7 +199,7 @@ atm_spotatui_release() {
     endpoint='https://api.github.com/repos/LargeModGames/spotatui/releases/latest'
     [[ "$requested" == latest ]] || endpoint="https://api.github.com/repos/LargeModGames/spotatui/releases/tags/v$requested"
     response="$(curl --proto '=https' --tlsv1.2 -fsSL --retry 2 --connect-timeout 10 --max-time 30 "$endpoint")" || return 1
-    python3 -B "${BASH_SOURCE[0]%/*}/release.py" resolve "$platform" <<< "$response"
+    ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" resolve "$platform" <<< "$response"
 }
 
 atm_spotatui_activate() {
@@ -209,7 +209,7 @@ atm_spotatui_activate() {
     atm_run ln -sfn -- "$version" "$current" || return 1
     if [[ "${ATM_SPOTATUI_LOCATION:-atm}" == local && "${ATM_DRY_RUN:-0}" != 1 ]]; then
         local backup=""
-        backup="$(python3 -B "${BASH_SOURCE[0]%/*}/release.py" publish-entry "$ATM_SPOTATUI_LOCAL_ENTRY" \
+        backup="$(ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" publish-entry "$ATM_SPOTATUI_LOCAL_ENTRY" \
             "$ATM_SPOTATUI_LOCAL_ROOT/current/bin/spotatui" "$ATM_SPOTATUI_LOCAL_EXPECTED")" \
             || { atm_warn "$(atm_t ATM_PLUGIN_SPOTATUI_ENTRY_FAILED)"; return 1; }
         [[ -z "$backup" ]] || printf '%s %s\n' "$(atm_t ATM_PLUGIN_SPOTATUI_BACKUP_KEPT)" "$backup"
@@ -224,7 +224,7 @@ atm_spotatui_use_at() {
     atm_spotatui_managed_version "$version" || { atm_warn "$(atm_t ATM_PLUGIN_SPOTATUI_NOT_FOUND)"; return 1; }
     if [[ "${ATM_DRY_RUN:-0}" != 1 ]]; then
         deps="$(atm_spotatui_dependency_info)" || { atm_spotatui_dependency_help; return 1; }
-        python3 -B "${BASH_SOURCE[0]%/*}/release.py" configure "$(atm_spotatui_install_dir "$version")" <<< "$deps" || return 1
+        ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" configure "$(atm_spotatui_install_dir "$version")" <<< "$deps" || return 1
     fi
     atm_spotatui_activate "$version"
 }
@@ -256,10 +256,10 @@ atm_spotatui_install_at() {
         archive="$ATM_SPOTATUI_CACHE_DIR/$version/${url##*/}"
         checksum="$archive.sha256"
         atm_download_file "$url" "$archive" && atm_download_file "$checksum_url" "$checksum" \
-            && python3 -B "${BASH_SOURCE[0]%/*}/release.py" install "$archive" "$checksum" "$(atm_spotatui_install_dir "$version")" <<< "$deps" \
+            && ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" install "$archive" "$checksum" "$(atm_spotatui_install_dir "$version")" <<< "$deps" \
             || { atm_warn "$(atm_t ATM_PLUGIN_SPOTATUI_FAILED)"; return 1; }
     else
-        python3 -B "${BASH_SOURCE[0]%/*}/release.py" configure "$(atm_spotatui_install_dir "$version")" <<< "$deps" || return 1
+        ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" configure "$(atm_spotatui_install_dir "$version")" <<< "$deps" || return 1
     fi
     atm_spotatui_activate "$version" || return 1
     atm_success "$(atm_t ATM_PLUGIN_SPOTATUI_DONE)"

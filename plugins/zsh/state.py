@@ -12,6 +12,12 @@ import shlex
 import shutil
 import tarfile
 import tempfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
 
 
 BEGIN = "# >>> ATM Oh My Zsh >>>"
@@ -27,17 +33,17 @@ def layout(args):
         for value in (args.home, args.dot_dir, args.omz, args.custom, args.backups)
     )
     if omz == Path("/") or omz == home or omz == dot or omz in home.parents or omz in dot.parents:
-        raise ValueError("Invalid Oh My Zsh directory")
+        raise ValueError(tr('ATM_PLUGIN_ZSH_INVALID_OMZ_DIRECTORY'))
     if backups == omz or omz in backups.parents:
-        raise ValueError("Backups must be outside the Oh My Zsh directory")
+        raise ValueError(tr('ATM_PLUGIN_ZSH_BACKUP_OUTSIDE_OMZ'))
     targets = {name[1:]: dot / name for name in DOTFILES}
     targets.update({"p10k.zsh": home / ".p10k.zsh", "shell.pre-oh-my-zsh": home / ".shell.pre-oh-my-zsh",
                     "oh-my-zsh": omz, "custom": custom})
     if custom != omz and omz not in custom.parents:
         if custom == home or custom == dot or custom in home.parents or custom in dot.parents or custom in omz.parents:
-            raise ValueError("Invalid custom directory")
+            raise ValueError(tr('ATM_PLUGIN_ZSH_INVALID_CUSTOM_DIRECTORY'))
         if backups == custom or custom in backups.parents:
-            raise ValueError("Backups must be outside the custom directory")
+            raise ValueError(tr('ATM_PLUGIN_ZSH_BACKUP_OUTSIDE_CUSTOM'))
     return targets, backups
 
 
@@ -48,18 +54,18 @@ def read_archive(filename, targets, stage=None):
         for member in archive:
             name = PurePosixPath(member.name)
             if name.is_absolute() or ".." in name.parts or not name.parts or str(name) in seen:
-                raise ValueError("Unsafe or duplicate archive path")
+                raise ValueError(tr('ATM_PLUGIN_ZSH_UNSAFE_ARCHIVE_PATH'))
             seen.add(str(name))
             if not (member.isfile() or member.isdir()):
-                raise ValueError("Archive links and special files are not supported")
+                raise ValueError(tr('ATM_PLUGIN_ZSH_UNSUPPORTED_ARCHIVE_ENTRY'))
             if str(name) == "metadata.json":
                 if not member.isfile() or member.size > 65536:
-                    raise ValueError("Invalid backup metadata")
+                    raise ValueError(tr('ATM_PLUGIN_ZSH_INVALID_METADATA'))
                 metadata = json.load(archive.extractfile(member))
                 continue
             root = name.parts[0]
             if root not in targets or (root not in ("oh-my-zsh", "custom") and (len(name.parts) != 1 or not member.isfile())):
-                raise ValueError("Unexpected backup content")
+                raise ValueError(tr('ATM_PLUGIN_ZSH_UNEXPECTED_CONTENT'))
             roots.add(root)
             if stage is not None:
                 destination = stage.joinpath(*name.parts)
@@ -78,17 +84,17 @@ def read_archive(filename, targets, stage=None):
         while archive.fileobj.read(1024 * 1024):
             pass
     if not isinstance(metadata, dict) or metadata.get("format") != FORMAT:
-        raise ValueError("Not an ATM Zsh backup")
+        raise ValueError(tr('ATM_PLUGIN_ZSH_NOT_ATM_BACKUP'))
     entries = metadata.get("entries")
     if not isinstance(entries, list) or any(not isinstance(item, str) for item in entries):
-        raise ValueError("Invalid backup entries")
+        raise ValueError(tr('ATM_PLUGIN_ZSH_INVALID_ENTRIES'))
     if len(entries) != len(set(entries)) or set(entries) != roots:
-        raise ValueError("Incomplete backup")
+        raise ValueError(tr('ATM_PLUGIN_ZSH_INCOMPLETE_BACKUP'))
     destinations = [targets[key].resolve() for key in entries]
     for index, dest in enumerate(destinations):
         for other in destinations[index + 1:]:
             if dest == other or dest in other.parents or other in dest.parents:
-                raise ValueError("Overlapping restore destinations")
+                raise ValueError(tr('ATM_PLUGIN_ZSH_OVERLAPPING_DESTINATIONS'))
     for destination, mode in reversed(directory_modes):
         destination.chmod(mode)
     return entries
@@ -158,7 +164,7 @@ def restore(args):
                     failed.append(str(old.parent))
             if failed:
                 retain_recovery = True
-                raise OSError("Restore rollback failed; recovery files retained in: " + ", ".join(failed)) from error
+                raise OSError(tr("ATM_PLUGIN_ZSH_ROLLBACK_FAILED", paths=", ".join(failed))) from error
             raise
         finally:
             if not retain_recovery:
@@ -178,10 +184,10 @@ def configure(args, remove=False):
             inside = False
         elif not inside:
             if remove and LOADER.match(line.rstrip("\r\n")):
-                line = "# ATM disabled Oh My Zsh loader: " + line
+                line = tr("ATM_PLUGIN_ZSH_DISABLED_LOADER") + line
             lines.append(line)
     if inside:
-        raise ValueError("Unclosed ATM configuration block")
+        raise ValueError(tr('ATM_PLUGIN_ZSH_UNCLOSED_CONFIG'))
     content = "".join(lines)
     if not remove and not any(LOADER.match(line.rstrip("\r\n")) for line in lines):
         content = content.rstrip("\n") + "\n\n" + BEGIN + "\n"
@@ -203,14 +209,14 @@ def configure(args, remove=False):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=tr("ATM_PLUGIN_ZSH_HELP_DESCRIPTION"))
     parser.add_argument("action", choices=("backup", "validate", "restore", "configure", "unconfigure"))
     for option in ("home", "dot-dir", "omz", "custom", "backups"):
         parser.add_argument("--" + option, required=True)
     parser.add_argument("--archive")
     args = parser.parse_args()
     if args.action in ("validate", "restore") and not args.archive:
-        parser.error("--archive is required")
+        parser.error(tr("ATM_PLUGIN_ZSH_ARCHIVE_REQUIRED"))
     if args.action == "backup":
         print(backup(args))
     elif args.action == "validate":

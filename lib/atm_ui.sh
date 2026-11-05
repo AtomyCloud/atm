@@ -104,6 +104,7 @@ atm_menu_main() {
             l|L)
                 atm_i18n_select_cli
                 atm_i18n_load_file "$ATM_LANG_DIR/$ATM_LANG.lang"
+                atm_plugin_reload_languages
                 atm_prompt_continue
                 ;;
             d|D)

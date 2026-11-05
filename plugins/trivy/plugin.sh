@@ -84,7 +84,7 @@ atm_trivy_release() {
     endpoint="https://api.github.com/repos/aquasecurity/trivy/releases/latest"
     if [[ "$version" != latest ]]; then endpoint="https://api.github.com/repos/aquasecurity/trivy/releases/tags/v$version"; fi
     response="$(curl --proto '=https' --tlsv1.2 -fsSL --retry 2 --connect-timeout 10 --max-time 30 "$endpoint")" || return 1
-    python3 -B "${BASH_SOURCE[0]%/*}/release.py" resolve "$platform" <<< "$response"
+    ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" resolve "$platform" <<< "$response"
 }
 
 atm_trivy_use() {
@@ -101,7 +101,7 @@ atm_trivy_install_binary() {
     requested="$(atm_trivy_normalize_version "${1:-$ATM_TRIVY_DEFAULT_VERSION}")" || return 1
     platform="$(atm_trivy_platform)" || return 1
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: %s %s/%s (%s)\n' "$(atm_t ATM_PLUGIN_TRIVY_BINARY_PLAN)" "$ATM_TRIVY_INSTALL_ROOT" "$requested" "$platform"
+        printf '%s: %s %s/%s (%s)\n' "$(atm_t ATM_PLUGIN_TRIVY_DRY_RUN)" "$(atm_t ATM_PLUGIN_TRIVY_BINARY_PLAN)" "$ATM_TRIVY_INSTALL_ROOT" "$requested" "$platform"
         return 0
     fi
     if atm_trivy_managed_version "$requested"; then
@@ -117,7 +117,7 @@ atm_trivy_install_binary() {
         checksums="$ATM_TRIVY_CACHE_DIR/${checksum_url##*/}"
         atm_download_file "$url" "$archive" || atm_fail "$(atm_t ATM_PLUGIN_TRIVY_FAILED)"
         atm_download_file "$checksum_url" "$checksums" || atm_fail "$(atm_t ATM_PLUGIN_TRIVY_FAILED)"
-        python3 -B "${BASH_SOURCE[0]%/*}/release.py" install "$archive" "$checksums" "$(atm_trivy_install_dir "$version")" \
+        ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/release.py" install "$archive" "$checksums" "$(atm_trivy_install_dir "$version")" \
             || atm_fail "$(atm_t ATM_PLUGIN_TRIVY_FAILED)"
     fi
     atm_trivy_use "$version"
@@ -133,7 +133,7 @@ atm_trivy_install_docker() {
     local requested="" version="" temporary=""
     requested="$(atm_trivy_normalize_version "${1:-$ATM_TRIVY_DEFAULT_VERSION}")" || return 1
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: %s (%s)\n' "$(atm_t ATM_PLUGIN_TRIVY_DOCKER_PLAN)" "$requested"
+        printf '%s: %s (%s)\n' "$(atm_t ATM_PLUGIN_TRIVY_DRY_RUN)" "$(atm_t ATM_PLUGIN_TRIVY_DOCKER_PLAN)" "$requested"
         return 0
     fi
     atm_trivy_require_docker

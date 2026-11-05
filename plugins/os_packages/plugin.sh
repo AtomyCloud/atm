@@ -207,7 +207,7 @@ atm_os_packages_run_command() {
     local run_command="$command_text"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: %s\n' "$command_text"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_DRY_RUN)" "$command_text"
         return 0
     fi
 
@@ -305,7 +305,7 @@ atm_os_packages_uninstall() {
     printf '%s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_UNINSTALL_WARNING)"
     printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_OS)" "$os_name"
     printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_MANAGER)" "$package_manager"
-    printf 'Continue? [y/N]: '
+    printf '%s ' "$(atm_t ATM_PLUGIN_OS_PACKAGES_CONFIRM)"
     read -r answer
 
     case "$answer" in
@@ -339,8 +339,8 @@ atm_os_packages_menu() {
         printf '    🧰 %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_MENU_TITLE)"
         printf '%s\n' "=========================================="
         printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_CURRENT)" "$current"
-        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_OS)" "${os_name:-unknown}"
-        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_MANAGER)" "${package_manager:-unknown}"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_OS)" "${os_name:-$(atm_t ATM_PLUGIN_OS_PACKAGES_UNKNOWN)}"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_MANAGER)" "${package_manager:-$(atm_t ATM_PLUGIN_OS_PACKAGES_UNKNOWN)}"
         printf '%s\n' "------------------------------------------"
         printf '1) %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_INSTALL)"
         printf '2) %s\n' "$(atm_t ATM_PLUGIN_OS_PACKAGES_UNINSTALL)"

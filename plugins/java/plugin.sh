@@ -25,7 +25,7 @@ atm_java_vendor_slug() {
             printf 'custom\n'
             ;;
         *)
-            atm_fail "Invalid Java vendor: $vendor"
+            atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_INVALID_VENDOR)" "$vendor")"
             ;;
     esac
 }
@@ -39,7 +39,7 @@ atm_java_vendor_display() {
         temurin) printf 'Eclipse Temurin\n' ;;
         microsoft) printf 'Microsoft OpenJDK\n' ;;
         graalvm) printf 'GraalVM JDK\n' ;;
-        custom) printf 'Custom JDK\n' ;;
+        custom) printf '%s\n' "$(atm_t ATM_PLUGIN_JAVA_CUSTOM_JDK)" ;;
         *) printf '%s\n' "$vendor" ;;
     esac
 }
@@ -71,7 +71,7 @@ atm_java_normalize_version() {
     if [[ "$version" =~ ^[0-9]+(\.[0-9]+){0,2}$ ]]; then
         printf '%s\n' "$version"
     else
-        atm_fail "Invalid Java version: $version"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_INVALID_VERSION)" "$version")"
     fi
 }
 
@@ -145,11 +145,11 @@ atm_java_root_from_tar() {
     IFS= read -r first_entry < "$list_file" || true
     rm -f "$list_file"
 
-    [[ -n "${first_entry:-}" ]] || atm_fail "Could not read Java archive: $file"
+    [[ -n "${first_entry:-}" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_ARCHIVE_READ_FAILED)" "$file")"
 
     root_dir="${first_entry%%/*}"
 
-    [[ -n "$root_dir" ]] || atm_fail "Could not detect Java archive root directory: $file"
+    [[ -n "$root_dir" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_ARCHIVE_ROOT_MISSING)" "$file")"
 
     printf '%s\n' "$root_dir"
 }
@@ -163,7 +163,7 @@ atm_java_version_from_args() {
         case "$1" in
             --vendor)
                 vendor="${2:-}"
-                [[ -n "$vendor" ]] || atm_fail "Missing value for --vendor"
+                [[ -n "$vendor" ]] || atm_fail "$(atm_t ATM_PLUGIN_JAVA_MISSING_VENDOR)"
                 shift
                 ;;
             --vendor=*)
@@ -171,7 +171,7 @@ atm_java_version_from_args() {
                 ;;
             --version)
                 version="${2:-}"
-                [[ -n "$version" ]] || atm_fail "Missing value for --version"
+                [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_JAVA_MISSING_VERSION)"
                 shift
                 ;;
             --version=*)
@@ -179,7 +179,7 @@ atm_java_version_from_args() {
                 ;;
             --url)
                 url="${2:-}"
-                [[ -n "$url" ]] || atm_fail "Missing value for --url"
+                [[ -n "$url" ]] || atm_fail "$(atm_t ATM_PLUGIN_JAVA_MISSING_URL)"
                 shift
                 ;;
             --url=*)
@@ -287,7 +287,7 @@ atm_java_extract_to_dest() {
 
     tar -xzf "$cache_file" -C "$tmp_extract"
 
-    [[ -d "$tmp_extract/$archive_root" ]] || atm_fail "Unexpected Java archive structure: $cache_file"
+    [[ -d "$tmp_extract/$archive_root" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_INVALID_ARCHIVE)" "$cache_file")"
 
     rm -rf "$dest"
     mv "$tmp_extract/$archive_root" "$dest"
@@ -316,7 +316,7 @@ atm_java_install() {
         url="$(atm_java_resolve_url "$vendor" "$version" || true)"
     fi
 
-    [[ -n "$url" ]] || atm_fail "No URL configured for $vendor_display $version. Use --url <tar.gz-url>."
+    [[ -n "$url" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_URL_NOT_CONFIGURED)" "$vendor_display" "$version")"
 
     cache_file="$(atm_java_cache_file "$vendor" "$version" "$url")"
     dest="$(atm_java_install_dir "$vendor" "$version")"
@@ -333,14 +333,14 @@ atm_java_install() {
         atm_download_file "$url" "$cache_file"
 
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-            printf 'DRY-RUN: install Java %s %s into %s\n' "$vendor_display" "$version" "$dest"
+            printf "$(atm_t ATM_PLUGIN_JAVA_DRY_INSTALL)\n" "$vendor_display" "$version" "$dest"
         else
             atm_java_extract_to_dest "$cache_file" "$dest"
         fi
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_java_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_JAVA_DRY_RUN)" "$dest" "$(atm_java_current_path)"
     else
         ln -sfn "$dest" "$(atm_java_current_path)"
     fi
@@ -358,18 +358,18 @@ atm_java_use() {
     local target="${1:-}"
     local dest=""
 
-    [[ -n "$target" ]] || atm_fail "Usage: atm use java <vendor/version>"
+    [[ -n "$target" ]] || atm_fail "$(atm_t ATM_PLUGIN_JAVA_USE_USAGE)"
 
     if [[ "$target" != */* ]]; then
-        atm_fail "Use format: atm use java <vendor/version>, example: atm use java openjdk/26.0.1"
+        atm_fail "$(atm_t ATM_PLUGIN_JAVA_USE_FORMAT)"
     fi
 
     dest="$(atm_java_install_root)/$target"
 
-    [[ -x "$dest/bin/java" ]] || atm_fail "Java version is not installed: $target"
+    [[ -x "$dest/bin/java" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_VERSION_NOT_INSTALLED)" "$target")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_java_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_JAVA_DRY_RUN)" "$dest" "$(atm_java_current_path)"
     else
         ln -sfn "$dest" "$(atm_java_current_path)"
     fi
@@ -384,23 +384,23 @@ atm_java_remove() {
     local dest=""
     local current_version=""
 
-    [[ -n "$target" ]] || atm_fail "Usage: atm remove java <vendor/version>"
+    [[ -n "$target" ]] || atm_fail "$(atm_t ATM_PLUGIN_JAVA_REMOVE_USAGE)"
 
     if [[ "$target" != */* ]]; then
-        atm_fail "Use format: atm remove java <vendor/version>, example: atm remove java openjdk/26.0.1"
+        atm_fail "$(atm_t ATM_PLUGIN_JAVA_REMOVE_FORMAT)"
     fi
 
     dest="$(atm_java_install_root)/$target"
     current_version="$(atm_java_current_version 2>/dev/null || true)"
 
-    [[ -d "$dest" ]] || atm_fail "Java version is not installed: $target"
+    [[ -d "$dest" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_VERSION_NOT_INSTALLED)" "$target")"
 
     if [[ "$current_version" == "$target" ]]; then
-        atm_fail "Cannot remove current Java version: $target. Switch version first with: atm use java <other-version>"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_JAVA_CANNOT_REMOVE_CURRENT)" "$target")"
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$dest"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_JAVA_DRY_RUN)" "$dest"
     else
         rm -rf "$dest"
     fi
@@ -417,8 +417,8 @@ atm_java_uninstall() {
     root="$(atm_java_install_root)"
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_JAVA_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_JAVA_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_JAVA_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -431,8 +431,8 @@ atm_java_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_java_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_JAVA_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_JAVA_DRY_RUN)" "$(atm_java_manifest_file)"
     else
         rm -rf "$root"
         rm -f "$(atm_java_manifest_file)"
@@ -456,7 +456,7 @@ atm_java_menu_install_custom_url() {
 
     printf '%s ' "$(atm_t ATM_PLUGIN_JAVA_ENTER_URL)"
     read -r url
-    [[ -n "$url" ]] || atm_fail "URL is required."
+    [[ -n "$url" ]] || atm_fail "$(atm_t ATM_PLUGIN_JAVA_URL_REQUIRED)"
 
     atm_java_install --vendor custom --version "$version" --url "$url"
 }

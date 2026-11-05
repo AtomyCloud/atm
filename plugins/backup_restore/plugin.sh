@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 
 # English defaults precede the selected plugin locale loaded by the core.
-source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
+if [[ -z "${ATM_PLUGIN_BACKUP_RESTORE_TITLE+x}" ]]; then
+    source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
+fi
 
 atm_backup_restore_state() {
     atm_require_commands python3
-    PYTHONDONTWRITEBYTECODE=1 python3 "${BASH_SOURCE[0]%/*}/state.py" "$@" \
+    ATM_LANG="${ATM_LANG:-en-us}" PYTHONDONTWRITEBYTECODE=1 python3 -B "${BASH_SOURCE[0]%/*}/state.py" "$@" \
         --home "$ATM_BACKUP_RESTORE_HOME" --excludes "$ATM_BACKUP_RESTORE_EXCLUDES" \
         --home-base "$ATM_BACKUP_RESTORE_HOME_BASE" --media-root "$ATM_BACKUP_RESTORE_MEDIA_ROOT" \
         --mountinfo "$ATM_BACKUP_RESTORE_MOUNTINFO"

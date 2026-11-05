@@ -6,6 +6,12 @@ import shutil
 import stat
 import subprocess
 import tempfile
+import sys
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
 
 from state import absolute, inside, no_links, stamp, validate_device
 
@@ -18,7 +24,7 @@ def measure(home):
     source = absolute(home) / "Apps"
     no_links(source)
     if not source.is_dir():
-        raise ValueError(f"Apps directory not found: {source}")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_APPS_NOT_FOUND', source=source))
     size = 0
     entries = 0
     tar_bytes = 10240
@@ -34,12 +40,12 @@ def measure(home):
             parts = path.relative_to(source).parts
             folder = parts[0] if parts else "Apps"
             hint = "VS Code" if folder.lower() in ("vscode", "code", "visual-studio-code") else folder
-            message += f"; app folder: {hint!r}; path: {str(path)!r}"
+            message += tr("ATM_PLUGIN_BACKUP_RESTORE_APP_PATH_DETAIL", hint=hint, path=str(path))
         blockers.append(message)
 
     for command in ("tar", "gzip"):
         if not shutil.which(command):
-            block(f"Required command not found: {command}")
+            block(tr('ATM_PLUGIN_BACKUP_RESTORE_COMMAND_NOT_FOUND', command=command))
     pending = [source]
     while pending:
         path = pending.pop()
@@ -50,32 +56,30 @@ def measure(home):
             tar_bytes += 4096 + 4 * len(os.fsencode(str(path)))
             if stat.S_ISREG(info.st_mode):
                 if not os.access(path, os.R_OK):
-                    block("Unreadable file: review its permissions", path)
+                    block(tr('ATM_PLUGIN_BACKUP_RESTORE_UNREADABLE_FILE'), path)
                 size += info.st_size
                 tar_bytes += ((info.st_size + 511) // 512) * 512
             elif stat.S_ISDIR(info.st_mode):
                 if not os.access(path, os.R_OK | os.X_OK):
-                    block("Unreadable directory: review its permissions", path)
+                    block(tr('ATM_PLUGIN_BACKUP_RESTORE_UNREADABLE_DIRECTORY'), path)
                     continue
                 with os.scandir(path) as children:
                     pending.extend(Path(child.path) for child in children)
             elif stat.S_ISLNK(info.st_mode):
                 tar_bytes += 4 * len(os.fsencode(os.readlink(path)))
             else:
-                kind = "socket" if stat.S_ISSOCK(info.st_mode) else "FIFO" if stat.S_ISFIFO(info.st_mode) else "device"
-                block(f"Unsupported special file ({kind})", path)
+                kind = (tr("ATM_PLUGIN_BACKUP_RESTORE_FILE_KIND_SOCKET") if stat.S_ISSOCK(info.st_mode)
+                        else tr("ATM_PLUGIN_BACKUP_RESTORE_FILE_KIND_FIFO") if stat.S_ISFIFO(info.st_mode)
+                        else tr("ATM_PLUGIN_BACKUP_RESTORE_FILE_KIND_DEVICE"))
+                block(tr('ATM_PLUGIN_BACKUP_RESTORE_SPECIAL_FILE_BLOCKED', kind=kind), path)
         except OSError as error:
-            block(f"Cannot inspect entry: {error.strerror or str(error)}", path)
+            block(tr('ATM_PLUGIN_BACKUP_RESTORE_INSPECTION_FAILED', error=error.strerror or str(error)), path)
     if blocker_count:
         details = "\n".join(f"  - {item}" for item in blockers)
         if blocker_count > len(blockers):
-            details += f"\n  ... {blocker_count - len(blockers)} more issues (report limited to 50)."
+            details += "\n" + tr("ATM_PLUGIN_BACKUP_RESTORE_MORE_ISSUES", remaining=blocker_count - len(blockers))
         raise ValueError(
-            f"Apps preflight blocked: {blocker_count} issue(s). No backup started.\n{details}\n"
-            "Close the listed applications normally (VS Code: File > Exit), fix access/dependency issues, "
-            "then recheck. App names are inferred from folders, not running-process detection.\n"
-            "Sockets may be stale even after an application exits; investigate remaining paths. "
-            "ATM will not delete them or terminate applications. No files are silently skipped.")
+            tr('ATM_PLUGIN_BACKUP_RESTORE_PREFLIGHT_BLOCKED', blocker_count=blocker_count, details=details, newline='\n'))
     # Incompressible/sparse files must fit too; never assume a compression ratio.
     required = tar_bytes + (tar_bytes + 99) // 100 + 16 * 1024 * 1024
     return {"source": str(source), "source_bytes": size, "source_size": readable(size),
@@ -85,8 +89,7 @@ def measure(home):
 def capacity(destination, required):
     free = shutil.disk_usage(destination).free
     if free < required:
-        raise ValueError(f"Not enough space: required {readable(required)}, available {readable(free)} "
-                         f"at {destination}. No successful archive created.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INSUFFICIENT_SPACE', required=readable(required), free=readable(free), destination=destination))
     return free
 
 
@@ -94,13 +97,13 @@ def backup(home, destination, media_root, mountinfo, mount_id=None, dry_run=Fals
     plan = measure(home)
     source = Path(plan["source"])
     if not destination:
-        raise ValueError("Choose a mounted device or an existing directory outside ~/Apps.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_APPS_DESTINATION_REQUIRED'))
     destination = absolute(destination)
     no_links(destination)
     if inside(destination, source):
-        raise ValueError("Backup destination must be outside ~/Apps, including ~/Apps/Backups.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_APPS_DESTINATION_OVERLAP'))
     if not destination.is_dir():
-        raise ValueError("Backup destination must be an existing directory.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_EXISTING_DESTINATION_REQUIRED'))
     selected = validate_device(destination, media_root, mountinfo, mount_id)
     plan.update(destination=str(destination), dry_run=dry_run,
                 available_bytes=capacity(destination, plan["required_bytes"]))
@@ -130,7 +133,7 @@ def backup(home, destination, media_root, mountinfo, mount_id=None, dry_run=Fals
                 env=environment, check=False)
             if result.returncode:
                 detail = result.stderr.decode(errors="replace").strip()
-                raise OSError(f"tar failed ({result.returncode}); backup not published: {detail}")
+                raise OSError(tr('ATM_PLUGIN_BACKUP_RESTORE_TAR_FAILED', returncode=result.returncode, detail=detail))
             stream.flush()
             os.fsync(stream.fileno())
         validate_device(destination, media_root, mountinfo, selected)

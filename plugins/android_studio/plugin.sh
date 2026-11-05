@@ -73,7 +73,7 @@ atm_android_studio_normalize_version() {
     if [[ "$version" =~ ^[0-9]{4}\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         printf '%s\n' "$version"
     else
-        atm_fail "Invalid Android Studio version: $version. Expected format: 2025.3.4.6"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_INVALID_VERSION)" "$version")"
     fi
 }
 
@@ -113,7 +113,7 @@ atm_android_studio_version_from_args() {
         case "$1" in
             --id)
                 id="${2:-}"
-                [[ -n "$id" ]] || atm_fail "Missing value for --id"
+                [[ -n "$id" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_MISSING_VALUE)" "--id")"
                 shift
                 ;;
             --id=*)
@@ -121,7 +121,7 @@ atm_android_studio_version_from_args() {
                 ;;
             --name)
                 name="${2:-}"
-                [[ -n "$name" ]] || atm_fail "Missing value for --name"
+                [[ -n "$name" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_MISSING_VALUE)" "--name")"
                 shift
                 ;;
             --name=*)
@@ -129,7 +129,7 @@ atm_android_studio_version_from_args() {
                 ;;
             --version)
                 version="${2:-}"
-                [[ -n "$version" ]] || atm_fail "Missing value for --version"
+                [[ -n "$version" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_MISSING_VALUE)" "--version")"
                 shift
                 ;;
             --version=*)
@@ -137,7 +137,7 @@ atm_android_studio_version_from_args() {
                 ;;
             --package)
                 package="${2:-}"
-                [[ -n "$package" ]] || atm_fail "Missing value for --package"
+                [[ -n "$package" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_MISSING_VALUE)" "--package")"
                 shift
                 ;;
             --package=*)
@@ -145,7 +145,7 @@ atm_android_studio_version_from_args() {
                 ;;
             --url)
                 url="${2:-}"
-                [[ -n "$url" ]] || atm_fail "Missing value for --url"
+                [[ -n "$url" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_MISSING_VALUE)" "--url")"
                 shift
                 ;;
             --url=*)
@@ -174,9 +174,9 @@ atm_android_studio_version_from_args() {
         url="$(atm_android_studio_option_url "$id")"
     fi
 
-    [[ -n "$name" ]] || atm_fail "Android Studio name is required."
-    [[ -n "$version" ]] || atm_fail "Android Studio version is required."
-    [[ -n "$package" ]] || atm_fail "Android Studio package filename is required."
+    [[ -n "$name" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_STUDIO_NAME_REQUIRED)"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_STUDIO_VERSION_REQUIRED)"
+    [[ -n "$package" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_PACKAGE_REQUIRED)"
 
     version="$(atm_android_studio_normalize_version "$version")"
 
@@ -416,7 +416,7 @@ atm_android_studio_write_meta() {
     local url="$6"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: write meta %s/.atm-meta\n' "$dest"
+        printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_META)\n" "$dest"
         return 0
     fi
 
@@ -461,7 +461,7 @@ atm_android_studio_create_desktop_entry() {
     desktop_file="$desktop_dir/$(atm_android_studio_desktop_file_name "$name" "$version")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: create desktop file %s\n' "$desktop_file"
+        printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_DESKTOP)\n" "$desktop_file"
         return 0
     fi
 
@@ -471,7 +471,8 @@ atm_android_studio_create_desktop_entry() {
 [Desktop Entry]
 Type=Application
 Name=$name
-Comment=Android Studio installed by ATM
+Comment=$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DESKTOP_COMMENT)
+GenericName=$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DESKTOP_GENERIC_NAME)
 Exec=$current_path/bin/studio.sh
 Icon=$current_path/bin/studio.png
 Terminal=false
@@ -507,7 +508,7 @@ atm_android_studio_install() {
     package="${spec%%|*}"
     url="${spec#*|}"
 
-    [[ -n "$url" ]] || atm_fail "No URL configured for $name $version. Use --url <android-studio-linux.tar.gz-url>."
+    [[ -n "$url" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_NO_URL)" "$name" "$version")"
 
     cache_file="$(atm_android_studio_cache_file "$package")"
     dest="$(atm_android_studio_install_dir "$name" "$version")"
@@ -524,7 +525,7 @@ atm_android_studio_install() {
         atm_download_file "$url" "$cache_file"
 
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-            printf 'DRY-RUN: install %s into %s\n' "$name" "$dest"
+            printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_INSTALL)\n" "$name" "$dest"
         else
             atm_archive_extract_tar_gz "$cache_file" "$dest" 1
         fi
@@ -533,7 +534,7 @@ atm_android_studio_install() {
     atm_android_studio_write_meta "$dest" "$id" "$name" "$version" "$package" "$url"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_android_studio_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_RUN)" "$dest" "$(atm_android_studio_current_path)"
     else
         ln -sfn "$dest" "$(atm_android_studio_current_path)"
     fi
@@ -554,10 +555,10 @@ atm_android_studio_use() {
     local name=""
     local current_label=""
 
-    [[ -n "$target" ]] || atm_fail "Usage: atm use android_studio <id/version>"
+    [[ -n "$target" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_USE_USAGE)"
 
     if [[ "$target" != */* ]]; then
-        atm_fail "Use format: atm use android_studio <id/version>, example: atm use android_studio panda4/2025.3.4.6"
+        atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_USE_FORMAT)"
     fi
 
     id="${target%%/*}"
@@ -579,7 +580,7 @@ atm_android_studio_use() {
             current_label="$id/$version"
 
             if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-                printf 'DRY-RUN: ln -sfn %s %s\n' "$path" "$(atm_android_studio_current_path)"
+                printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_RUN)" "$path" "$(atm_android_studio_current_path)"
             else
                 ln -sfn "$path" "$(atm_android_studio_current_path)"
             fi
@@ -592,7 +593,7 @@ atm_android_studio_use() {
         fi
     done
 
-    atm_fail "Android Studio version is not installed: $target"
+    atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_VERSION_NOT_INSTALLED)" "$target")"
 }
 
 atm_android_studio_remove() {
@@ -604,10 +605,10 @@ atm_android_studio_remove() {
     local version=""
     local current_label=""
 
-    [[ -n "$target" ]] || atm_fail "Usage: atm remove android_studio <id/version>"
+    [[ -n "$target" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_REMOVE_USAGE)"
 
     if [[ "$target" != */* ]]; then
-        atm_fail "Use format: atm remove android_studio <id/version>, example: atm remove android_studio panda4/2025.3.4.6"
+        atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_REMOVE_FORMAT)"
     fi
 
     id="${target%%/*}"
@@ -616,7 +617,7 @@ atm_android_studio_remove() {
     root="$(atm_android_studio_install_root)"
 
     if [[ "$current_label" == "$target" ]]; then
-        atm_fail "Cannot remove current Android Studio version: $target. Switch version first with: atm use android_studio <other-version>"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_REMOVE_CURRENT)" "$target")"
     fi
 
     for path in "$root"/studio_*; do
@@ -629,7 +630,7 @@ atm_android_studio_remove() {
 
         if [[ "${ATM_ANDROID_STUDIO_ID:-}" == "$id" && "${ATM_ANDROID_STUDIO_VERSION:-}" == "$version" ]]; then
             if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-                printf 'DRY-RUN: rm -rf %s\n' "$path"
+                printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_RUN)" "$path"
             else
                 rm -rf "$path"
             fi
@@ -640,7 +641,7 @@ atm_android_studio_remove() {
         fi
     done
 
-    atm_fail "Android Studio version is not installed: $target"
+    atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_VERSION_NOT_INSTALLED)" "$target")"
 }
 
 atm_android_studio_uninstall() {
@@ -650,8 +651,8 @@ atm_android_studio_uninstall() {
     root="$(atm_android_studio_install_root)"
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -664,8 +665,8 @@ atm_android_studio_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_android_studio_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_DRY_RUN)" "$(atm_android_studio_manifest_file)"
     else
         rm -rf "$root"
         rm -f "$(atm_android_studio_manifest_file)"
@@ -682,11 +683,11 @@ atm_android_studio_menu_install_custom_url() {
 
     printf '%s ' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_ENTER_NAME)"
     read -r name
-    [[ -n "$name" ]] || atm_fail "Name is required."
+    [[ -n "$name" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_NAME_REQUIRED)"
 
     printf '%s ' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_ENTER_VERSION)"
     read -r version
-    [[ -n "$version" ]] || atm_fail "Version is required."
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_VERSION_REQUIRED)"
 
     printf '%s ' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_ENTER_PACKAGE)"
     read -r package
@@ -694,7 +695,7 @@ atm_android_studio_menu_install_custom_url() {
 
     printf '%s ' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_ENTER_URL)"
     read -r url
-    [[ -n "$url" ]] || atm_fail "URL is required."
+    [[ -n "$url" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_URL_MISSING)"
 
     atm_android_studio_install \
         --id custom \
@@ -720,7 +721,7 @@ atm_android_studio_menu() {
         printf '    🤖 %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_MENU_TITLE)"
         printf '%s\n' "=========================================="
         printf '%s: %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_CURRENT)" "$(atm_android_studio_status)"
-        printf '%s: %s\n' "Install root" "$(atm_android_studio_install_root)"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_ANDROID_STUDIO_INSTALL_ROOT)" "$(atm_android_studio_install_root)"
         printf '%s\n' "------------------------------------------"
 
         idx=1

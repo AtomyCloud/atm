@@ -608,13 +608,52 @@ Rules:
 
 ## 10. Locales For A Plugin
 
-The active locale is loaded from:
+The loader first loads `lang/en-us.lang`, then overlays the active locale from:
 
 ```text
 plugins/<plugin_id>/lang/<ATM_LANG>.lang
 ```
 
-If the file does not exist, plugin-specific keys will be missing. For release, create every supported locale.
+Missing optional locales/keys fall back to English. For release, provide every
+supported locale with the same key set and actual translations, not English copies.
+Use `ATM_PLUGIN_<ID>_*` keys for menus, prompts, errors, status, help and explanatory
+dry-run text. Product names, URLs, executable commands and machine-readable
+JSON/TSV identifiers must remain unchanged. Do not translate values consumed by
+another program as protocol data.
+
+Define `ATM_PLUGIN_<ID>_NAME` and `ATM_PLUGIN_<ID>_DESCRIPTION` to localize plugin
+names/descriptions in ATM's lists; metadata values remain compatibility fallbacks.
+Keep locale assignments literal, quoted and on a single line. Preserve printf
+format specifiers and Python named placeholders in every translation. Never put
+shell commands or variable expansion into a locale value.
+
+For Bash, use `atm_t` and pass runtime data separately:
+
+```bash
+# lang/en-us.lang: ATM_PLUGIN_EXAMPLE_TOOL_TARGET="Target: %s"
+printf "$(atm_t ATM_PLUGIN_EXAMPLE_TOOL_TARGET)\n" "$destination"
+```
+
+Python helpers can use the shared non-executing locale reader. The CORE exports
+the selected `ATM_LANG` to child processes; standalone helpers default to English.
+
+```python
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
+# lang/en-us.lang: ATM_PLUGIN_EXAMPLE_TOOL_MISSING="File not found: {path}"
+raise ValueError(tr("ATM_PLUGIN_EXAMPLE_TOOL_MISSING", path=destination))
+```
+
+The Python reader treats locale values as literal text, never shell-sources them,
+and falls back to English for unavailable optional locales or invalid translated
+format fields. Package helpers together with the matching CORE locale support.
+Low-level messages from external commands/operating systems may retain their own
+language; translate ATM's surrounding explanation without rewriting their output.
 
 Supported release locales:
 
@@ -636,6 +675,7 @@ Validate locale files:
 
 ```bash
 find plugins/<plugin_id>/lang -name '*.lang' -print -exec bash -n {} \;
+python3 -B -m unittest discover -s tests -p 'test_plugin_i18n.py'
 ```
 
 ## 11. Validation Checklist

@@ -27,7 +27,7 @@ atm_zsh_run_elevated() {
 atm_zsh_state() {
     local action="$1"
     shift
-    python3 "${BASH_SOURCE[0]%/*}/state.py" "$action" \
+    ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/state.py" "$action" \
         --home "$ATM_ZSH_USER_HOME" --dot-dir "$ATM_ZSH_DOT_DIR" \
         --omz "$ATM_ZSH_OMZ_DIR" --custom "$ATM_ZSH_CUSTOM_DIR" \
         --backups "$ATM_ZSH_BACKUP_DIR" "$@"
@@ -89,7 +89,7 @@ atm_zsh_backup() {
     local archive=""
     atm_zsh_require_user
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: %s (%s)\n' "$(atm_t ATM_PLUGIN_ZSH_BACKUP_PLAN)" "$ATM_ZSH_BACKUP_DIR"
+        printf "$(atm_t ATM_PLUGIN_ZSH_DRY_RUN)\n" "$(atm_t ATM_PLUGIN_ZSH_BACKUP_PLAN)" "$ATM_ZSH_BACKUP_DIR"
         return 0
     fi
     atm_require_commands python3
@@ -264,7 +264,7 @@ atm_zsh_restore() {
     fi
     atm_zsh_confirm "$(atm_t ATM_PLUGIN_ZSH_RESTORE_WARNING)" || return 0
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: %s (%s)\n' "$(atm_t ATM_PLUGIN_ZSH_RESTORE_PLAN)" "$archive"
+        printf "$(atm_t ATM_PLUGIN_ZSH_DRY_RUN)\n" "$(atm_t ATM_PLUGIN_ZSH_RESTORE_PLAN)" "$archive"
         return 0
     fi
     atm_require_commands python3

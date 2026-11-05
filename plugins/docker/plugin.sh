@@ -20,7 +20,7 @@ atm_docker_run_elevated() {
     local command_text="$1"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: %s\n' "$command_text"
+        printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DRY_RUN)" "$command_text"
         return 0
     fi
 
@@ -79,7 +79,7 @@ atm_docker_desktop_releases() {
 
     if [[ "${ATM_DRY_RUN:-0}" != "1" ]] && command -v curl >/dev/null 2>&1 && command -v python3 >/dev/null 2>&1; then
         if response="$(curl -fsSL --connect-timeout 5 --max-time 20 "$(atm_docker_desktop_release_notes_url)" 2>/dev/null)" \
-            && releases="$(python3 "$(atm_docker_desktop_helper)" releases <<< "$response")" \
+            && releases="$(ATM_LANG="${ATM_LANG:-en-us}" python3 "$(atm_docker_desktop_helper)" releases <<< "$response")" \
             && [[ -n "$releases" ]]; then
             printf '%s\n' "$releases"
             return 0
@@ -191,9 +191,9 @@ atm_docker_stop_running() {
 
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
         if [[ "$scope" == all ]]; then
-            printf 'DRY-RUN: %s\n' "$(atm_t ATM_PLUGIN_DOCKER_STOP_PLAN)"
+            printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DRY_RUN)" "$(atm_t ATM_PLUGIN_DOCKER_STOP_PLAN)"
         else
-            printf 'DRY-RUN: %s\n' "$(atm_t ATM_PLUGIN_DOCKER_STOP_DESKTOP_PLAN)"
+            printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DRY_RUN)" "$(atm_t ATM_PLUGIN_DOCKER_STOP_DESKTOP_PLAN)"
         fi
         return 0
     fi
@@ -268,7 +268,7 @@ atm_docker_setup_desktop_signin() {
     printf '%s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_SETUP)"
     printf '%s\n' 'https://docs.docker.com/desktop/setup/install/linux/#signing-in-with-docker-desktop-for-linux'
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_PLAN)"
+        printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DRY_RUN)" "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_SIGNIN_PLAN)"
         return 0
     fi
 
@@ -510,7 +510,7 @@ atm_docker_install_desktop() {
     printf '%s %s\n' "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_INSTALLING)" "$version"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: download %s to %s\n' "$deb_url" "$deb_file"
+        printf "$(atm_t ATM_PLUGIN_DOCKER_DOWNLOAD_PLAN)\n" "$deb_url" "$deb_file"
     else
         atm_require_commands curl apt-get dpkg-deb uname
         atm_download_file "$deb_url" "$deb_file"
@@ -564,7 +564,7 @@ atm_docker_uninstall_desktop() {
         atm_require_commands apt-get
         if [[ -f "$config_file" ]]; then
             atm_require_commands python3
-            python3 "$(atm_docker_desktop_helper)" check-config "$config_file" \
+            ATM_LANG="${ATM_LANG:-en-us}" python3 "$(atm_docker_desktop_helper)" check-config "$config_file" \
                 || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_CONFIG_FAILED)"
         fi
     fi
@@ -579,7 +579,7 @@ atm_docker_uninstall_desktop() {
         || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_UNINSTALL_FAILED)"
 
     if [[ -f "$config_file" || "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        atm_run python3 "$(atm_docker_desktop_helper)" clean-config "$config_file" \
+        ATM_LANG="${ATM_LANG:-en-us}" atm_run python3 "$(atm_docker_desktop_helper)" clean-config "$config_file" \
             || atm_fail "$(atm_t ATM_PLUGIN_DOCKER_DESKTOP_CONFIG_FAILED)"
     fi
 

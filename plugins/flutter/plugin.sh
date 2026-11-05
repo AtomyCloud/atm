@@ -49,7 +49,7 @@ atm_flutter_normalize_version() {
     if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+([-+][A-Za-z0-9._-]+)?$ ]]; then
         printf '%s\n' "$version"
     else
-        atm_fail "Invalid Flutter version: $version. Expected format: 3.41.8"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_FLUTTER_INVALID_VERSION)" "$version")"
     fi
 }
 
@@ -60,7 +60,7 @@ atm_flutter_version_from_args() {
         case "$1" in
             --version)
                 version="${2:-}"
-                [[ -n "$version" ]] || atm_fail "Missing value for --version"
+                [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_FLUTTER_MISSING_VERSION)"
                 shift
                 ;;
             --version=*)
@@ -162,7 +162,7 @@ atm_flutter_install() {
         atm_download_file "$url" "$cache_file"
 
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-            printf 'DRY-RUN: install Flutter %s into %s\n' "$version" "$dest"
+            printf "$(atm_t ATM_PLUGIN_FLUTTER_DRY_INSTALL)\n" "$version" "$dest"
         else
             tmp_extract="${dest}.tmp.$$"
             rm -rf "$tmp_extract"
@@ -170,7 +170,7 @@ atm_flutter_install() {
 
             tar -xJf "$cache_file" -C "$tmp_extract"
 
-            [[ -d "$tmp_extract/flutter" ]] || atm_fail "Unexpected Flutter archive structure: $cache_file"
+            [[ -d "$tmp_extract/flutter" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_FLUTTER_INVALID_ARCHIVE)" "$cache_file")"
 
             rm -rf "$dest"
             mv "$tmp_extract/flutter" "$dest"
@@ -179,7 +179,7 @@ atm_flutter_install() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_flutter_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_FLUTTER_DRY_RUN)" "$dest" "$(atm_flutter_current_path)"
     else
         ln -sfn "$dest" "$(atm_flutter_current_path)"
     fi
@@ -197,15 +197,15 @@ atm_flutter_use() {
     local version="${1:-}"
     local dest=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm use flutter <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_FLUTTER_USE_USAGE)"
 
     version="$(atm_flutter_normalize_version "$version")"
     dest="$(atm_flutter_install_dir "$version")"
 
-    [[ -x "$dest/bin/flutter" ]] || atm_fail "Flutter version is not installed: $version"
+    [[ -x "$dest/bin/flutter" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_FLUTTER_VERSION_NOT_INSTALLED)" "$version")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_flutter_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_FLUTTER_DRY_RUN)" "$dest" "$(atm_flutter_current_path)"
     else
         ln -sfn "$dest" "$(atm_flutter_current_path)"
     fi
@@ -220,20 +220,20 @@ atm_flutter_remove() {
     local dest=""
     local current_version=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm remove flutter <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_FLUTTER_REMOVE_USAGE)"
 
     version="$(atm_flutter_normalize_version "$version")"
     dest="$(atm_flutter_install_dir "$version")"
     current_version="$(atm_flutter_current_version 2>/dev/null || true)"
 
-    [[ -d "$dest" ]] || atm_fail "Flutter version is not installed: $version"
+    [[ -d "$dest" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_FLUTTER_VERSION_NOT_INSTALLED)" "$version")"
 
     if [[ "$current_version" == "$version" ]]; then
-        atm_fail "Cannot remove current Flutter version: $version. Switch version first with: atm use flutter <other-version>"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_FLUTTER_CANNOT_REMOVE_CURRENT)" "$version")"
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$dest"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_FLUTTER_DRY_RUN)" "$dest"
     else
         rm -rf "$dest"
     fi
@@ -248,8 +248,8 @@ atm_flutter_uninstall() {
     local answer=""
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_FLUTTER_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_FLUTTER_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_FLUTTER_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -262,8 +262,8 @@ atm_flutter_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_flutter_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_FLUTTER_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_FLUTTER_DRY_RUN)" "$(atm_flutter_manifest_file)"
     else
         rm -rf "$root"
         rm -f "$(atm_flutter_manifest_file)"

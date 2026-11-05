@@ -58,12 +58,26 @@ atm_plugin_enabled() {
     [[ "${!var:-1}" == "1" ]]
 }
 
+atm_plugin_reload_languages() {
+    local id="" prefix="" key=""
+    for id in "${ATM_PLUGIN_IDS[@]}"; do
+        atm_i18n_load_plugin_lang "$id"
+        prefix="ATM_PLUGIN_$(atm_plugin_upper_id "$id")"
+        key="${prefix}_NAME"
+        [[ -z "${!key:-}" ]] || ATM_PLUGIN_NAME["$id"]="${!key}"
+        key="${prefix}_DESCRIPTION"
+        [[ -z "${!key:-}" ]] || ATM_PLUGIN_DESCRIPTION["$id"]="${!key}"
+    done
+    return 0
+}
+
 atm_plugin_load_metadata() {
     local plugin_dir="$1"
     local metadata_file="$plugin_dir/plugin.metadata"
     local plugin_conf=""
     local plugin_sh=""
     local plugin_id=""
+    local name_key="" description_key="" locale_prefix=""
 
     [[ -f "$metadata_file" ]] || return 1
 
@@ -136,11 +150,14 @@ atm_plugin_load_metadata() {
 
     ATM_PLUGIN_IDS+=("$plugin_id")
 
-    ATM_PLUGIN_NAME["$plugin_id"]="${ATM_PLUGIN_NAME_VALUE:-$plugin_id}"
+    locale_prefix="ATM_PLUGIN_$(atm_plugin_upper_id "$plugin_id")"
+    name_key="${locale_prefix}_NAME"
+    description_key="${locale_prefix}_DESCRIPTION"
+    ATM_PLUGIN_NAME["$plugin_id"]="${!name_key:-${ATM_PLUGIN_NAME_VALUE:-$plugin_id}}"
     ATM_PLUGIN_ICON["$plugin_id"]="${ATM_PLUGIN_ICON_VALUE:-🔌}"
     ATM_PLUGIN_VERSION["$plugin_id"]="${ATM_PLUGIN_VERSION_VALUE:-0.0.0}"
     ATM_PLUGIN_ORDER["$plugin_id"]="${ATM_PLUGIN_ORDER_VALUE:-999}"
-    ATM_PLUGIN_DESCRIPTION["$plugin_id"]="${ATM_PLUGIN_DESCRIPTION_VALUE:-}"
+    ATM_PLUGIN_DESCRIPTION["$plugin_id"]="${!description_key:-${ATM_PLUGIN_DESCRIPTION_VALUE:-}}"
     ATM_PLUGIN_FULL_SETUP["$plugin_id"]="${ATM_PLUGIN_FULL_SETUP_VALUE:-0}"
     ATM_PLUGIN_DEPENDS["$plugin_id"]="${ATM_PLUGIN_DEPENDS_VALUE:-}"
     ATM_PLUGIN_OPTIONAL_DEPENDS["$plugin_id"]="${ATM_PLUGIN_OPTIONAL_DEPENDS_VALUE:-}"

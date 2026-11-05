@@ -4,7 +4,7 @@ source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
 
 atm_rea_manage() {
     command -v python3 >/dev/null 2>&1 || { atm_warn "$(atm_t ATM_PLUGIN_REA_PYTHON)"; return 1; }
-    ATM_APPS_DIR="$ATM_APPS_DIR" ATM_HOME="$ATM_HOME" python3 -B "${BASH_SOURCE[0]%/*}/manage.py" "$@"
+    ATM_APPS_DIR="$ATM_APPS_DIR" ATM_HOME="$ATM_HOME" ATM_LANG="${ATM_LANG:-en-us}" python3 -B "${BASH_SOURCE[0]%/*}/manage.py" "$@"
 }
 
 atm_rea_root() {
@@ -226,8 +226,9 @@ atm_rea_install() {
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
         [[ -n "$root" ]] || root="$(atm_rea_root)" || return 1
         atm_rea_dependencies
-        printf 'DRY-RUN: %s rea-agents@%s in %q (staged npm global prefix, engine-strict, ignore-scripts); update current and receipt/manifest\n' \
-            "$action" "$requested" "$root"
+        local plan=ATM_PLUGIN_REA_INSTALL_PLAN
+        [[ "$action" != update ]] || plan=ATM_PLUGIN_REA_UPDATE_PLAN
+        printf "$(atm_t "$plan")\n" "$requested" "$root"
         return 0
     fi
     old_root="$(atm_rea_root)" || return 1
@@ -255,7 +256,7 @@ atm_rea_uninstall() {
     local root="" version="" answer=""
     root="$(atm_rea_root)" || return 1
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: confirm removal of ATM-owned REA versions/launchers in %q; retain external programs, dependencies, settings and data\n' "$root"
+        printf "$(atm_t ATM_PLUGIN_REA_REMOVE_PLAN)\n" "$root"
         return 0
     fi
     version="$(atm_rea_manage version "$root")" || return 1

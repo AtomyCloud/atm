@@ -11,7 +11,7 @@ atm_ai_run_elevated() {
     local command_text="$1"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: %s\n' "$command_text"
+        printf '%s %s\n' "$(atm_t ATM_PLUGIN_AI_DRY_RUN)" "$command_text"
         return 0
     fi
 
@@ -273,7 +273,7 @@ atm_ai_install_hermes_agent() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: curl -fsSL %q | bash\n' "$install_url"
+        printf '%s curl -fsSL %q | bash\n' "$(atm_t ATM_PLUGIN_AI_DRY_RUN)" "$install_url"
     else
         curl -fsSL "$install_url" | bash
     fi
@@ -353,9 +353,9 @@ atm_ai_install_hermes_desktop_portable() {
 
 atm_ai_ollama_version_text() {
     if atm_ai_ollama_installed; then
-        ollama version 2>/dev/null || printf '%s\n' "unknown"
+        ollama version 2>/dev/null || printf '%s\n' "$(atm_t ATM_PLUGIN_AI_VERSION_UNKNOWN)"
     else
-        printf '%s\n' "not available in dry-run"
+        printf '%s\n' "$(atm_t ATM_PLUGIN_AI_VERSION_DRY_RUN)"
     fi
 }
 
@@ -366,15 +366,15 @@ atm_ai_print_ollama_usage() {
 
     cat <<EOF
 
-✅ Done! ollama Installed Successfully:
-  🆔 ollama version: $version
+✅ $(atm_t ATM_PLUGIN_AI_OLLAMA_INSTALLED):
+  🆔 $(atm_t ATM_PLUGIN_AI_OLLAMA_VERSION) $version
 
-To run ollama, use the following command:
-  #RUN: ollama run <model-name>
-  #Example: ollama run llama3
+$(atm_t ATM_PLUGIN_AI_OLLAMA_USAGE)
+  #$(atm_t ATM_PLUGIN_AI_OLLAMA_RUN): ollama run <model-name>
+  #$(atm_t ATM_PLUGIN_AI_OLLAMA_EXAMPLE): ollama run llama3
 
-  #PULL: ollama pull <model-name>
-  #Example: ollama pull llama3
+  #$(atm_t ATM_PLUGIN_AI_OLLAMA_PULL): ollama pull <model-name>
+  #$(atm_t ATM_PLUGIN_AI_OLLAMA_EXAMPLE): ollama pull llama3
 
 EOF
 }
@@ -395,7 +395,7 @@ atm_ai_install_ollama() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: curl -fsSL %q | sh\n' "$install_url"
+        printf '%s curl -fsSL %q | sh\n' "$(atm_t ATM_PLUGIN_AI_DRY_RUN)" "$install_url"
     else
         curl -fsSL "$install_url" | sh
     fi

@@ -10,7 +10,7 @@ atm_vscode_normalize_version() {
     elif [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         printf '%s\n' "$version"
     else
-        atm_fail "Invalid VS Code version: $version. Expected format: 1.118 or 1.118.0"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_VSCODE_INVALID_VERSION)" "$version")"
     fi
 }
 
@@ -74,7 +74,7 @@ atm_vscode_version_from_args() {
         case "$1" in
             --version)
                 version="${2:-}"
-                [[ -n "$version" ]] || atm_fail "Missing value for --version"
+                [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_VSCODE_MISSING_VERSION)"
                 shift
                 ;;
             --version=*)
@@ -241,7 +241,7 @@ atm_vscode_render_template() {
     local vscode_icon=""
     local short_version=""
 
-    [[ -f "$template_file" ]] || atm_fail "VS Code desktop template not found: $template_file"
+    [[ -f "$template_file" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_VSCODE_DESKTOP_TEMPLATE_MISSING)" "$template_file")"
 
     rendered_file="$(mktemp)"
     vscode_home="$(atm_vscode_resolved_install_dir "$version")"
@@ -277,7 +277,7 @@ atm_vscode_register_url_handler() {
     command -v xdg-mime >/dev/null 2>&1 || return 0
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: xdg-mime default %s x-scheme-handler/vscode\n' "$handler_file"
+        printf '%s: xdg-mime default %s x-scheme-handler/vscode\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$handler_file"
         return 0
     fi
 
@@ -375,8 +375,8 @@ atm_vscode_create_cli_link() {
     current_path="$(atm_vscode_current_path)"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: mkdir -p %s\n' "$(dirname "$cli_link")"
-        printf 'DRY-RUN: ln -sfn %s/bin/code %s\n' "$current_path" "$cli_link"
+        printf '%s: mkdir -p %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$(dirname "$cli_link")"
+        printf '%s: ln -sfn %s/bin/code %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$current_path" "$cli_link"
         return 0
     fi
 
@@ -408,7 +408,7 @@ atm_vscode_install_extensions() {
         [[ -z "${line// }" ]] && continue
 
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-            printf 'DRY-RUN: %s/bin/code --install-extension %s\n' "$dest" "$line"
+            printf '%s: %s/bin/code --install-extension %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$dest" "$line"
         else
             "$dest/bin/code" \
                 --user-data-dir "$dest/data" \
@@ -443,7 +443,7 @@ atm_vscode_install() {
         atm_download_file "$url" "$cache_file"
 
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-            printf 'DRY-RUN: install VS Code %s into %s\n' "$version" "$dest"
+            printf "$(atm_t ATM_PLUGIN_VSCODE_DRY_INSTALL)\n" "$version" "$dest"
         else
             atm_archive_extract_tar_gz "$cache_file" "$dest" 1
             mkdir -p "$dest/data" "$dest/data/extensions"
@@ -451,7 +451,7 @@ atm_vscode_install() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_vscode_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$dest" "$(atm_vscode_current_path)"
     else
         ln -sfn "$dest" "$(atm_vscode_current_path)"
     fi
@@ -472,16 +472,16 @@ atm_vscode_use() {
     local dest=""
     local short_version=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm use vscode <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_VSCODE_USE_USAGE)"
 
     version="$(atm_vscode_normalize_version "$version")"
     short_version="$(atm_vscode_short_version "$version")"
     dest="$(atm_vscode_install_dir "$version")"
 
-    [[ -x "$dest/bin/code" ]] || atm_fail "VS Code version is not installed: v$short_version"
+    [[ -x "$dest/bin/code" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_VSCODE_VERSION_NOT_INSTALLED)" "v$short_version")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_vscode_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$dest" "$(atm_vscode_current_path)"
     else
         ln -sfn "$dest" "$(atm_vscode_current_path)"
     fi
@@ -502,21 +502,21 @@ atm_vscode_remove() {
     local current_version=""
     local short_version=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm remove vscode <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_VSCODE_REMOVE_USAGE)"
 
     version="$(atm_vscode_normalize_version "$version")"
     short_version="$(atm_vscode_short_version "$version")"
     dest="$(atm_vscode_install_dir "$version")"
     current_version="$(atm_vscode_current_version 2>/dev/null || true)"
 
-    [[ -d "$dest" ]] || atm_fail "VS Code version is not installed: v$short_version"
+    [[ -d "$dest" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_VSCODE_VERSION_NOT_INSTALLED)" "v$short_version")"
 
     if [[ "$current_version" == "$version" ]]; then
-        atm_fail "Cannot remove current VS Code version: v$short_version. Switch version first with: atm use vscode <other-version>"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_VSCODE_CANNOT_REMOVE_CURRENT)" "v$short_version")"
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$dest"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$dest"
     else
         rm -rf "$dest"
     fi
@@ -537,8 +537,8 @@ atm_vscode_uninstall() {
     local version=""
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_VSCODE_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_VSCODE_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_VSCODE_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -551,9 +551,9 @@ atm_vscode_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$cli_link"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_vscode_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$cli_link"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_VSCODE_DRY_RUN)" "$(atm_vscode_manifest_file)"
     else
         for version in $(atm_vscode_list_installed_versions); do
             atm_vscode_remove_desktop_entry "$version"
@@ -587,10 +587,10 @@ atm_vscode_migrate_data() {
     target_data="$(atm_vscode_install_dir "$target_version")/data"
 
     [[ -d "$source_data" ]] || atm_fail "$(atm_t ATM_PLUGIN_VSCODE_MIGRATE_SOURCE_MISSING): $source_data"
-    [[ -d "$(atm_vscode_install_dir "$target_version")" ]] || atm_fail "VS Code version is not installed: v$(atm_vscode_short_version "$target_version")"
+    [[ -d "$(atm_vscode_install_dir "$target_version")" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_VSCODE_VERSION_NOT_INSTALLED)" "v$(atm_vscode_short_version "$target_version")")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf "DRY-RUN: migrate VS Code data from %s to %s\n" "$source_data" "$target_data"
+        printf "$(atm_t ATM_PLUGIN_VSCODE_DRY_MIGRATE)\n" "$source_data" "$target_data"
         return 0
     fi
 

@@ -1,7 +1,27 @@
 [Desktop Entry]
 Name=Android Studio Panda 4
 Comment=Android Studio installed by ATM
+Comment[pt_BR]=Android Studio instalado pelo ATM
+Comment[pt_PT]=Android Studio instalado pelo ATM
+Comment[es]=Android Studio instalado por ATM
+Comment[it]=Android Studio installato da ATM
+Comment[fr]=Android Studio installé par ATM
+Comment[de]=Android Studio, installiert von ATM
+Comment[ru]=Android Studio установлен через ATM
+Comment[ja]=ATM によりインストールされた Android Studio
+Comment[zh_CN]=由 ATM 安装的 Android Studio
+Comment[ko]=ATM으로 설치한 Android Studio
 GenericName=Android IDE
+GenericName[pt_BR]=IDE para Android
+GenericName[pt_PT]=IDE para Android
+GenericName[es]=IDE para Android
+GenericName[it]=IDE per Android
+GenericName[fr]=EDI pour Android
+GenericName[de]=Android-Entwicklungsumgebung
+GenericName[ru]=Среда разработки Android
+GenericName[ja]=Android 統合開発環境
+GenericName[zh_CN]=Android 集成开发环境
+GenericName[ko]=Android 통합 개발 환경
 Exec=/home/php/Apps/AndroidStudio/current/bin/studio
 Icon=/home/php/Apps/AndroidStudio/current/bin/studio.png
 Type=Application

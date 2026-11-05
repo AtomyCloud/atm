@@ -11,22 +11,27 @@ import tempfile
 import uuid
 
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
+
 MAGIC = "atm-rea-root-v1\n"
 VERSION = re.compile(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\Z")
 
 
 def version(value):
     if not isinstance(value, str) or not VERSION.fullmatch(value):
-        raise ValueError("Expected an exact stable X.Y.Z version")
+        raise ValueError(tr("ATM_PLUGIN_REA_EXACT_VERSION"))
     return value
 
 
 def regular_json(path):
     if path.is_symlink() or not path.is_file():
-        raise ValueError("Expected a regular JSON file: " + str(path))
+        raise ValueError(tr("ATM_PLUGIN_REA_REGULAR_JSON", path=str(path)))
     data = json.loads(path.read_text())
     if not isinstance(data, dict):
-        raise ValueError("Expected a JSON object: " + str(path))
+        raise ValueError(tr("ATM_PLUGIN_REA_JSON_OBJECT", path=str(path)))
     return data
 
 
@@ -35,18 +40,18 @@ def root_path(value):
     def unsafe(text):
         return any(ord(c) < 32 or ord(c) == 127 or c in ':"$`\\' for c in text)
     if not path.is_absolute() or unsafe(value):
-        raise ValueError("Use an absolute path without control characters, colons or shell-expansion characters")
+        raise ValueError(tr("ATM_PLUGIN_REA_ABSOLUTE_PATH"))
     if path.is_symlink():
-        raise ValueError("The REA root cannot be a symlink")
+        raise ValueError(tr("ATM_PLUGIN_REA_ROOT_SYMLINK"))
     path = path.resolve()
     if unsafe(str(path)):
-        raise ValueError("Resolved path contains shell-expansion characters")
+        raise ValueError(tr("ATM_PLUGIN_REA_RESOLVED_PATH"))
     forbidden = {Path("/"), Path.home().resolve(), Path("/usr"), Path("/usr/local"),
                  Path("/etc"), Path("/var"), Path("/opt"), Path("/tmp"), Path("/home"),
                  Path(os.environ.get("ATM_APPS_DIR", str(Path.home() / "Apps"))).resolve(),
                  Path(os.environ.get("ATM_HOME", str(Path.home() / "Apps/atm"))).resolve()}
     if path in forbidden:
-        raise ValueError("Choose a dedicated REA subdirectory")
+        raise ValueError(tr("ATM_PLUGIN_REA_DEDICATED_ROOT"))
     return path
 
 
@@ -57,7 +62,7 @@ def owned_root(root):
 
 def child_dir(path):
     if path.is_symlink() or (path.exists() and not path.is_dir()):
-        raise ValueError("Unsafe managed directory: " + str(path))
+        raise ValueError(tr("ATM_PLUGIN_REA_UNSAFE_DIRECTORY", path=str(path)))
 
 
 def managed(root, selected):
@@ -68,10 +73,10 @@ def managed(root, selected):
     data = regular_json(prefix / ".atm-rea-version.json")
     package = regular_json(prefix / "lib/node_modules/rea-agents/package.json")
     if data.get("version") != selected or package.get("name") != "rea-agents" or package.get("version") != selected:
-        raise ValueError("REA package/ownership mismatch")
+        raise ValueError(tr("ATM_PLUGIN_REA_OWNERSHIP_MISMATCH"))
     launcher = prefix / "bin/rea"
     if launcher.is_symlink() or not launcher.is_file():
-        raise ValueError("Missing owned REA launcher")
+        raise ValueError(tr("ATM_PLUGIN_REA_MISSING_LAUNCHER"))
     return prefix
 
 
@@ -82,10 +87,10 @@ def current_version(root):
     if not current.exists() and not current.is_symlink():
         return ""
     if not current.is_symlink():
-        raise ValueError("Refusing an unmanaged current entry")
+        raise ValueError(tr("ATM_PLUGIN_REA_FOREIGN_CURRENT"))
     target = os.readlink(current)
     if not target.startswith("versions/"):
-        raise ValueError("Unmanaged current link")
+        raise ValueError(tr("ATM_PLUGIN_REA_CURRENT_LINK"))
     selected = target[len("versions/"):]
     managed(root, selected)
     return selected
@@ -113,14 +118,14 @@ def read_state(state):
         return None
     data = regular_json(state)
     if data.get("schema") != 1 or not isinstance(data.get("root"), str):
-        raise ValueError("Invalid REA receipt; inspect it before continuing")
+        raise ValueError(tr("ATM_PLUGIN_REA_INVALID_RECEIPT"))
     root_path(data["root"])
     return data
 
 
 def atomic_json(path, data):
     if path.is_symlink():
-        raise ValueError("Refusing a linked state file")
+        raise ValueError(tr("ATM_PLUGIN_REA_LINKED_STATE"))
     path.parent.mkdir(parents=True, exist_ok=True)
     fd, temporary = tempfile.mkstemp(prefix=".rea-", dir=path.parent)
     try:
@@ -139,14 +144,14 @@ def check_entries(root):
     current_version(root)
     entry = root / "bin/rea"
     if (entry.exists() or entry.is_symlink()) and (not entry.is_symlink() or os.readlink(entry) != "../current/bin/rea"):
-        raise ValueError("Refusing to replace a foreign rea entry")
+        raise ValueError(tr("ATM_PLUGIN_REA_FOREIGN_ENTRY"))
 
 
 def begin(root):
     if root.exists():
         child_dir(root)
         if not owned_root(root) and any(root.iterdir()):
-            raise ValueError("Destination is not empty or owned by ATM REA")
+            raise ValueError(tr("ATM_PLUGIN_REA_DESTINATION_NOT_EMPTY"))
     else:
         root.mkdir(parents=True)
     if not owned_root(root):
@@ -163,7 +168,7 @@ def begin(root):
 def finish(root):
     lock = root / ".atm-rea-lock"
     if not owned_root(root):
-        raise ValueError("Unknown root")
+        raise ValueError(tr("ATM_PLUGIN_REA_UNKNOWN_ROOT"))
     child_dir(lock)
     if lock.exists():
         shutil.rmtree(lock)
@@ -187,9 +192,9 @@ def activate(root, state, selected, node):
     node = Path(node)
     script = prefix / "lib/node_modules/rea-agents/scripts/rea.mjs"
     if not node.is_absolute() or not os.access(node, os.X_OK) or not script.is_file() or script.is_symlink():
-        raise ValueError("Missing selected Node or REA entrypoint")
+        raise ValueError(tr("ATM_PLUGIN_REA_MISSING_ENTRYPOINT"))
     if prefix.resolve() not in script.resolve().parents:
-        raise ValueError("Package entrypoint escapes prefix")
+        raise ValueError(tr("ATM_PLUGIN_REA_ESCAPING_ENTRYPOINT"))
     write_launcher(prefix / "bin/rea", node, script)
     atomic_json(prefix / ".atm-rea-version.json", {"version": selected, "node": str(node)})
     (root / "bin").mkdir(exist_ok=True)
@@ -208,24 +213,24 @@ def activate(root, state, selected, node):
 
 def publish(root, state, selected, node):
     if not owned_root(root):
-        raise ValueError("Unknown REA root")
+        raise ValueError(tr("ATM_PLUGIN_REA_UNKNOWN_REA_ROOT"))
     version(selected)
     check_entries(root)
     stage = root / ".atm-rea-lock/stage"
     package = regular_json(stage / "lib/node_modules/rea-agents/package.json")
     script = stage / "lib/node_modules/rea-agents/scripts/rea.mjs"
     if package.get("name") != "rea-agents" or package.get("version") != selected or not script.is_file() or script.is_symlink():
-        raise ValueError("Downloaded package identity/entrypoint mismatch")
+        raise ValueError(tr("ATM_PLUGIN_REA_PACKAGE_MISMATCH"))
     if stage.resolve() not in script.resolve().parents:
-        raise ValueError("Package entrypoint escapes prefix")
+        raise ValueError(tr("ATM_PLUGIN_REA_ESCAPING_ENTRYPOINT"))
     node = Path(node)
     if not node.is_absolute() or not os.access(node, os.X_OK):
-        raise ValueError("Missing selected Node executable")
+        raise ValueError(tr("ATM_PLUGIN_REA_MISSING_NODE"))
     versions = root / "versions"
     versions.mkdir(exist_ok=True)
     dest = versions / selected
     if dest.exists() or dest.is_symlink():
-        raise ValueError("Version already exists; refusing replacement")
+        raise ValueError(tr("ATM_PLUGIN_REA_VERSION_EXISTS"))
     bin_dir = stage / "bin"
     child_dir(bin_dir)
     bin_dir.mkdir(exist_ok=True)
@@ -233,7 +238,7 @@ def publish(root, state, selected, node):
     if launcher.is_symlink() and launcher.resolve() == script.resolve():
         launcher.unlink()
     elif launcher.exists() or launcher.is_symlink():
-        raise ValueError("Unexpected npm launcher")
+        raise ValueError(tr("ATM_PLUGIN_REA_UNEXPECTED_LAUNCHER"))
     write_launcher(launcher, node, dest / "lib/node_modules/rea-agents/scripts/rea.mjs")
     atomic_json(stage / ".atm-rea-version.json", {"version": selected, "node": str(node)})
     os.rename(stage, dest)
@@ -242,9 +247,9 @@ def publish(root, state, selected, node):
 
 def remove(root, state):
     if not owned_root(root):
-        raise ValueError("Refusing to remove an unmanaged REA directory")
+        raise ValueError(tr("ATM_PLUGIN_REA_UNMANAGED_REMOVAL"))
     if (root / ".atm-rea-lock").exists() or (root / ".atm-rea-lock").is_symlink():
-        raise ValueError("An install/update lock exists; do not remove during installation")
+        raise ValueError(tr("ATM_PLUGIN_REA_INSTALL_LOCK"))
     check_entries(root)
     versions = root / "versions"
     candidates = []
@@ -253,7 +258,7 @@ def remove(root, state):
             candidates.append(managed(root, prefix.name))
     data = read_state(state)
     if data is not None and root_path(data["root"]) != root:
-        raise ValueError("Receipt points at another installation")
+        raise ValueError(tr("ATM_PLUGIN_REA_RECEIPT_ROOT"))
     for prefix in candidates:
         shutil.rmtree(prefix)
     for entry in (root / "current", root / "bin/rea"):
@@ -291,7 +296,7 @@ def main():
     elif action == "remove":
         remove(root, Path(args[1]))
     else:
-        raise ValueError("Unknown operation")
+        raise ValueError(tr("ATM_PLUGIN_REA_UNKNOWN_OPERATION"))
 
 
 if __name__ == "__main__":

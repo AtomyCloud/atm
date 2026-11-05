@@ -44,7 +44,7 @@ atm_go_normalize_version() {
     if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         printf '%s\n' "$version"
     else
-        atm_fail "Invalid Go version: $version. Expected format: 1.26.2"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_GO_INVALID_VERSION)" "$version")"
     fi
 }
 
@@ -55,7 +55,7 @@ atm_go_version_from_args() {
         case "$1" in
             --version)
                 version="${2:-}"
-                [[ -n "$version" ]] || atm_fail "Missing value for --version"
+                [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_GO_MISSING_VERSION)"
                 shift
                 ;;
             --version=*)
@@ -187,7 +187,7 @@ atm_go_extract_archive() {
 
     tar -xzf "$cache_file" -C "$tmp_extract"
 
-    [[ -d "$tmp_extract/go" ]] || atm_fail "Unexpected Go archive structure: $cache_file"
+    [[ -d "$tmp_extract/go" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_GO_INVALID_ARCHIVE)" "$cache_file")"
 
     rm -rf "$dest"
     mv "$tmp_extract/go" "$dest"
@@ -213,8 +213,8 @@ atm_go_install() {
         atm_warn "$(atm_t ATM_PLUGIN_GO_ALREADY_INSTALLED): $dest"
     else
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-            printf 'DRY-RUN: download %s to %s\n' "$url" "$cache_file"
-            printf 'DRY-RUN: install Go %s into %s\n' "$version" "$dest"
+            printf "$(atm_t ATM_PLUGIN_GO_DRY_DOWNLOAD)\n" "$url" "$cache_file"
+            printf "$(atm_t ATM_PLUGIN_GO_DRY_INSTALL)\n" "$version" "$dest"
         else
             mkdir -p "$(atm_go_cache_dir)"
             mkdir -p "${ATM_GO_INSTALL_ROOT:-$ATM_APPS_DIR/go}"
@@ -224,8 +224,8 @@ atm_go_install() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_go_current_path)"
-        printf 'DRY-RUN: mkdir -p %s/bin %s/pkg %s/src\n' "$workspace" "$workspace" "$workspace"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_GO_DRY_RUN)" "$dest" "$(atm_go_current_path)"
+        printf '%s: mkdir -p %s/bin %s/pkg %s/src\n' "$(atm_t ATM_PLUGIN_GO_DRY_RUN)" "$workspace" "$workspace" "$workspace"
     else
         ln -sfn "$dest" "$(atm_go_current_path)"
         mkdir -p "$workspace/bin" "$workspace/pkg" "$workspace/src"
@@ -244,15 +244,15 @@ atm_go_use() {
     local version="${1:-}"
     local dest=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm use go <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_GO_USE_USAGE)"
 
     version="$(atm_go_normalize_version "$version")"
     dest="$(atm_go_install_dir "$version")"
 
-    [[ -x "$dest/bin/go" ]] || atm_fail "Go version is not installed: $version"
+    [[ -x "$dest/bin/go" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_GO_VERSION_NOT_INSTALLED)" "$version")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_go_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_GO_DRY_RUN)" "$dest" "$(atm_go_current_path)"
     else
         ln -sfn "$dest" "$(atm_go_current_path)"
     fi
@@ -267,20 +267,20 @@ atm_go_remove() {
     local dest=""
     local current_version=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm remove go <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_GO_REMOVE_USAGE)"
 
     version="$(atm_go_normalize_version "$version")"
     dest="$(atm_go_install_dir "$version")"
     current_version="$(atm_go_current_version 2>/dev/null || true)"
 
-    [[ -d "$dest" ]] || atm_fail "Go version is not installed: $version"
+    [[ -d "$dest" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_GO_VERSION_NOT_INSTALLED)" "$version")"
 
     if [[ "$current_version" == "$version" ]]; then
-        atm_fail "Cannot remove current Go version: $version. Switch version first with: atm use go <other-version>"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_GO_CANNOT_REMOVE_CURRENT)" "$version")"
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$dest"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_GO_DRY_RUN)" "$dest"
     else
         rm -rf "$dest"
     fi
@@ -295,8 +295,8 @@ atm_go_uninstall() {
     local answer=""
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_GO_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_GO_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_GO_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -309,8 +309,8 @@ atm_go_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_go_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_GO_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_GO_DRY_RUN)" "$(atm_go_manifest_file)"
     else
         rm -rf "$root"
         rm -f "$(atm_go_manifest_file)"

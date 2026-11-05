@@ -11,6 +11,24 @@ import sys
 import tempfile
 from urllib.parse import urlsplit, urlunsplit
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
+
+
+class LocalizedHelpFormatter(argparse.HelpFormatter):
+    def _format_usage(self, usage, actions, groups, prefix=None):
+        if prefix is None:
+            prefix = tr("ATM_PLUGIN_DOCKER_HELP_USAGE") + " "
+        return super()._format_usage(usage, actions, groups, prefix)
+
+
+class LocalizedArgumentParser(argparse.ArgumentParser):
+    def error(self, message):
+        self.print_usage(sys.stderr)
+        self.exit(2, tr("ATM_PLUGIN_DOCKER_HELP_ERROR", prog=self.prog, message=message) + "\n")
+
 
 class DesktopReleases(HTMLParser):
     def __init__(self):
@@ -54,7 +72,7 @@ def clean_config(path, check_only):
         return
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise ValueError("Docker config must be a JSON object")
+        raise ValueError(tr("ATM_PLUGIN_DOCKER_CONFIG_OBJECT_REQUIRED"))
     changed = False
     for key, value in (("credsStore", "desktop"), ("currentContext", "desktop-linux")):
         if data.get(key) == value:
@@ -82,10 +100,26 @@ def clean_config(path, check_only):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("action", choices=("releases", "check-config", "clean-config"))
+    actions = ("releases", "check-config", "clean-config")
+    parser = LocalizedArgumentParser(
+        description=tr("ATM_PLUGIN_DOCKER_HELPER_DESCRIPTION"),
+        formatter_class=LocalizedHelpFormatter,
+        usage="%(prog)s [-h] {releases,check-config,clean-config} [path]",
+        add_help=False,
+    )
+    parser._positionals.title = tr("ATM_PLUGIN_DOCKER_HELP_POSITIONALS")
+    parser._optionals.title = tr("ATM_PLUGIN_DOCKER_HELP_OPTIONS")
+    parser.add_argument("-h", "--help", action="help", help=tr("ATM_PLUGIN_DOCKER_HELP_EXIT"))
+    parser.add_argument("action", nargs="?", metavar="{releases,check-config,clean-config}")
     parser.add_argument("path", nargs="?")
-    args = parser.parse_args()
+    # Validate these fields here so argparse's generated prose follows ATM_LANG.
+    args, unknown = parser.parse_known_args()
+    if args.action is None:
+        parser.error(tr("ATM_PLUGIN_DOCKER_HELP_ACTION_REQUIRED"))
+    if args.action not in actions:
+        parser.error(tr("ATM_PLUGIN_DOCKER_HELP_INVALID_ACTION", value=repr(args.action)))
+    if unknown:
+        parser.error(tr("ATM_PLUGIN_DOCKER_HELP_UNKNOWN_ARGUMENTS", arguments=" ".join(unknown)))
     if args.action == "releases":
         releases = DesktopReleases()
         releases.feed(sys.stdin.read())
@@ -97,7 +131,7 @@ def main():
             print(f"{version}\t{releases.releases[version]}")
     else:
         if args.path is None:
-            parser.error("config path is required")
+            parser.error(tr("ATM_PLUGIN_DOCKER_CONFIG_PATH_REQUIRED"))
         clean_config(Path(args.path), args.action == "check-config")
     return 0
 

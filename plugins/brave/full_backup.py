@@ -12,6 +12,11 @@ import sys
 import tarfile
 import tempfile
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
+
 
 class BackupError(Exception):
     pass
@@ -31,12 +36,12 @@ def detect_sources(home, standard=None):
         except FileNotFoundError:
             continue
         if not stat.S_ISDIR(source.stat().st_mode):
-            raise BackupError(f"Not a profile directory: {location}")
+            raise BackupError(tr("ATM_PLUGIN_BRAVE_FULL_NOT_DIRECTORY", location=location))
         if source not in seen:
             sources.append((kind, source))
             seen.add(source)
     if not sources:
-        raise BackupError("No Brave data directories found (standard, Flatpak or Snap).")
+        raise BackupError(tr("ATM_PLUGIN_BRAVE_FULL_NO_SOURCES"))
     return sources
 
 
@@ -50,9 +55,9 @@ def require_closed():
         result = subprocess.run(["pgrep", "-u", str(os.getuid()), flag, pattern],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, check=False)
         if result.returncode == 0:
-            raise BackupError("Close Brave Browser before creating a full backup.")
+            raise BackupError(tr("ATM_PLUGIN_BRAVE_FULL_CLOSE_BROWSER"))
         if result.returncode != 1:
-            raise BackupError("Unable to check running Brave processes; backup cancelled.")
+            raise BackupError(tr("ATM_PLUGIN_BRAVE_FULL_PROCESS_CHECK_FAILED"))
 
 
 def backup(home, destination, standard=None, dry_run=False):
@@ -60,11 +65,11 @@ def backup(home, destination, standard=None, dry_run=False):
     destination = destination.resolve()
     for kind, source in sources:
         if destination == source or source in destination.parents:
-            raise BackupError(f"Backup destination cannot be inside a Brave profile: {source}")
-        print(f"Source [{kind}]: {source}", flush=True)
-    print(f"Backup directory: {destination}", flush=True)
+            raise BackupError(tr("ATM_PLUGIN_BRAVE_FULL_DESTINATION_OVERLAP", source=source))
+        print(tr("ATM_PLUGIN_BRAVE_FULL_SOURCE", kind=kind, source=source), flush=True)
+    print(tr("ATM_PLUGIN_BRAVE_FULL_DESTINATION", destination=destination), flush=True)
     if dry_run:
-        print("DRY-RUN: create brave-<date>_<time>-<id>.tar.gz; no files written.")
+        print(tr("ATM_PLUGIN_BRAVE_FULL_DRY_RUN"))
         return None
 
     require_closed()
@@ -95,12 +100,12 @@ def backup(home, destination, standard=None, dry_run=False):
         os.link(temporary, final)
     finally:
         temporary.unlink(missing_ok=True)
-    print(f"Archive: {final}", flush=True)
+    print(tr("ATM_PLUGIN_BRAVE_FULL_ARCHIVE", archive=final), flush=True)
     return final
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=tr("ATM_PLUGIN_BRAVE_FULL_HELP"))
     parser.add_argument("--home", required=True, type=Path)
     parser.add_argument("--backups", required=True, type=Path)
     parser.add_argument("--standard-profile", type=Path)
@@ -109,7 +114,7 @@ def main():
     try:
         backup(args.home, args.backups, args.standard_profile, args.dry_run)
     except (BackupError, OSError, RuntimeError, tarfile.TarError) as exc:
-        print(f"Brave full backup: {exc}", file=sys.stderr)
+        print(tr("ATM_PLUGIN_BRAVE_FULL_ERROR", error=exc), file=sys.stderr)
         return 1
     return 0
 

@@ -1,8 +1,5 @@
 #!/usr/bin/env bash
 
-# Keep new labels available while translated plugin locales are being stabilized.
-source "${BASH_SOURCE[0]%/*}/lang/en-us.lang"
-
 atm_node_install_root() {
     printf '%s\n' "${ATM_NODE_INSTALL_ROOT:-$ATM_APPS_DIR/node}"
 }
@@ -51,7 +48,7 @@ atm_node_normalize_version() {
     if [[ "$version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
         printf '%s\n' "$version"
     else
-        atm_fail "Invalid Node.js version: $version. Expected format: 26.2.0"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_INVALID_VERSION)" "$version")"
     fi
 }
 
@@ -153,7 +150,7 @@ atm_node_install_system() {
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
         atm_run "${privileged[@]}" apt-get update
         atm_run "${privileged[@]}" apt-get --no-remove install nodejs npm
-        printf 'DRY-RUN: %s\n' "$ATM_NODE_SYSTEM_BINARY"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_NODE_DRY_RUN)" "$ATM_NODE_SYSTEM_BINARY"
         return 0
     fi
     printf '%s ' "$(atm_t ATM_PLUGIN_NODE_SYSTEM_CONFIRM)"
@@ -265,7 +262,7 @@ atm_node_fallback_versions() {
         26) value="${ATM_NODE_FALLBACK_VERSIONS_26:-26.2.0}" ;;
         25) value="${ATM_NODE_FALLBACK_VERSIONS_25:-25.9.0}" ;;
         24) value="${ATM_NODE_FALLBACK_VERSIONS_24:-24.16.0}" ;;
-        *) atm_fail "Unsupported Node.js major: $major" ;;
+        *) atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_UNSUPPORTED_MAJOR)" "$major")" ;;
     esac
 
     printf '%s\n' $value
@@ -312,11 +309,11 @@ atm_node_extract_archive() {
     mkdir -p "$tmp_extract"
 
     root_dir="$(tar -tf "$cache_file" | sed -n '1p' | cut -d/ -f1)"
-    [[ -n "$root_dir" ]] || atm_fail "Could not detect Node.js archive root: $cache_file"
+    [[ -n "$root_dir" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_ARCHIVE_ROOT_FAILED)" "$cache_file")"
 
     tar -xJf "$cache_file" -C "$tmp_extract"
 
-    [[ -d "$tmp_extract/$root_dir" ]] || atm_fail "Unexpected Node.js archive structure: $cache_file"
+    [[ -d "$tmp_extract/$root_dir" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_INVALID_ARCHIVE)" "$cache_file")"
 
     rm -rf "$dest"
     mv "$tmp_extract/$root_dir" "$dest"
@@ -330,7 +327,7 @@ atm_node_version_from_args() {
         case "$1" in
             --version)
                 version="${2:-}"
-                [[ -n "$version" ]] || atm_fail "Missing value for --version"
+                [[ -n "$version" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_MISSING_VALUE)" "--version")"
                 shift
                 ;;
             --version=*)
@@ -338,7 +335,7 @@ atm_node_version_from_args() {
                 ;;
             --major)
                 local major="${2:-}"
-                [[ -n "$major" ]] || atm_fail "Missing value for --major"
+                [[ -n "$major" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_MISSING_VALUE)" "--major")"
                 version="$(atm_node_latest_versions "$major" | sed -n '1p')"
                 shift
                 ;;
@@ -380,7 +377,7 @@ atm_node_install_portable() {
         atm_run mkdir -p "$(atm_node_cache_dir)" "$(atm_node_install_root)"
         if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
             atm_run curl --fail --location "$url" -o "$cache_file"
-            printf 'DRY-RUN: install Node.js %s into %s\n' "$version" "$dest"
+            printf "$(atm_t ATM_PLUGIN_NODE_DRY_INSTALL)\n" "$version" "$dest"
         else
             atm_download_file "$url" "$cache_file"
             atm_require_commands tar xz
@@ -389,7 +386,7 @@ atm_node_install_portable() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_node_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_NODE_DRY_RUN)" "$dest" "$(atm_node_current_path)"
     else
         ln -sfn "$dest" "$(atm_node_current_path)"
     fi
@@ -408,14 +405,14 @@ atm_node_use() {
     local version="${1:-}"
     local dest=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm use node <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_NODE_USE_USAGE)"
     version="$(atm_node_normalize_version "$version")"
     dest="$(atm_node_install_dir "$version")"
 
-    [[ -x "$dest/bin/node" ]] || atm_fail "Node.js version is not installed: $version"
+    [[ -x "$dest/bin/node" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_VERSION_NOT_INSTALLED)" "$version")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$dest" "$(atm_node_current_path)"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_NODE_DRY_RUN)" "$dest" "$(atm_node_current_path)"
     else
         ln -sfn "$dest" "$(atm_node_current_path)"
     fi
@@ -430,19 +427,19 @@ atm_node_remove() {
     local dest=""
     local current_version=""
 
-    [[ -n "$version" ]] || atm_fail "Usage: atm remove node <version>"
+    [[ -n "$version" ]] || atm_fail "$(atm_t ATM_PLUGIN_NODE_REMOVE_USAGE)"
     version="$(atm_node_normalize_version "$version")"
     dest="$(atm_node_install_dir "$version")"
     current_version="$(atm_node_current_version 2>/dev/null || true)"
 
-    [[ -d "$dest" ]] || atm_fail "Node.js version is not installed: $version"
+    [[ -d "$dest" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_VERSION_NOT_INSTALLED)" "$version")"
 
     if [[ "$current_version" == "$version" ]]; then
-        atm_fail "Cannot remove current Node.js version: $version. Switch version first with: atm use node <other-version>"
+        atm_fail "$(printf "$(atm_t ATM_PLUGIN_NODE_REMOVE_CURRENT)" "$version")"
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$dest"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_NODE_DRY_RUN)" "$dest"
     else
         rm -rf "$dest"
     fi
@@ -458,8 +455,8 @@ atm_node_uninstall() {
     root="$(atm_node_install_root)"
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_NODE_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_NODE_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_NODE_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -471,8 +468,8 @@ atm_node_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_node_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_NODE_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_NODE_DRY_RUN)" "$(atm_node_manifest_file)"
     else
         rm -rf "$root"
         rm -f "$(atm_node_manifest_file)"
@@ -551,7 +548,7 @@ atm_node_major_menu() {
 
         idx=1
         for version in "${versions[@]}"; do
-            printf '%s) Install Node.js %s\n' "$idx" "$version"
+            printf "$(atm_t ATM_PLUGIN_NODE_INSTALL_VERSION)\n" "$idx" "$version"
             idx=$((idx + 1))
         done
 

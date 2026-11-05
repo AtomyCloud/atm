@@ -19,6 +19,11 @@ import sys
 import tempfile
 import uuid
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "lib"))
+from atm_plugin_i18n import translator
+
+tr = translator(__file__)
+
 
 MAIN_FOLDERS = ("Desktop", "Documents", "Downloads", "Pictures", "Videos", "Music")
 MAX_METADATA_SIZE = 64 * 1024 * 1024
@@ -33,28 +38,28 @@ def inside(path, parent):
 def absolute(value):
     path = Path(value).expanduser()
     if not path.is_absolute():
-        raise ValueError("Use an absolute path.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_ABSOLUTE_PATH_REQUIRED'))
     if ".." in path.parts:
-        raise ValueError("Parent traversal is not allowed.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_PARENT_TRAVERSAL'))
     return Path("/", *path.parts[1:])
 
 
 def no_links(path):
     for part in (path, *path.parents):
         if part.is_symlink():
-            raise ValueError(f"Symlinked path component is not allowed: {part}")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_SYMLINK_COMPONENT', part=part))
 
 
 def relative(value):
     path = PurePosixPath(value)
     if not value or path.is_absolute() or any(p in (".", "..", "") for p in value.split("/")):
-        raise ValueError(f"Invalid relative path: {value!r}")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INVALID_RELATIVE_PATH', value=value))
     return Path(*path.parts)
 
 
 def username(value):
     if not re.fullmatch(r"[A-Za-z0-9_][A-Za-z0-9_.-]*\$?", value):
-        raise ValueError("Invalid backup user name.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INVALID_USERNAME'))
     return value
 
 
@@ -90,17 +95,17 @@ def discover_users(home_base, current_home):
 
 def select_users(home_base, current_home, user=None, all_users=False):
     if user and all_users:
-        raise ValueError("Choose --user or --all-users, not both.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_USER_OPTIONS_EXCLUSIVE'))
     if not user and not all_users:
         return [(username(pwd.getpwuid(os.getuid()).pw_name), absolute(current_home))]
     available = dict(discover_users(home_base, current_home))
     if all_users:
         if not available:
-            raise ValueError("No user homes found.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_NO_HOMES'))
         return list(available.items())
     username(user)
     if user not in available:
-        raise ValueError(f"User home not found or excluded as a system account: {user}")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_HOME_NOT_FOUND', user=user))
     return [(user, available[user])]
 
 
@@ -145,16 +150,16 @@ def validate_device(destination, media_root, mountinfo, mount_id=None):
     media = absolute(media_root)
     if not inside(destination, media):
         if mount_id:
-            raise ValueError("Selected device does not match the destination.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DEVICE_MISMATCH'))
         return None
     for device in mounted_devices(media, mountinfo):
         if inside(destination, device["path"]):
             if mount_id and mount_id != device["id"]:
-                raise ValueError("Selected device mount changed. Choose it again.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_MOUNT_CHANGED'))
             if not device["writable"]:
-                raise ValueError("Selected device is read-only.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DEVICE_READ_ONLY'))
             return device["id"]
-    raise ValueError("No mounted device at this destination. No local fallback will be created.")
+    raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DEVICE_NOT_MOUNTED'))
 
 
 def stamp():
@@ -184,7 +189,7 @@ def inventory(root):
             elif stat.S_ISREG(mode):
                 result[key] = ["file", digest(item)]
             else:
-                raise ValueError(f"Unsupported special file in backup: {key}")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_UNSUPPORTED_SPECIAL_FILE', path=key))
 
     visit(root)
     return result
@@ -217,9 +222,9 @@ def backup_plan(home, destination, kind, paths):
     destination = absolute(destination)
     no_links(destination)
     if not home.is_dir() or inside(home, destination):
-        raise ValueError("Backup destination cannot be the source home or its ancestor.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DESTINATION_SOURCE_OVERLAP'))
     if destination.exists() and not destination.is_dir():
-        raise ValueError("Backup destination must be a directory.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DESTINATION_DIRECTORY'))
     if kind in ("safe", "full"):
         selected = sorted(home.iterdir())
     elif kind == "main":
@@ -227,19 +232,19 @@ def backup_plan(home, destination, kind, paths):
     elif kind == "custom":
         selected = sorted({home / relative(p) for p in paths})
         if not selected:
-            raise ValueError("Custom backups require at least one relative path.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_CUSTOM_PATH_REQUIRED'))
     else:
-        raise ValueError("Unknown backup type.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_UNKNOWN_TYPE'))
     for item in selected:
         no_links(item.parent)
         if not item.exists() and not item.is_symlink():
-            raise ValueError(f"Selected path does not exist: {item}")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_PATH_NOT_FOUND', item=item))
         if kind == "custom" and inside(item, destination):
-            raise ValueError("A selected path is inside the backup destination.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_PATH_INSIDE_DESTINATION'))
     selected = [p for p in selected if not inside(p, destination)
                 and not any(other in p.parents for other in selected)]
     if not selected:
-        raise ValueError("No matching folders found.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_NO_MATCHING_FOLDERS'))
     return home, destination, selected
 
 
@@ -247,14 +252,14 @@ def create_backup(home, destination, kind="safe", paths=(), excludes=None, user=
                   sources=None, media_root=None, mountinfo="/proc/self/mountinfo", mount_id=None):
     sources = sources if sources is not None else [(user or getpass.getuser(), home)]
     if not sources or len({name for name, _ in sources}) != len(sources):
-        raise ValueError("Backup requires distinct selected users.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DISTINCT_USERS_REQUIRED'))
     plans = []
     for name, source_home in sources:
         username(name)
         try:
             source_home, destination, selected = backup_plan(source_home, destination, kind, paths)
         except PermissionError as error:
-            raise PermissionError(f"Cannot read home for {name}. All selected homes must be readable; no users were skipped.") from error
+            raise PermissionError(tr('ATM_PLUGIN_BACKUP_RESTORE_HOME_UNREADABLE', name=name)) from error
         plans.append((name, source_home, selected))
 
     def check_device():
@@ -277,7 +282,7 @@ def create_backup(home, destination, kind="safe", paths=(), excludes=None, user=
     parent.mkdir(mode=0o700, parents=True, exist_ok=True)
     ignore = parent.parent / ".gitignore"
     if ignore.is_symlink() or (ignore.exists() and ignore.read_text() != "*\n"):
-        raise ValueError("Backup repository .gitignore must contain only '*'. Review it before backing up.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INVALID_GITIGNORE'))
     if not ignore.exists():
         with ignore.open("x") as stream:
             stream.write("*\n")
@@ -296,7 +301,7 @@ def create_backup(home, destination, kind="safe", paths=(), excludes=None, user=
                 copy_entry(source, target, source_home, [destination], patterns, skipped)
             records = inventory(data)
             if not records:
-                raise ValueError(f"No files or directories remain after exclusions for {name}.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_EMPTY_AFTER_EXCLUSIONS', name=name))
             inventories[name] = records
             skipped_by_user[name] = skipped
         names = [name for name, _, _ in plans]
@@ -314,13 +319,16 @@ def create_backup(home, destination, kind="safe", paths=(), excludes=None, user=
                             skipped_special_files=skipped_by_user)
         encoded = (json.dumps(metadata, indent=2) + "\n").encode("utf-8")
         if len(encoded) > MAX_METADATA_SIZE:
-            raise ValueError("Backup metadata exceeds the 64 MiB limit; select fewer paths.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_METADATA_TOO_LARGE'))
         (stage / "atool-backup.json").write_bytes(encoded)
         (stage / "atool-backup.json").chmod(0o600)
         logs = stage / "logs"
         logs.mkdir(mode=0o700)
         count = sum(len(records) for records in inventories.values())
-        (logs / "summary.txt").write_text(f"success\nUsers: {', '.join(names)}\nEntries: {count}\n")
+        (logs / "summary.txt").write_text(
+            "success\n" + tr("ATM_PLUGIN_BACKUP_RESTORE_SUMMARY_USERS", users=", ".join(names))
+            + "\n" + tr("ATM_PLUGIN_BACKUP_RESTORE_SUMMARY_ENTRIES", count=count) + "\n",
+            encoding="utf-8")
         check_device()
         stage.rename(final)
         return {"backup": str(final), "users": names, "entries": count,
@@ -340,19 +348,19 @@ def backup_metadata(root):
     no_links(root)
     meta = root / "atool-backup.json"
     if not meta.is_file() or meta.is_symlink() or meta.stat().st_size > MAX_METADATA_SIZE:
-        raise ValueError("Missing or invalid atool-backup.json.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INVALID_METADATA'))
     obj = json.loads(meta.read_text())
     if not isinstance(obj, dict) or obj.get("schema_version") != "1.0" or obj.get("status") != "success" or obj.get("dry_run") is not False:
-        raise ValueError("Only successful, real schema 1.0 backups can be restored.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_SUCCESSFUL_BACKUP_REQUIRED'))
     users = obj.get("users")
     if not isinstance(users, list) or not users or not all(isinstance(u, str) for u in users):
-        raise ValueError("Invalid backup users.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INVALID_USERS'))
     for item in users:
         username(item)
     successful = obj.get("successful_users")
     if (not isinstance(successful, list) or successful != users
             or obj.get("failed_users") != [] or len(set(users)) != len(users)):
-        raise ValueError("Backup user status is inconsistent.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INCONSISTENT_USER_STATUS'))
     return obj
 
 
@@ -361,15 +369,15 @@ def user_records(obj, user):
         return None
     version = obj["atm_format"]
     if type(version) is not int:
-        raise ValueError("Unsupported ATM backup format.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_UNSUPPORTED_FORMAT'))
     if version == 1 and len(obj["users"]) == 1:
         records = obj.get("inventory")
     elif version == 2 and isinstance(obj.get("inventories"), dict) and set(obj["inventories"]) == set(obj["users"]):
         records = obj["inventories"].get(user)
     else:
-        raise ValueError("Unsupported ATM backup format.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_UNSUPPORTED_FORMAT'))
     if not isinstance(records, dict):
-        raise ValueError("Invalid backup inventory.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INVALID_INVENTORY'))
     return records
 
 
@@ -379,19 +387,19 @@ def load_backup(root, user=None, verify=True):
     users = obj["users"]
     if user is None:
         if len(users) != 1:
-            raise ValueError("Multi-user atool backup: specify --user explicitly.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_MULTIUSER_REQUIRES_USER'))
         user = users[0]
     if user not in users:
-        raise ValueError("Selected user was not successfully backed up.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_USER_NOT_BACKED_UP'))
     data = root / "users" / username(user)
     no_links(data)
     if not data.is_dir():
-        raise ValueError("Backup user directory is missing.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_USER_DIRECTORY_MISSING'))
     records = user_records(obj, user)
     if verify:
         actual = inventory(data)
         if records is not None and actual != records:
-            raise ValueError("Backup integrity check failed. No files replaced.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_INTEGRITY_FAILED'))
     return root, data, obj
 
 
@@ -406,9 +414,9 @@ def restore_plan(root, target, home, user=None):
             or inside(target, root) or inside(root, target)
             or inside(Path(__file__).resolve().parents[2], target)
             or inside(target, Path(__file__).resolve().parents[2])):
-        raise ValueError("Unsafe or overlapping restore target. Choose a separate user directory.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_UNSAFE_RESTORE_TARGET'))
     if target.exists() and not target.is_dir():
-        raise ValueError("Restore target must be a directory.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_RESTORE_TARGET_DIRECTORY'))
     return root, data, target, obj
 
 
@@ -434,14 +442,14 @@ def overlay(source, target):
 
 def restore_backup(root, target, home, user=None, dry_run=False, all_users=False, home_base=None):
     if user and all_users:
-        raise ValueError("Choose --user or --all-users, not both.")
+        raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_USER_OPTIONS_EXCLUSIVE'))
     metadata = backup_metadata(root)
     names = metadata["users"] if all_users else [user]
     plans = [restore_plan(root, target, home, name) for name in names]
     root, _, target, obj = plans[0]
     if home_base is not None:
         if any(target == h or inside(h, target) for _, h in discover_users(home_base, home)):
-            raise ValueError("Restore over a live user home is not allowed.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_LIVE_HOME_FORBIDDEN'))
     sources = [(plan[1].name, plan[1]) for plan in plans]
     result = {"source": str(root), "target": str(target),
               "users": [name for name, _ in sources], "grouped_by_user": all_users,
@@ -470,12 +478,12 @@ def restore_backup(root, target, home, user=None, dry_run=False, all_users=False
             stored = user_records(obj, name)
             records = inventory(data)
             if stored is not None and records != stored:
-                raise ValueError("Backup changed during restore.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_BACKUP_CHANGED'))
             prefix = name + "/" if all_users else ""
             expected.update({prefix + key: value for key, value in records.items()})
         staged_records = inventory(stage)
         if any(staged_records.get(key) != value for key, value in expected.items()):
-            raise ValueError("Staged restore integrity check failed.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_STAGING_INTEGRITY_FAILED'))
         for key, value in staged_records.items():
             if value[0] != "link":
                 item = stage / key
@@ -492,7 +500,7 @@ def restore_backup(root, target, home, user=None, dry_run=False, all_users=False
                     try:
                         recovery.rename(target)
                     except OSError as error:
-                        raise OSError(f"Rollback failed; original data retained at {recovery}") from error
+                        raise OSError(tr('ATM_PLUGIN_BACKUP_RESTORE_ROLLBACK_FAILED', recovery=recovery)) from error
                 raise
         finally:
             signal.pthread_sigmask(signal.SIG_SETMASK, previous_mask)
@@ -525,7 +533,7 @@ def list_backups(destination):
 
 
 def main():
-    parser = argparse.ArgumentParser(description=__doc__)
+    parser = argparse.ArgumentParser(description=tr("ATM_PLUGIN_BACKUP_RESTORE_HELP_DESCRIPTION"))
     parser.add_argument("action", choices=("backup", "restore", "list", "verify", "users", "devices", "backup-users",
                                           "apps-size", "backup-apps"))
     parser.add_argument("--home", default=str(Path.home()))
@@ -548,7 +556,7 @@ def main():
         if args.action in ("apps-size", "backup-apps"):
             import apps_backup
             if args.user or args.all_users or args.path or args.source or args.target:
-                raise ValueError("Apps backup uses only the current configured home/Apps.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_APPS_CURRENT_HOME_ONLY'))
             if args.action == "apps-size":
                 result = apps_backup.measure(args.home)
             else:
@@ -557,7 +565,7 @@ def main():
             print(json.dumps(result, indent=2))
             return 0
         if args.user and args.all_users:
-            raise ValueError("Choose --user or --all-users, not both.")
+            raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_USER_OPTIONS_EXCLUSIVE'))
         if args.action in ("users", "backup-users"):
             if args.action == "users":
                 rows = discover_users(args.home_base, args.home)
@@ -576,7 +584,7 @@ def main():
             return 0
         if args.action == "backup":
             if not args.destination:
-                raise ValueError("Backup requires --destination.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_DESTINATION_REQUIRED'))
             selected = select_users(args.home_base, args.home, args.user, args.all_users)
             result = create_backup(args.home, args.destination, args.type, args.path,
                                    args.excludes, dry_run=args.dry_run, sources=selected,
@@ -592,13 +600,13 @@ def main():
             result = {"valid": True, "integrity": "sha256" if "atm_format" in obj else "legacy: no stored checksums"}
         else:
             if not args.source or not args.target:
-                raise ValueError("Restore requires --source and --target.")
+                raise ValueError(tr('ATM_PLUGIN_BACKUP_RESTORE_RESTORE_ARGUMENTS_REQUIRED'))
             result = restore_backup(args.source, args.target, args.home, args.user, args.dry_run,
                                     args.all_users, args.home_base)
         print(json.dumps(result, indent=2))
         return 0
     except (OSError, ValueError, TypeError, shutil.Error) as error:
-        print(f"Backup/restore failed: {error}", file=sys.stderr)
+        print(tr("ATM_PLUGIN_BACKUP_RESTORE_ERROR_DETAIL", error=error), file=sys.stderr)
         return 1
 
 

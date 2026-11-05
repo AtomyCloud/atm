@@ -74,7 +74,7 @@ atm_android_sdk_ensure_java() {
         return 0
     fi
 
-    atm_fail "Java is required for Android sdkmanager. Install Java first: atm install java"
+    atm_fail "$(atm_t ATM_PLUGIN_ANDROID_SDK_JAVA_REQUIRED)"
 }
 
 atm_android_sdk_ensure_cmdline_tools() {
@@ -100,8 +100,8 @@ atm_android_sdk_ensure_cmdline_tools() {
     atm_download_file "${ATM_ANDROID_CMDLINE_TOOLS_URL:-https://dl.google.com/android/repository/commandlinetools-linux-14742923_latest.zip}" "$zip_file"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: unzip %s into %s\n' "$zip_file" "$cmd_dir"
-        printf 'DRY-RUN: ln -sfn %s %s\n' "$cmd_dir" "$latest_dir"
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_EXTRACT)\n" "$zip_file" "$cmd_dir"
+        printf '%s: ln -sfn %s %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_RUN)" "$cmd_dir" "$latest_dir"
         return 0
     fi
 
@@ -113,7 +113,7 @@ atm_android_sdk_ensure_cmdline_tools() {
 
     unzip -q "$zip_file" -d "$tmp_dir"
 
-    [[ -d "$tmp_dir/cmdline-tools" ]] || atm_fail "Unexpected Android cmdline-tools archive structure: $zip_file"
+    [[ -d "$tmp_dir/cmdline-tools" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_INVALID_ARCHIVE)" "$zip_file")"
 
     rm -rf "$cmd_dir"
     mv "$tmp_dir/cmdline-tools" "$cmd_dir"
@@ -128,18 +128,18 @@ atm_android_sdk_accept_licenses() {
     sdkmanager="$(atm_android_sdk_sdkmanager)"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: yes | %s --sdk_root=%s --licenses\n' "$sdkmanager" "$(atm_android_sdk_root)"
+        printf '%s: yes | %s --sdk_root=%s --licenses\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_RUN)" "$sdkmanager" "$(atm_android_sdk_root)"
         return 0
     fi
 
-    [[ -x "$sdkmanager" ]] || atm_fail "sdkmanager not found: $sdkmanager"
+    [[ -x "$sdkmanager" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_SDKMANAGER_NOT_FOUND)" "$sdkmanager")"
 
     set +o pipefail
     yes | "$sdkmanager" --sdk_root="$(atm_android_sdk_root)" --licenses >/dev/null
     local sdkmanager_status="${PIPESTATUS[1]}"
     set -o pipefail
 
-    [[ "$sdkmanager_status" -eq 0 ]] || atm_fail "Failed to accept Android SDK licenses."
+    [[ "$sdkmanager_status" -eq 0 ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_SDK_LICENSES_FAILED)"
 }
 
 atm_android_sdk_install_packages() {
@@ -166,7 +166,7 @@ atm_android_sdk_install_packages() {
     fi
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: %s --sdk_root=%s --channel=%s' \
+        printf '%s: %s --sdk_root=%s --channel=%s' "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_RUN)" \
             "$sdkmanager" \
             "$(atm_android_sdk_root)" \
             "${ATM_ANDROID_SDK_CHANNEL:-0}"
@@ -179,7 +179,7 @@ atm_android_sdk_install_packages() {
         return 0
     fi
 
-    [[ -x "$sdkmanager" ]] || atm_fail "sdkmanager not found: $sdkmanager"
+    [[ -x "$sdkmanager" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_SDKMANAGER_NOT_FOUND)" "$sdkmanager")"
 
     "$sdkmanager" \
         --sdk_root="$(atm_android_sdk_root)" \
@@ -240,7 +240,7 @@ atm_android_sdk_stack_packages() {
             return 0
             ;;
         *)
-            atm_fail "Unknown Android SDK stack: $stack"
+            atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_UNKNOWN_STACK)" "$stack")"
             ;;
     esac
 }
@@ -256,7 +256,7 @@ atm_android_sdk_version_from_args() {
         case "$1" in
             --stack)
                 stack="${2:-}"
-                [[ -n "$stack" ]] || atm_fail "Missing value for --stack"
+                [[ -n "$stack" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_MISSING_VALUE)" "--stack")"
                 shift
                 ;;
             --stack=*)
@@ -264,7 +264,7 @@ atm_android_sdk_version_from_args() {
                 ;;
             --platform)
                 platform="${2:-}"
-                [[ -n "$platform" ]] || atm_fail "Missing value for --platform"
+                [[ -n "$platform" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_MISSING_VALUE)" "--platform")"
                 shift
                 ;;
             --platform=*)
@@ -272,7 +272,7 @@ atm_android_sdk_version_from_args() {
                 ;;
             --build-tools)
                 build_tools="${2:-}"
-                [[ -n "$build_tools" ]] || atm_fail "Missing value for --build-tools"
+                [[ -n "$build_tools" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_MISSING_VALUE)" "--build-tools")"
                 shift
                 ;;
             --build-tools=*)
@@ -280,7 +280,7 @@ atm_android_sdk_version_from_args() {
                 ;;
             --cmake)
                 cmake="${2:-}"
-                [[ -n "$cmake" ]] || atm_fail "Missing value for --cmake"
+                [[ -n "$cmake" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_MISSING_VALUE)" "--cmake")"
                 shift
                 ;;
             --cmake=*)
@@ -288,7 +288,7 @@ atm_android_sdk_version_from_args() {
                 ;;
             --ndk)
                 ndk="${2:-}"
-                [[ -n "$ndk" ]] || atm_fail "Missing value for --ndk"
+                [[ -n "$ndk" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_MISSING_VALUE)" "--ndk")"
                 shift
                 ;;
             --ndk=*)
@@ -378,12 +378,12 @@ atm_android_sdk_status() {
     fi
 
     if [[ -n "$platform" || -n "$ndk" || -n "$build_tools" ]]; then
-        printf '✅ API %s / Build Tools %s / NDK %s\n' \
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_STATUS_PACKAGES)\n" \
             "${platform#android-}" \
-            "${build_tools:-none}" \
-            "${ndk:-none}"
+            "${build_tools:-$(atm_t ATM_PLUGIN_ANDROID_SDK_NONE)}" \
+            "${ndk:-$(atm_t ATM_PLUGIN_ANDROID_SDK_NONE)}"
     else
-        printf '✅ cmdline-tools installed\n'
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_STATUS_TOOLS)\n"
     fi
 }
 
@@ -392,13 +392,13 @@ atm_android_sdk_list_installed_packages() {
 
     sdk_root="$(atm_android_sdk_root)"
 
-    printf 'SDK root: %s\n' "$sdk_root"
+    printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_ROOT_PATH)\n" "$sdk_root"
     printf 'cmdline-tools: %s\n' "$(atm_android_sdk_cmdline_tools_latest_dir)"
 
-    printf '\nPlatforms:\n'
+    printf "\n$(atm_t ATM_PLUGIN_ANDROID_SDK_PLATFORMS)\n"
     find "$sdk_root/platforms" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sed 's|.*/|- |' | sort -V || true
 
-    printf '\nBuild tools:\n'
+    printf "\n$(atm_t ATM_PLUGIN_ANDROID_SDK_BUILD_TOOLS)\n"
     find "$sdk_root/build-tools" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | sed 's|.*/|- |' | sort -V || true
 
     printf '\nCMake:\n'
@@ -475,13 +475,13 @@ atm_android_sdk_remove() {
     local package="${1:-}"
     local sdkmanager=""
 
-    [[ -n "$package" ]] || atm_fail "Usage: atm remove android_sdk <sdk-package>"
+    [[ -n "$package" ]] || atm_fail "$(atm_t ATM_PLUGIN_ANDROID_SDK_REMOVE_USAGE)"
 
     sdkmanager="$(atm_android_sdk_sdkmanager)"
-    [[ -x "$sdkmanager" ]] || atm_fail "sdkmanager not found: $sdkmanager"
+    [[ -x "$sdkmanager" ]] || atm_fail "$(printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_SDKMANAGER_NOT_FOUND)" "$sdkmanager")"
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: %s --sdk_root=%s --uninstall %q\n' "$sdkmanager" "$(atm_android_sdk_root)" "$package"
+        printf '%s: %s --sdk_root=%s --uninstall %q\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_RUN)" "$sdkmanager" "$(atm_android_sdk_root)" "$package"
     else
         "$sdkmanager" --sdk_root="$(atm_android_sdk_root)" --uninstall "$package"
     fi
@@ -496,8 +496,8 @@ atm_android_sdk_uninstall() {
     root="$(atm_android_sdk_root)"
 
     printf '%s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_UNINSTALL_WARNING)"
-    printf 'Target: %s\n' "$root"
-    printf 'Continue? [y/N]: '
+    printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_TARGET)\n" "$root"
+    printf '%s' "$(atm_t ATM_PLUGIN_ANDROID_SDK_CONFIRM_CONTINUE)"
     read -r answer
 
     case "$answer" in
@@ -510,8 +510,8 @@ atm_android_sdk_uninstall() {
     esac
 
     if [[ "${ATM_DRY_RUN:-0}" == "1" ]]; then
-        printf 'DRY-RUN: rm -rf %s\n' "$root"
-        printf 'DRY-RUN: rm -f %s\n' "$(atm_android_sdk_manifest_file)"
+        printf '%s: rm -rf %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_RUN)" "$root"
+        printf '%s: rm -f %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_DRY_RUN)" "$(atm_android_sdk_manifest_file)"
     else
         rm -rf "$root"
         rm -f "$(atm_android_sdk_manifest_file)"
@@ -521,7 +521,7 @@ atm_android_sdk_uninstall() {
 }
 
 atm_android_sdk_use() {
-    atm_warn "Android SDK does not use a current-version symlink. Use install/remove package operations instead."
+    atm_warn "$(atm_t ATM_PLUGIN_ANDROID_SDK_USE_UNSUPPORTED)"
 }
 
 atm_android_sdk_menu() {
@@ -538,13 +538,13 @@ atm_android_sdk_menu() {
         printf '    📦 %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_MENU_TITLE)"
         printf '%s\n' "=========================================="
         printf '%s: %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_CURRENT)" "$(atm_android_sdk_status)"
-        printf '%s: %s\n' "SDK root" "$(atm_android_sdk_root)"
+        printf '%s: %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_ROOT)" "$(atm_android_sdk_root)"
         printf '%s\n' "------------------------------------------"
         printf '1) %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_STACK_LATEST)"
-        printf '2) Android API 36 + Build Tools 36.0.0 + CMake 3.31.6 + NDK r29\n'
-        printf '3) Android API 35 + Build Tools 35.0.1 + CMake 3.31.6 + NDK r29\n'
-        printf '4) Android API 35 + Build Tools 35.0.0 + CMake 3.22.1 + NDK r28\n'
-        printf '5) Android API 34 + Build Tools 34.0.0 + CMake 3.22.1 + NDK r27\n'
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_STACK_OPTION)\n" "2" "36" "36.0.0" "3.31.6" "r29"
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_STACK_OPTION)\n" "3" "35" "35.0.1" "3.31.6" "r29"
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_STACK_OPTION)\n" "4" "35" "35.0.0" "3.22.1" "r28"
+        printf "$(atm_t ATM_PLUGIN_ANDROID_SDK_STACK_OPTION)\n" "5" "34" "34.0.0" "3.22.1" "r27"
         printf '6) %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_CUSTOM_STACK)"
         printf '7) %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_LIST_INSTALLED)"
         printf '8) %s\n' "$(atm_t ATM_PLUGIN_ANDROID_SDK_REMOVE_PACKAGE)"
@@ -571,11 +571,11 @@ atm_android_sdk_menu() {
                 atm_android_sdk_install --stack api34
                 ;;
             6)
-                printf 'Platform [android-36]: '
+                printf '%s' "$(atm_t ATM_PLUGIN_ANDROID_SDK_PLATFORM_PROMPT)"
                 read -r platform
                 platform="${platform:-android-36}"
 
-                printf 'Build tools [36.0.0]: '
+                printf '%s' "$(atm_t ATM_PLUGIN_ANDROID_SDK_BUILD_TOOLS_PROMPT)"
                 read -r build_tools
                 build_tools="${build_tools:-36.0.0}"
 

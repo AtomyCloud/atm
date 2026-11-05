@@ -677,6 +677,12 @@ Desktop launchers are installed in:
 
 ## Locales
 
+Plugin menus, prompts, status messages and ATM-owned helper diagnostics use the
+selected locale, with English fallback. Plugin names/descriptions are localized
+where appropriate; product names, commands, URLs and machine-readable fields are
+preserved. Output produced by external installers and system utilities retains
+the language those programs support.
+
 Use the CLI to persistently change the ATM language:
 
 ```bash
