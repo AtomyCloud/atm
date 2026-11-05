@@ -17,11 +17,11 @@ import tempfile
 import time
 import uuid
 
-from plugin_catalog import API, SOURCE, ID, SHA, MAX_FILE, MAX_TOTAL, Catalog, clean, core_path, parse_metadata, safe_path
+from plugin_catalog import API, BRANCH, SOURCE, ID, SHA, MAX_FILE, MAX_TOTAL, Catalog, CatalogHTTPError, clean, core_path, parse_metadata, safe_path
 
 
 SCHEMA = 1
-CORE_BRANCH = "v0.0.1"
+CORE_BRANCH = BRANCH
 UPDATES_SOURCE = "https://github.com/AtomyCloud/atm/tree/" + CORE_BRANCH
 CORE_UNITS = ("bin", "lib", "lang", "core-api.json")
 STATES = {"current", "available", "modified", "unknown", "unmanaged", "removed", "blocked", "ahead", "diverged"}
@@ -33,7 +33,7 @@ def component_source(component):
 
 
 def component_branch(component):
-    return CORE_BRANCH if component == "core" else "main"
+    return BRANCH
 
 
 class LegacyCoreCatalog(Catalog):
@@ -196,7 +196,7 @@ def git_manifest(root, component):
 
 
 class Updates:
-    def __init__(self, home, plugins, state, cache, factory=Catalog, core_factory=LegacyCoreCatalog):
+    def __init__(self, home, plugins, state, cache, factory=Catalog, core_factory=None):
         self.home = Path(home).absolute()
         self.plugins = Path(plugins).absolute()
         if self.home.is_symlink() or self.plugins.is_symlink():
@@ -214,7 +214,7 @@ class Updates:
                for destination in (self.state, self.cache) for root in protected):
             raise ValueError("Update state/cache must be outside replaceable component directories")
         self.factory = factory
-        self.core_factory = core_factory
+        self.core_factory = factory if core_factory is None else core_factory
         self.catalogs = {}
         self.relations = {}
 
@@ -319,11 +319,21 @@ class Updates:
             return "identical"
         key = (revision, remote.revision)
         if key not in self.relations:
-            data = remote.json(API + "/compare/" + revision + "..." + remote.revision)
-            value = data.get("status")
-            if value not in ("ahead", "behind", "identical", "diverged"):
-                raise ValueError("Cannot establish official revision ancestry")
-            self.relations[key] = value
+            try:
+                data = remote.json(API + "/compare/" + revision + "..." + remote.revision)
+                value = data.get("status")
+                if value not in ("ahead", "behind", "identical", "diverged"):
+                    raise ValueError("Cannot establish official revision ancestry")
+                self.relations[key] = value
+            except (OSError, ValueError, subprocess.SubprocessError) as error:
+                if isinstance(error, CatalogHTTPError) and error.status == 404:
+                    error = ValueError("Cannot compare installation baseline " + revision[:12] +
+                                       " with official " + remote.revision[:12] +
+                                       ": commit unavailable on GitHub (possibly an unpublished local commit). "
+                                       "No update authorized; review the installation origin")
+                self.relations[key] = error
+        if isinstance(self.relations[key], Exception):
+            raise self.relations[key]
         return self.relations[key]
 
     def api(self, remote=None):
@@ -346,11 +356,18 @@ class Updates:
 
     def status(self, component, remote):
         base = self.baseline(component, remote)
-        latest = self.remote_files(remote, component)
         if base is None:
             return "unmanaged", "No verified installation baseline"
         if not self.clean(component, base["files"]):
-            return "modified", "Local tracked files differ from the installation baseline"
+            names = []
+            for name, entry in sorted(base["files"].items()):
+                if not self.clean(component, {name: entry}):
+                    names.append(name)
+                    if len(names) == 6:
+                        break
+            detail = ", ".join(names[:5]) + (", ..." if len(names) > 5 else "")
+            return "modified", "Local tracked files differ from the installation baseline: " + detail
+        latest = self.remote_files(remote, component)
         if latest is None:
             return "removed", "No longer present in the official catalog; retained locally"
         if component != "core":
@@ -386,10 +403,13 @@ class Updates:
                     return cached
             except (OSError, ValueError):
                 pass
+        self.catalogs.clear()
+        self.relations.clear()
         rows = []
-        # CORE and plugins deliberately resolve different branches. A failure in
-        # either channel must not hide the other channel's independent result.
+        # The legacy channel uses one pinned tree for CORE and every plugin.
         groups = ((["core"], self.core_factory), (self.components()[1:], self.factory))
+        if self.core_factory is self.factory:
+            groups = ((self.components(), self.factory),)
         for components, factory in groups:
             if not components:
                 continue
@@ -407,6 +427,7 @@ class Updates:
                     status, detail = "unknown", str(error)
                 rows.append({"component": component, "status": status, "detail": detail, "revision": remote.revision})
         data = {"schema": SCHEMA, "home": str(self.home), "plugins": str(self.plugins), "source": UPDATES_SOURCE,
+                "plugin_source": SOURCE,
                 "checked_at": time.time(), "rows": rows}
         atomic_json(self.cache, data)
         return data
@@ -416,7 +437,8 @@ class Updates:
             return None
         data = read_json(self.cache)
         if data.get("schema") != SCHEMA or data.get("home") != str(self.home) or data.get("plugins") != str(self.plugins) \
-                or data.get("source") != UPDATES_SOURCE or type(data.get("checked_at")) not in (int, float) \
+                or data.get("source") != UPDATES_SOURCE or data.get("plugin_source") != SOURCE \
+                or type(data.get("checked_at")) not in (int, float) \
                 or not 0 <= time.time() - data["checked_at"] <= ttl:
             return None
         rows = data.get("rows")
@@ -621,11 +643,10 @@ class Updates:
             raise ValueError("CORE recovery is pending; no component updates are permitted")
         if not SHA.fullmatch(revision):
             raise ValueError("A checked, pinned official revision is required")
-        if "core" in targets:
-            # A manually supplied SHA or old main cache cannot bypass the channel.
-            latest = self.core_factory()
-            if self.relationship(latest, revision) not in ("ahead", "identical"):
-                raise ValueError("CORE revision must be on the official v0.0.1 history")
+        # A manually supplied SHA or old main cache cannot bypass the channel.
+        latest = self.core_factory() if "core" in targets else self.factory()
+        if self.relationship(latest, revision) not in ("ahead", "identical"):
+            raise ValueError("Component revision must be on the official " + BRANCH + " history")
         remote = self.catalog(revision)
         results = []
         with self.lock():

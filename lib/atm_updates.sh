@@ -73,7 +73,7 @@ atm_updates_menu_label() {
 atm_updates_show() {
     local component="" status="" revision="" detail=""
     printf '%s\nCORE: %s\nPlugins: %s\n' "$(atm_updates_t ATM_UPDATES_TITLE)" \
-        'https://github.com/AtomyCloud/atm/tree/v0.0.1' 'https://github.com/AtomyCloud/atm/tree/main/plugins'
+        'https://github.com/AtomyCloud/atm/tree/v0.0.1' 'https://github.com/AtomyCloud/atm/tree/v0.0.1/plugins'
     if [[ -z "${ATM_UPDATES_ROWS:-}" ]]; then atm_info "$(atm_updates_t ATM_UPDATES_UNKNOWN)"; return 0; fi
     while IFS=$'\t' read -r component status revision detail; do
         [[ -n "$component" ]] || continue

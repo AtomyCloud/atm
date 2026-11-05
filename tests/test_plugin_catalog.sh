@@ -44,7 +44,7 @@ python3() {
 
 output="$(atm_plugins_cli search brave)"
 [[ "$output" == *'brave | Brave Browser'* && "$output" == *'browser_tools | Browser Tools'* ]]
-[[ "$output" == *'https://github.com/AtomyCloud/atm/tree/main/plugins'* && ! -e "$ATM_PLUGIN_DIR" ]]
+[[ "$output" == *'https://github.com/AtomyCloud/atm/tree/v0.0.1/plugins'* && ! -e "$ATM_PLUGIN_DIR" ]]
 output="$(atm_plugins_cli search missing)"
 [[ "$output" == *'No matching official plugins'* ]]
 output="$(atm_plugins_cli search --help)"

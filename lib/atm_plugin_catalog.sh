@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 atm_plugins_official_source() {
-    printf '%s\n' 'https://github.com/AtomyCloud/atm/tree/main/plugins'
+    printf '%s\n' 'https://github.com/AtomyCloud/atm/tree/v0.0.1/plugins'
 }
 
 atm_plugins_catalog_rows() {

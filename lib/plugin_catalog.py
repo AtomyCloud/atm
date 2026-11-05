@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read and download plugins exclusively from AtomyCloud/atm main/plugins."""
+"""Read and download legacy plugins exclusively from AtomyCloud/atm v0.0.1/plugins."""
 
 import argparse
 import base64
@@ -19,7 +19,8 @@ from urllib.parse import quote
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 
-SOURCE = "https://github.com/AtomyCloud/atm/tree/main/plugins"
+BRANCH = "v0.0.1"
+SOURCE = "https://github.com/AtomyCloud/atm/tree/" + BRANCH + "/plugins"
 API = "https://api.github.com/repos/AtomyCloud/atm"
 RAW = "https://raw.githubusercontent.com/AtomyCloud/atm"
 ID = re.compile(r"[a-z][a-z0-9_-]{0,63}\Z")
@@ -34,6 +35,12 @@ def core_path(path):
 
 class CatalogError(ValueError):
     pass
+
+
+class CatalogHTTPError(CatalogError):
+    def __init__(self, message, status):
+        super().__init__(message)
+        self.status = status
 
 
 class NoRedirects(HTTPRedirectHandler):
@@ -54,10 +61,18 @@ def get_bytes(url, limit, token=""):
             data = response.read(limit + 1)
     except HTTPError as error:
         if error.code in (403, 429):
-            raise CatalogError("GitHub access denied or rate limit reached; try later or set GITHUB_TOKEN") from None
+            detail = "GitHub access denied or rate limit reached; further API requests stopped for this check"
+            retry = error.headers.get("Retry-After", "") if error.headers else ""
+            reset = error.headers.get("X-RateLimit-Reset", "") if error.headers else ""
+            if retry.isascii() and retry.isdigit():
+                detail += "; retry after " + retry + " seconds"
+            elif reset.isascii() and reset.isdigit():
+                detail += "; rate limit reset Unix timestamp: " + reset
+            detail += ". Wait before retrying; GITHUB_TOKEN is optional for public repositories"
+            raise CatalogHTTPError(detail, error.code) from None
         if error.code == 404:
-            raise CatalogError("Official repository or plugin unavailable; private access requires GITHUB_TOKEN") from None
-        raise CatalogError("GitHub HTTP error: " + str(error.code)) from None
+            raise CatalogHTTPError("Official repository resource not found (HTTP 404); check the branch, commit or file", 404) from None
+        raise CatalogHTTPError("GitHub HTTP error: " + str(error.code), error.code) from None
     except URLError as error:
         raise CatalogError("Cannot reach the official GitHub repository: " + str(error.reason)) from None
     if len(data) > limit:
@@ -106,9 +121,9 @@ class Catalog:
     def __init__(self, revision=None):
         self.token = os.environ.get("GITHUB_TOKEN", "")
         if revision is None:
-            revision = self.json(API + "/commits/main").get("sha", "")
+            revision = self.branch_revision()
         if not isinstance(revision, str) or not SHA.fullmatch(revision):
-            raise CatalogError("Invalid main revision")
+            raise CatalogError("Invalid official revision")
         self.revision = revision
         tree = self.json(API + "/git/trees/" + revision + "?recursive=1")
         if tree.get("truncated") is not False or not isinstance(tree.get("tree"), list):
@@ -140,10 +155,41 @@ class Catalog:
         if len(self.plugins) > 200:
             raise CatalogError("Plugin catalog exceeds the supported size")
 
+    def branch_revision(self):
+        revision = self.json(API + "/commits/" + BRANCH).get("sha", "")
+        if not isinstance(revision, str) or not SHA.fullmatch(revision):
+            raise CatalogError("Invalid official " + BRANCH + " revision; no fallback is allowed")
+        return revision
+
+    def verify_branch(self):
+        latest = self.branch_revision()
+        if latest != self.revision:
+            relation = self.json(API + "/compare/" + self.revision + "..." + latest).get("status")
+            if relation not in ("ahead", "identical"):
+                raise CatalogError("Plugin revision must be on the official " + BRANCH + " history")
+
     def json(self, url):
-        value = json.loads(get_bytes(url, 16 * 1024 * 1024, self.token))
-        if not isinstance(value, dict):
-            raise CatalogError("Invalid GitHub response")
+        # Cache failures too: every installed plugin may need the same comparison.
+        if not hasattr(self, "json_cache"):
+            self.json_cache = {}
+            self.json_errors = {}
+            self.api_error = None
+        if url in self.json_cache:
+            return self.json_cache[url]
+        if url in self.json_errors:
+            raise self.json_errors[url]
+        if self.api_error is not None:
+            raise self.api_error
+        try:
+            value = json.loads(get_bytes(url, 16 * 1024 * 1024, self.token))
+            if not isinstance(value, dict):
+                raise CatalogError("Invalid GitHub response")
+        except (OSError, ValueError) as error:
+            self.json_errors[url] = error
+            if isinstance(error, CatalogHTTPError) and error.status in (401, 403, 429):
+                self.api_error = error
+            raise
+        self.json_cache[url] = value
         return value
 
     def blob(self, entry):
@@ -174,7 +220,7 @@ class Catalog:
     def metadata(self, plugin_id):
         files = self.plugins.get(plugin_id)
         if files is None:
-            raise CatalogError("Plugin not found in the official main/plugins directory")
+            raise CatalogError("Plugin not found in the official " + BRANCH + "/plugins directory")
         values = parse_metadata(self.blob(files["plugin.metadata"]), plugin_id)
         for required in ("plugin.conf", "lang/en-us.lang", values.get("ATM_PLUGIN_ENTRYPOINT", "plugin.sh")):
             if required not in files:
@@ -200,7 +246,8 @@ class Catalog:
             raise CatalogError("Invalid plugin ID")
         files = self.plugins.get(plugin_id)
         if files is None:
-            raise CatalogError("Plugin not found in the official main/plugins directory")
+            raise CatalogError("Plugin not found in the official " + BRANCH + "/plugins directory")
+        self.verify_branch()
         self.metadata(plugin_id)
         total = 0
         for relative, entry in files.items():
@@ -239,7 +286,7 @@ class Catalog:
                     result = subprocess.run(["bash", "-n", str(path)], capture_output=True, timeout=10)
                     if result.returncode:
                         raise CatalogError("Bash syntax validation failed: " + relative)
-            receipt = {"schema": 1, "source": SOURCE, "branch": "main", "commit": self.revision, "plugin": plugin_id,
+            receipt = {"schema": 1, "source": SOURCE, "branch": BRANCH, "commit": self.revision, "plugin": plugin_id,
                        "files": {name: {"sha": entry["sha"], "mode": entry["mode"]} for name, entry in files.items()}}
             (stage / ".atm-origin.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
             if os.path.lexists(target):

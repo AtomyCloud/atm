@@ -128,7 +128,7 @@ ATM_LANG=en-us atm plugins list
 ```
 
 Search and download new plugins from the fixed official source,
-[AtomyCloud/atm, main/plugins](https://github.com/AtomyCloud/atm/tree/main/plugins):
+[AtomyCloud/atm, v0.0.1/plugins](https://github.com/AtomyCloud/atm/tree/v0.0.1/plugins):
 
 ```bash
 ATM_LANG=en-us atm plugins search brave
@@ -142,7 +142,7 @@ and file paths. An empty search lists the catalog; it does not search file bodie
 Results show which plugins are already local. Existing plugins are never replaced.
 
 Downloads require confirmation because plugins contain Bash code that ATM sources
-on startup. Files are pinned to one `main` commit, verified against Git blob hashes,
+on startup. Files are pinned to one `v0.0.1` commit, verified against Git blob hashes,
 and checked with `bash -n` before publication under ATM's local `plugins` directory.
 Search/download does not execute the downloaded code or install its application.
 Restart ATM to load the new plugin, then use its regular menu. No sudo is used for
@@ -287,8 +287,12 @@ even while plugin versions remain `0.0.1`. Changed plugins show a blue `Update`
 badge; plugin-only commits do not flag unchanged CORE files. Checks use a pinned
 official snapshots and a five-minute cache. The legacy CORE is pinned exclusively
 to [AtomyCloud/atm/v0.0.1](https://github.com/AtomyCloud/atm/tree/v0.0.1);
-plugin updates/catalog downloads continue to use `main/plugins`. Each component
-uses its own channel's commit; old CORE caches/receipts from `main` are not trusted.
+plugin updates/catalog downloads use `v0.0.1/plugins` exclusively. One legacy
+commit/tree is shared by the check, with independent status for each component.
+Old CORE/plugin caches and receipts from `main` are not silently relabelled.
+Missing commit comparisons are not retried per plugin; API denial/rate limits stop
+further API requests within that check. Local modifications remain protected and
+the report lists affected files. See the update guide for recovery and diagnostics.
 Offline or
 unverified installations are reported explicitly, not assumed current.
 

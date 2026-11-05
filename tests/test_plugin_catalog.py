@@ -61,7 +61,7 @@ class CatalogTests(unittest.TestCase):
 
     def fetch(self, url, limit, token=""):
         self.requests.append((url, token))
-        if url == catalog.API + "/commits/main":
+        if url == catalog.API + "/commits/v0.0.1":
             return json.dumps({"sha": REVISION}).encode()
         if url == catalog.API + "/git/trees/" + REVISION + "?recursive=1":
             return json.dumps({"truncated": self.truncated, "tree": self.entries}).encode()
@@ -97,14 +97,51 @@ class CatalogTests(unittest.TestCase):
         receipt = json.loads((target / ".atm-origin.json").read_text())
         self.assertEqual(receipt["commit"], REVISION)
         self.assertEqual(receipt["source"], catalog.SOURCE)
+        self.assertEqual(receipt["branch"], "v0.0.1")
         self.assertEqual(list(target.parent.iterdir()), [target])
         self.assertFalse(self.marker.exists())
 
     def test_search_snapshot_remains_pinned_for_download(self):
         remote = catalog.Catalog(REVISION)
         remote.download("go", self.root / "plugins")
-        self.assertNotIn(catalog.API + "/commits/main", [url for url, _ in self.requests])
-        self.assertTrue(all(REVISION in url for url, _ in self.requests))
+        self.assertIn(catalog.API + "/commits/v0.0.1", [url for url, _ in self.requests])
+        self.assertTrue(all(REVISION in url or url == catalog.API + "/commits/v0.0.1"
+                            for url, _ in self.requests))
+
+    def test_fixed_legacy_branch_has_no_fallback_or_environment_override(self):
+        with patch.dict(os.environ, ATM_SELF_UPDATE_BRANCH="main", ATM_REPO_URL="https://example.invalid"):
+            catalog.Catalog()
+        self.assertEqual(self.requests[0][0], catalog.API + "/commits/v0.0.1")
+        self.assertNotIn("/commits/main", " ".join(url for url, _ in self.requests))
+        for sha in (None, "", "main", 12):
+            with patch.object(catalog, "get_bytes", return_value=json.dumps({"sha": sha}).encode()) as fetch:
+                with self.assertRaisesRegex(catalog.CatalogError, "no fallback"):
+                    catalog.Catalog()
+                self.assertEqual(fetch.call_count, 1)
+        with patch.object(catalog, "get_bytes", side_effect=catalog.CatalogHTTPError("missing branch", 404)) as fetch:
+            with self.assertRaises(catalog.CatalogHTTPError):
+                catalog.Catalog()
+            self.assertEqual(fetch.call_count, 1)
+
+    def test_pinned_download_requires_legacy_ancestry_and_keeps_selected_snapshot(self):
+        for status in ("ahead", "behind", "diverged", "invalid"):
+            remote = catalog.Catalog(REVISION)
+            new = "b" * 40
+            def fetch(url, limit, token=""):
+                if url == catalog.API + "/commits/v0.0.1":
+                    return json.dumps({"sha": new}).encode()
+                if url == catalog.API + "/compare/" + REVISION + "..." + new:
+                    return json.dumps({"status": status}).encode()
+                return self.fetch(url, limit, token)
+            root = self.root / status
+            with self.subTest(status=status), patch.object(catalog, "get_bytes", side_effect=fetch):
+                if status == "ahead":
+                    target = remote.download("go", root)
+                    self.assertEqual(json.loads((target / ".atm-origin.json").read_text())["commit"], REVISION)
+                else:
+                    with self.assertRaisesRegex(catalog.CatalogError, "official v0.0.1 history"):
+                        remote.download("go", root)
+                    self.assertFalse(root.exists())
 
     def test_existing_directory_and_broken_symlink_are_not_overwritten(self):
         plugins = self.root / "plugins"
@@ -201,6 +238,35 @@ class CatalogTests(unittest.TestCase):
 
 
 class TransportTests(unittest.TestCase):
+    def test_http_errors_preserve_status_and_do_not_call_missing_commits_private(self):
+        errors = (
+            (404, {}, "check the branch, commit or file"),
+            (403, {"X-RateLimit-Reset": "2000000000"}, "2000000000"),
+            (429, {"Retry-After": "60"}, "retry after 60 seconds"),
+        )
+        for code, headers, expected in errors:
+            with self.subTest(code=code), patch.object(catalog, "build_opener") as opener:
+                opener.return_value.open.side_effect = HTTPError(catalog.API, code, "failure", headers, None)
+                with self.assertRaises(catalog.CatalogHTTPError) as caught:
+                    catalog.get_bytes(catalog.API + "/compare/a...b", 100)
+                self.assertEqual(caught.exception.status, code)
+                self.assertIn(expected, str(caught.exception))
+                self.assertNotIn("private access requires", str(caught.exception))
+
+    def test_json_caches_failures_and_stops_requests_after_denial(self):
+        for code in (404, 403, 429):
+            remote = catalog.Catalog.__new__(catalog.Catalog)
+            remote.token = ""
+            with self.subTest(code=code), patch.object(catalog, "get_bytes") as fetch:
+                fetch.side_effect = catalog.CatalogHTTPError("fixture failure", code)
+                for _ in range(16):
+                    with self.assertRaises(catalog.CatalogHTTPError):
+                        remote.json(catalog.API + "/compare/a...b")
+                self.assertEqual(fetch.call_count, 1)
+                with self.assertRaises(catalog.CatalogHTTPError):
+                    remote.json(catalog.API + "/compare/c...b")
+                self.assertEqual(fetch.call_count, 2 if code == 404 else 1)
+
     def test_redirects_and_official_host_credential_boundary(self):
         with self.assertRaises(catalog.CatalogError):
             catalog.NoRedirects().redirect_request(None, None, 302, "redirect", None, "https://other.example/")

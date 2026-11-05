@@ -2,8 +2,8 @@
 
 These actions update ATM's own code, not Node, Docker, REA or other applications
 installed by plugins. The repository is fixed to `AtomyCloud/atm`. Legacy CORE
-updates use **`v0.0.1` only**; plugin updates/downloads continue using `main/plugins`.
-There is no fallback to `main` or `v0.0.2` for CORE, including on network errors or
+updates and plugin updates/downloads use **`v0.0.1` only**.
+There is no fallback to `main` or `v0.0.2`, including on network errors or
 a missing/invalid legacy branch. Repository/branch configuration cannot override
 this policy. Existing configuration files are not rewritten.
 
@@ -44,8 +44,8 @@ then ATM restarted before plugins requiring its newer API can be updated.
 
 ## Independent Detection
 
-Each check pins one official `v0.0.1` commit for CORE and one `main` commit for
-plugins, retaining the appropriate revision per row/action, and compares file paths, Git blob
+Each check pins one official `v0.0.1` commit and tree shared by CORE and plugins,
+retaining the pinned revision per row/action, and compares file paths, Git blob
 hashes and executable modes for each component. A plugin-only commit does not
 mark CORE or unchanged plugins as outdated. Plugin version `0.0.1` is descriptive,
 not the update detector; version bumps are not required for detection.
@@ -90,17 +90,43 @@ original commit is known, explicitly verify it:
 
 ```bash
 atm updates verify core <official-v0.0.1-commit>
-atm updates verify brave <official-main-commit>
+atm updates verify brave <official-v0.0.1-commit>
 ```
 
-Old CORE caches from `main` are discarded. Old CORE origins/receipts labelled
+Old CORE/plugin caches from `main` are discarded. Old origins/receipts labelled
 `main` are not silently relabelled: they report Unknown until explicitly verified
-against a matching commit in the official `v0.0.1` history. Plugin origins remain
-unchanged. If files do not match, reconcile them manually; no force-adoption exists.
+against a matching commit in the official `v0.0.1` history. Original receipts remain
+unchanged until verification succeeds. If files do not match, reconcile them
+manually; no force-adoption exists. Downloads and update actions also validate
+explicitly supplied commit IDs against the legacy history before publishing files.
 
 Verification requires confirmation, ancestry in the component's official branch and matching owned
 files. It changes only the receipt, not component files. Custom tracked settings
 must be reconciled manually; verification does not bypass file matching.
+
+## Check Failures
+
+`Locally modified` protects tracked files that differ from the recorded baseline.
+The detail lists up to five affected paths. Review and preserve those edits before
+updating; ATM does not reset files or silently replace the baseline. In a Git
+checkout, inspect `git status --short` and `git diff -- lib bin lang core-api.json`.
+Selective replacement still refuses Git checkouts; use the explicit Git workflow
+below after reviewing local work.
+
+A comparison returning HTTP 404 does not necessarily mean a private repository.
+The installation baseline may be a local commit that has not been published, or
+a revision no longer available in the official history. ATM reports the baseline
+and target commit IDs and refuses to authorize replacement without ancestry.
+Publishing your intended work is a separate, manual Git decision, not an update
+operation. Do not use baseline verification to hide local modifications.
+
+Repeated comparison failures are cached within one check. After API access denial
+or a rate limit, the catalog stops issuing further API requests for that check.
+Retry guidance includes `Retry-After` seconds or the reset Unix timestamp when
+GitHub provides them. Wait before another explicit `atm updates check`.
+An expired quota cannot be restored by this fix: unauthenticated public requests
+share the originating IP's limit. A token is optional, not a repair for an absent
+commit. See [GitHub REST API rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api).
 
 ## Protected Updates
 

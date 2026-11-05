@@ -72,8 +72,6 @@ class UpdateTests(unittest.TestCase):
     def fetch(self, url, limit, token=""):
         self.requests.append(url)
         if url == catalog.API + "/commits/v0.0.1":
-            return json.dumps({"sha": getattr(self, "core_remote", self.remote)}).encode()
-        if url == catalog.API + "/commits/main":
             return json.dumps({"sha": self.remote}).encode()
         for revision in (A, B):
             if url == catalog.API + "/git/trees/" + revision + "?recursive=1":
@@ -110,27 +108,81 @@ class UpdateTests(unittest.TestCase):
         self.advance({"plugins/alpha/plugin.sh": "#!/bin/bash\n# new implementation\n"})
         self.requests.clear()
         self.assertEqual(self.statuses(), {"core": "current", "plugin:alpha": "available", "plugin:beta": "current"})
-        self.assertEqual(self.requests.count(catalog.API + "/commits/main"), 1)
+        self.assertEqual(self.requests.count(catalog.API + "/commits/v0.0.1"), 1)
+        self.assertEqual(self.requests.count(catalog.API + "/git/trees/" + B + "?recursive=1"), 1)
+        self.assertFalse(any("/commits/main" in url for url in self.requests))
         self.assertFalse(self.marker.exists())
         self.assertIn(("plugin:alpha", "changed", "plugin.sh"), self.engine.changes())
 
-    def test_distinct_core_and_plugin_branches_keep_independent_revisions(self):
+    def test_unpublished_comparison_is_attempted_once_for_multiple_plugins(self):
         self.bootstrap()
-        self.advance({"lib/atm_core.sh": "ATM_CORE_PLUGIN_API=1\n# main only\n",
+        self.advance({"plugins/alpha/plugin.sh": "#!/bin/bash\n# update\n",
+                      "plugins/beta/plugin.sh": "#!/bin/bash\n# update\n"})
+        comparisons = []
+        def fetch(url, limit, token=""):
+            if "/compare/" in url:
+                comparisons.append(url)
+                raise catalog.CatalogHTTPError("missing", 404)
+            return self.fetch(url, limit, token)
+        with patch.object(catalog, "get_bytes", side_effect=fetch):
+            result = self.engine.check()
+        self.assertEqual(len(comparisons), 1)
+        for row in result["rows"][1:]:
+            self.assertEqual(row["status"], "unknown")
+            self.assertIn("unpublished local commit", row["detail"])
+            self.assertIn(A[:12], row["detail"])
+            self.assertNotIn("private access", row["detail"])
+        # A new explicit check may retry after the missing commit is published.
+        self.assertEqual(self.statuses(), {"core": "current", "plugin:alpha": "available", "plugin:beta": "available"})
+
+    def test_rate_limit_stops_comparisons_even_for_distinct_baselines(self):
+        self.bootstrap()
+        self.advance({"plugins/alpha/plugin.sh": "#!/bin/bash\n# update\n",
+                      "plugins/beta/plugin.sh": "#!/bin/bash\n# update\n"})
+        receipt = self.engine.receipt_file("plugin:beta")
+        data = updates.read_json(receipt)
+        data["commit"] = "c" * 40
+        updates.atomic_json(receipt, data)
+        comparisons = []
+        def fetch(url, limit, token=""):
+            if "/compare/" in url:
+                comparisons.append(url)
+                raise catalog.CatalogHTTPError("rate limit reached", 403)
+            return self.fetch(url, limit, token)
+        before = updates.snapshot(self.home)
+        with patch.object(catalog, "get_bytes", side_effect=fetch):
+            self.assertEqual(self.statuses(), {"core": "current", "plugin:alpha": "unknown", "plugin:beta": "unknown"})
+        self.assertEqual(len(comparisons), 1)
+        self.assertEqual(updates.snapshot(self.home), before)
+
+    def test_local_changes_name_files_without_fetching_remote_metadata(self):
+        self.bootstrap()
+        (self.home / "lib/atm_core.sh").write_text("# local customization\n")
+        (self.plugins / "alpha/plugin.conf").write_text("# local configuration\n")
+        remote = catalog.Catalog()
+        with patch.object(remote, "metadata", side_effect=AssertionError("unnecessary metadata fetch")):
+            state, detail = self.engine.status("plugin:alpha", remote)
+            self.assertEqual(state, "modified")
+            self.assertIn("plugin.conf", detail)
+            state, detail = self.engine.status("core", remote)
+            self.assertEqual(state, "modified")
+            self.assertIn("lib/atm_core.sh", detail)
+
+    def test_shared_legacy_snapshot_keeps_component_updates_independent(self):
+        self.bootstrap()
+        self.advance({"lib/atm_core.sh": "ATM_CORE_PLUGIN_API=1\n# legacy core update\n",
                       "plugins/alpha/plugin.sh": "#!/bin/bash\n# plugin update\n"})
-        self.core_remote = A
         data = self.engine.check()
         rows = {row["component"]: row for row in data["rows"]}
-        self.assertEqual((rows["core"]["status"], rows["core"]["revision"]), ("current", A))
+        self.assertEqual((rows["core"]["status"], rows["core"]["revision"]), ("available", B))
         self.assertEqual((rows["plugin:alpha"]["status"], rows["plugin:alpha"]["revision"]), ("available", B))
-        self.assertFalse(any(component == "core" for component, _, _ in self.engine.changes()))
+        self.assertEqual(rows["plugin:beta"]["status"], "current")
         self.assertEqual(self.engine.apply(["plugin:alpha"], B)[0]["result"], "updated")
         self.assertEqual((self.home / "lib/atm_core.sh").read_bytes(), self.files["lib/atm_core.sh"][0])
 
     def test_core_only_legacy_commit_uses_legacy_receipt_and_leaves_plugins(self):
         self.bootstrap()
         self.advance({"lib/atm_core.sh": "ATM_CORE_PLUGIN_API=1\n# legacy update\n"})
-        self.core_remote, self.remote = B, A
         self.assertEqual(self.statuses(), {"core": "available", "plugin:alpha": "current", "plugin:beta": "current"})
         plugins = updates.snapshot(self.plugins)
         self.assertEqual(self.engine.apply(["core"], B)[0]["result"], "updated")
@@ -139,14 +191,15 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(receipt["source"], updates.UPDATES_SOURCE)
         self.assertEqual(updates.snapshot(self.plugins), plugins)
 
-    def test_core_apply_and_verify_refuse_commit_outside_legacy_history(self):
+    def test_core_and_plugins_refuse_apply_and_verify_outside_legacy_history(self):
         self.bootstrap()
-        self.core_remote, self.remote, self.relationship = A, B, "behind"
+        self.remote, self.relationship = A, "behind"
         before = updates.snapshot(self.home)
-        with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
-            self.engine.apply(["core"], B)
-        with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
-            self.engine.verify("core", B)
+        for component in ("core", "plugin:alpha"):
+            with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
+                self.engine.apply([component], B)
+            with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
+                self.engine.verify(component, B)
         self.assertEqual(updates.snapshot(self.home), before)
 
     def test_old_main_cache_and_core_receipt_require_revalidation(self):
@@ -163,6 +216,23 @@ class UpdateTests(unittest.TestCase):
         self.engine.verify("core", A)
         self.assertEqual(self.statuses()["core"], "current")
 
+    def test_old_plugin_channel_cache_and_receipt_require_revalidation(self):
+        self.bootstrap()
+        data = updates.read_json(self.engine.cache)
+        for source in (None, "https://github.com/AtomyCloud/atm/tree/main/plugins"):
+            data["plugin_source"] = source
+            updates.atomic_json(self.engine.cache, data)
+            self.assertIsNone(self.engine.read_cache())
+        path = self.engine.receipt_file("plugin:alpha")
+        receipt = updates.read_json(path)
+        receipt.update(source="https://github.com/AtomyCloud/atm/tree/main/plugins", branch="main")
+        updates.atomic_json(path, receipt)
+        before = path.read_bytes()
+        self.assertEqual(self.statuses()["plugin:alpha"], "unknown")
+        self.assertEqual(path.read_bytes(), before)
+        self.engine.verify("plugin:alpha", A)
+        self.assertEqual(self.statuses()["plugin:alpha"], "current")
+
     def test_missing_or_malformed_legacy_branch_never_falls_back_to_main(self):
         for value in (None, "", "main", 123):
             with patch.object(catalog, "get_bytes", return_value=json.dumps({"sha": value}).encode()) as fetch:
@@ -170,8 +240,10 @@ class UpdateTests(unittest.TestCase):
                     updates.LegacyCoreCatalog()
                 self.assertEqual(fetch.call_count, 1)
                 self.assertEqual(fetch.call_args.args[0], catalog.API + "/commits/v0.0.1")
-        with patch.object(self.engine, "core_factory", side_effect=ValueError("legacy branch unavailable")):
-            self.assertEqual(self.statuses(), {"core": "unknown", "plugin:alpha": "current", "plugin:beta": "current"})
+        with patch.object(catalog, "get_bytes", side_effect=catalog.CatalogHTTPError("legacy branch unavailable", 404)) as fetch:
+            self.assertEqual(set(self.statuses().values()), {"unknown"})
+            self.assertEqual(fetch.call_count, 1)
+            self.assertEqual(fetch.call_args.args[0], catalog.API + "/commits/v0.0.1")
 
     def test_stale_config_cannot_override_core_channel_and_is_not_rewritten(self):
         config = self.root / "config.sh"
@@ -222,7 +294,7 @@ atm_config_init
 
     def test_legacy_receipt_is_verified_and_missing_baseline_is_not_invented(self):
         self.advance({"plugins/alpha/plugin.sh": "#!/bin/bash\n# updated\n"})
-        receipt = {"source": catalog.SOURCE, "branch": "main", "commit": A, "plugin": "alpha"}
+        receipt = {"source": catalog.SOURCE, "branch": "v0.0.1", "commit": A, "plugin": "alpha"}
         (self.plugins / "alpha/.atm-origin.json").write_text(json.dumps(receipt))
         states = self.statuses()
         self.assertEqual(states["plugin:alpha"], "available")
@@ -458,7 +530,7 @@ atm_plugin_load_metadata "$TEST_PLUGIN"
         self.assertEqual(self.engine.receipt_file("plugin:alpha").read_bytes(), receipt)
         self.relationship = "diverged"
         self.engine = self.new_engine()
-        with self.assertRaisesRegex(ValueError, "official main history"):
+        with self.assertRaisesRegex(ValueError, "official v0.0.1 history"):
             self.engine.verify("plugin:beta", A)
 
     def test_project_api_constant_matches_the_published_declaration(self):

@@ -43,6 +43,9 @@ for reply in n '' $'\n'; do
     atm_updates_apply plugin:alpha <<< "$reply" > "$temp/cancel"
     [[ ! -e "$temp/actions" && "${ATM_UPDATES_RESTART_REQUIRED:-0}" == 0 ]]
 done
+atm_updates_cli verify alpha aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa <<< n > "$temp/verify"
+grep -q 'official v0.0.1 commit' "$temp/verify"
+[[ ! -e "$temp/actions" ]]
 printf 'PASS explicit consent, Enter/No cancellation, and no updater execution on cancel\n'
 
 atm_updates_apply plugin:alpha <<< y > "$temp/update"
@@ -63,8 +66,9 @@ printf 'PASS pinned single-plugin apply and required restart\n'
     grep -q 'apply plugin:alpha --revision bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' "$temp/actions"
     grep -q 'apply all-plugins --revision bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' "$temp/actions"
     grep -q 'CORE: https://github.com/AtomyCloud/atm/tree/v0.0.1' "$temp/core-channel"
+    grep -q 'Plugins: https://github.com/AtomyCloud/atm/tree/v0.0.1/plugins' "$temp/core-channel"
 )
-printf 'PASS per-target CORE/plugin/all revision selection across different channels\n'
+printf 'PASS per-target CORE/plugin/all revision selection from pinned rows\n'
 
 ATM_UPDATES_RESTART_REQUIRED=0
 ATM_UPDATES_ROWS=$'core\tcurrent\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tCurrent\nplugin:alpha\tavailable\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tChanged'
