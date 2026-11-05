@@ -68,6 +68,21 @@ outside `~/Apps`. Enter defaults to Cancel. `~/Apps/Backups` is not offered for
 this action, and destinations inside the source or through symlinks are refused.
 The source follows `ATM_BACKUP_RESTORE_HOME/Apps`, not the checkout location.
 
+The initial **preflight** checks `tar`/`gzip`, source access and unsupported special
+files while calculating size. It collects blockers rather than stopping at the
+first socket; up to 50 details are displayed, with the total issue count. A VS Code
+socket under `Apps/vscode/.../data/user-data` is labelled with a VS Code hint.
+Close the application normally, then choose `r) Recheck`; Enter/`q` cancels.
+No devices are offered and no archive is created until preflight passes. CLI and
+dry-run failures report the same blockers without a retry prompt; rerun after fixing.
+Preflight runs again before actual compression, after confirmation.
+
+Application names are inferred from directory names, not a process inventory.
+Sockets can be stale; ATM neither deletes them nor terminates applications. Review
+remaining blockers rather than bypassing them. Access checks are advisory and
+concurrent changes can still cause runtime errors; a clean preflight does not prove
+all applications are closed. Existing space and device checks remain in place.
+
 Before confirmation, the plan shows source size, required space, and available
 space in bytes/GiB. Required space includes TAR padding/headers, 1% allowance and
 a 16 MiB reserve. No compression savings are assumed. Insufficient space aborts

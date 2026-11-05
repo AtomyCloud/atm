@@ -216,12 +216,25 @@ atm_backup_restore_select_destination() {
 }
 
 atm_backup_restore_prompt_apps() {
+    local choice=""
     if [[ -n "${SUDO_USER:-}" && "${SUDO_USER:-}" != root ]]; then
         atm_warn "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_USER_ONLY)"
         return 1
     fi
-    printf '\n%s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_MEASURE)"
-    atm_backup_restore_state apps-size || return 1
+    while true; do
+        printf '\n%s\n' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_MEASURE)"
+        if atm_backup_restore_state apps-size; then
+            atm_info "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_READY)"
+            break
+        fi
+        [[ "${ATM_DRY_RUN:-0}" != 1 ]] || return 1
+        printf '%s ' "$(atm_t ATM_PLUGIN_BACKUP_RESTORE_APPS_RECHECK)"
+        read -r choice || return 1
+        case "$choice" in
+            r|R) continue ;;
+            *) return 1 ;;
+        esac
+    done
     atm_backup_restore_select_destination apps || return 1
     atm_backup_restore_run backup-apps "${ATM_BACKUP_RESTORE_DESTINATION_ARGS[@]}"
 }

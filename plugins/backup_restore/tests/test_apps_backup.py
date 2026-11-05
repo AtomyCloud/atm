@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+import socket
 import stat
 import subprocess
 import sys
@@ -138,6 +139,57 @@ class AppsBackupTests(unittest.TestCase):
             self.backup()
         self.assertEqual(list(self.device.iterdir()), [])
 
+    def test_preflight_collects_socket_fifo_and_access_blockers(self):
+        path = self.source / "vscode/data/1.14-main.sock"
+        path.parent.mkdir(parents=True)
+        fifo = self.source / "another-app.fifo"
+        os.mkfifo(fifo)
+        access = os.access
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(path))
+            with mock.patch.object(apps.os, "access", side_effect=lambda p, mode: False if Path(p).name == ".settings" else access(p, mode)):
+                with mock.patch.object(apps.subprocess, "run") as run:
+                    with self.assertRaises(ValueError) as caught:
+                        self.backup()
+                    run.assert_not_called()
+            message = str(caught.exception)
+            for text in ("3 issue(s)", "VS Code", "socket", "FIFO", "Unreadable file", str(path), str(fifo)):
+                self.assertIn(text, message)
+        # Closing a UNIX socket does not remove its filesystem entry.
+        with self.assertRaisesRegex(ValueError, "Sockets may be stale"):
+            apps.measure(self.home)
+        self.assertTrue(path.exists())
+        self.assertEqual(list(self.device.iterdir()), [])
+        path.unlink()
+        fifo.unlink()
+        self.assertGreater(apps.measure(self.home)["source_bytes"], 0)
+
+    def test_preflight_collects_missing_tools_and_unreadable_directory(self):
+        scan = os.scandir
+
+        def denied(path):
+            if path == self.source / "atm":
+                raise PermissionError(13, "Permission denied")
+            return scan(path)
+
+        with mock.patch.object(apps.shutil, "which", return_value=None), mock.patch.object(apps.os, "scandir", side_effect=denied):
+            with self.assertRaises(ValueError) as caught:
+                self.backup()
+        message = str(caught.exception)
+        for text in ("3 issue(s)", "tar", "gzip", "Permission denied", str(self.source / "atm")):
+            self.assertIn(text, message)
+        self.assertEqual(list(self.device.iterdir()), [])
+
+    def test_preflight_report_is_bounded_but_counts_all_issues(self):
+        for index in range(55):
+            os.mkfifo(self.source / f"fifo-{index}")
+        with self.assertRaises(ValueError) as caught:
+            apps.measure(self.home)
+        message = str(caught.exception)
+        self.assertIn("55 issue(s)", message)
+        self.assertIn("5 more issues", message)
+        self.assertEqual(message.count("Unsupported special file"), 50)
+
     def shell(self, commands, inputs="", dry_run="0"):
         plugin = Path(__file__).parents[1]
         env = dict(os.environ, HOME=str(self.home), ATM_APPS_DIR=str(self.source),
@@ -188,6 +240,61 @@ atm_require_commands() { command -v "$1" >/dev/null; }
         result = self.shell("SUDO_USER=someone atm_backup_restore_prompt_apps")
         self.assertNotEqual(result.returncode, 0)
         self.assertNotIn('"source_bytes"', result.stdout)
+        self.assertEqual(list(self.device.iterdir()), [])
+
+    def test_preflight_menu_cancel_eof_and_dry_run_do_not_select_devices(self):
+        os.mkfifo(self.source / "blocked.fifo")
+        for inputs in ("\n", "q\n", ""):
+            result = self.shell("atm_backup_restore_prompt_apps", inputs)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("Recheck", result.stdout)
+            self.assertNotIn("USB Disk", result.stdout)
+            self.assertNotIn("Continue?", result.stdout)
+        result = self.shell("atm_backup_restore_prompt_apps", dry_run="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn("Recheck", result.stdout)
+        result = self.shell('atm_backup_restore_install --action backup-apps --destination "$ATM_BACKUP_RESTORE_MEDIA_ROOT/USB Disk"')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Apps preflight blocked", result.stderr)
+        self.assertNotIn("Continue?", result.stdout)
+        self.assertTrue((self.source / "blocked.fifo").exists())
+        self.assertEqual(list(self.device.iterdir()), [])
+
+    def test_preflight_retry_after_socket_resolved_proceeds_to_backup(self):
+        path = self.source / "vscode/main.sock"
+        path.parent.mkdir()
+        with socket.socket(socket.AF_UNIX) as server:
+            server.bind(str(path))
+        # The fixture simulates the application cleaning up on user-requested retry.
+        script = '''read() {
+    builtin read "$@" || return 1
+    if [[ "${choice:-}" == r && -S "$HOME/Apps/vscode/main.sock" ]]; then
+        rm -- "$HOME/Apps/vscode/main.sock"
+    fi
+}
+atm_backup_restore_prompt_apps
+'''
+        result = self.shell(script, "r\n1\ny\n")
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("VS Code", result.stderr)
+        self.assertIn("Recheck", result.stdout)
+        self.assertIn("Preflight passed", result.stdout)
+        self.assertLess(result.stdout.index("Preflight passed"), result.stdout.index("USB Disk"))
+        self.assertEqual(len(list(self.device.rglob("Apps.tar.gz"))), 1)
+
+    def test_blocker_appearing_after_confirmation_prevents_archive(self):
+        script = '''read() {
+    builtin read "$@" || return 1
+    if [[ "${answer:-}" == y ]]; then
+        mkfifo "$HOME/Apps/appeared.fifo"
+    fi
+}
+atm_backup_restore_prompt_apps
+'''
+        result = self.shell(script, "1\ny\n")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Preflight passed", result.stdout)
+        self.assertIn("appeared.fifo", result.stderr)
         self.assertEqual(list(self.device.iterdir()), [])
 
 

@@ -22,23 +22,60 @@ def measure(home):
     size = 0
     entries = 0
     tar_bytes = 10240
+    blockers = []
+    blocker_count = 0
+
+    def block(message, path=None):
+        nonlocal blocker_count
+        blocker_count += 1
+        if len(blockers) >= 50:
+            return
+        if path is not None:
+            parts = path.relative_to(source).parts
+            folder = parts[0] if parts else "Apps"
+            hint = "VS Code" if folder.lower() in ("vscode", "code", "visual-studio-code") else folder
+            message += f"; app folder: {hint!r}; path: {str(path)!r}"
+        blockers.append(message)
+
+    for command in ("tar", "gzip"):
+        if not shutil.which(command):
+            block(f"Required command not found: {command}")
     pending = [source]
     while pending:
         path = pending.pop()
-        info = path.lstat()
-        entries += 1
-        # Budget for TAR padding, PAX headers and long UTF-8 names/link targets.
-        tar_bytes += 4096 + 4 * len(os.fsencode(str(path)))
-        if stat.S_ISREG(info.st_mode):
-            size += info.st_size
-            tar_bytes += ((info.st_size + 511) // 512) * 512
-        elif stat.S_ISDIR(info.st_mode):
-            with os.scandir(path) as children:
-                pending.extend(Path(child.path) for child in children)
-        elif stat.S_ISLNK(info.st_mode):
-            tar_bytes += 4 * len(os.fsencode(os.readlink(path)))
-        else:
-            raise ValueError(f"Unsupported special file; close its application first: {path}")
+        try:
+            info = path.lstat()
+            entries += 1
+            # Budget for TAR padding, PAX headers and long UTF-8 names/link targets.
+            tar_bytes += 4096 + 4 * len(os.fsencode(str(path)))
+            if stat.S_ISREG(info.st_mode):
+                if not os.access(path, os.R_OK):
+                    block("Unreadable file: review its permissions", path)
+                size += info.st_size
+                tar_bytes += ((info.st_size + 511) // 512) * 512
+            elif stat.S_ISDIR(info.st_mode):
+                if not os.access(path, os.R_OK | os.X_OK):
+                    block("Unreadable directory: review its permissions", path)
+                    continue
+                with os.scandir(path) as children:
+                    pending.extend(Path(child.path) for child in children)
+            elif stat.S_ISLNK(info.st_mode):
+                tar_bytes += 4 * len(os.fsencode(os.readlink(path)))
+            else:
+                kind = "socket" if stat.S_ISSOCK(info.st_mode) else "FIFO" if stat.S_ISFIFO(info.st_mode) else "device"
+                block(f"Unsupported special file ({kind})", path)
+        except OSError as error:
+            block(f"Cannot inspect entry: {error.strerror or str(error)}", path)
+    if blocker_count:
+        details = "\n".join(f"  - {item}" for item in blockers)
+        if blocker_count > len(blockers):
+            details += f"\n  ... {blocker_count - len(blockers)} more issues (report limited to 50)."
+        raise ValueError(
+            f"Apps preflight blocked: {blocker_count} issue(s). No backup started.\n{details}\n"
+            "Close the listed applications normally (VS Code: File > Exit), fix access/dependency issues, "
+            "then recheck. App names are inferred from folders, not running-process detection.\n"
+            "Sockets may be stale even after an application exits; investigate remaining paths. "
+            "ATM will not delete them or terminate applications. No files are silently skipped.")
     # Incompressible/sparse files must fit too; never assume a compression ratio.
     required = tar_bytes + (tar_bytes + 99) // 100 + 16 * 1024 * 1024
     return {"source": str(source), "source_bytes": size, "source_size": readable(size),
@@ -64,8 +101,6 @@ def backup(home, destination, media_root, mountinfo, mount_id=None, dry_run=Fals
         raise ValueError("Backup destination must be outside ~/Apps, including ~/Apps/Backups.")
     if not destination.is_dir():
         raise ValueError("Backup destination must be an existing directory.")
-    if not shutil.which("tar") or not shutil.which("gzip"):
-        raise ValueError("The tar and gzip commands are required for Apps backups.")
     selected = validate_device(destination, media_root, mountinfo, mount_id)
     plan.update(destination=str(destination), dry_run=dry_run,
                 available_bytes=capacity(destination, plan["required_bytes"]))
