@@ -59,6 +59,7 @@ Desktop apps: ~/.local/share/applications
 | [ATM - Backup & Restore](plugins/backup_restore/README.md) | `backup_restore` | `0.0.1` | Selected/all-user local backups, mounted-device selection, verification, and staged restore with recovery copies. |
 | [spotatui](plugins/spotatui/README.md) | `spotatui` | `0.0.1` | Portable music player with yt-dlp/EJS, FFmpeg and JavaScript runtime checks before installation. |
 | [REA: Reverse Engineer Anything](plugins/rea/README.md) | `rea` | `0.0.1` | Install, update and remove REA in an ATM/custom directory; check dependencies and ask before installing missing prerequisites. |
+| [Secrets](plugins/secrets/README.md) | `secrets` | `0.0.1` | Install, update, open and remove GNOME Secrets in an ATM-scoped Flatpak location; preserve vaults and app data. Requires host Flatpak, not fully portable. |
 
 ## Features
 
@@ -253,6 +254,7 @@ Language: en-us
 14) 💾 ATM - Backup & Restore            <status>
 15) 🎵 spotatui                         <status>
 16) 🔬 REA: Reverse Engineer Anything   <status>
+17) 🔐 Secrets                         <status>
 ------------------------------------------
 f) ⚡ Install Stack / Full Setup
 c) 🛠️  Configure PATH, CLI & Desktop
