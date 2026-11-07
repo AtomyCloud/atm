@@ -3,11 +3,54 @@
 atm_secrets_flatpak() {
     local action="$1"
     shift
-    FLATPAK_USER_DIR="$ATM_SECRETS_FLATPAK_DIR" command flatpak "$action" --user "$@"
+    if [[ "${ATM_SECRETS_MODE:-atm}" == default ]]; then
+        env -u FLATPAK_USER_DIR -u FLATPAK_SYSTEM_DIR flatpak "$action" --system "$@"
+    else
+        FLATPAK_USER_DIR="$ATM_SECRETS_FLATPAK_DIR" command flatpak "$action" --user "$@"
+    fi
+}
+
+atm_secrets_options() {
+    local operation="$1" mode_seen=0 update_seen=0 stable_seen=0
+    shift
+    while (($#)); do
+        case "$1" in
+            --mode)
+                (($# >= 2 && mode_seen == 0)) || break
+                case "$2" in atm|default) ATM_SECRETS_MODE="$2" ;; *) break ;; esac
+                mode_seen=1; shift 2 ;;
+            --update)
+                [[ "$operation" == install && "$update_seen" == 0 ]] || break
+                ATM_SECRETS_UPDATE=1; update_seen=1; shift ;;
+            stable)
+                [[ "$operation" == remove && "$stable_seen" == 0 ]] || break
+                stable_seen=1; shift ;;
+            *) break ;;
+        esac
+    done
+    if (($#)); then
+        atm_warn "$(atm_t ATM_PLUGIN_SECRETS_ARGS) $(atm_t ATM_PLUGIN_SECRETS_MODE_USAGE)"; return 1
+    fi
+    if [[ "$ATM_SECRETS_MODE" == default ]]; then ATM_SECRETS_REMOTE=flathub; fi
+}
+
+atm_secrets_not_installed() {
+    if [[ "${ATM_SECRETS_MODE:-atm}" == default ]]; then atm_t ATM_PLUGIN_SECRETS_NOT_INSTALLED_DEFAULT
+    else atm_t ATM_PLUGIN_SECRETS_NOT_INSTALLED; fi
+}
+
+atm_secrets_dry_run() {
+    if [[ "${ATM_SECRETS_MODE:-atm}" == default ]]; then
+        printf 'DRY-RUN: env -u FLATPAK_USER_DIR -u FLATPAK_SYSTEM_DIR flatpak %q --system' "$1"
+    else
+        printf 'DRY-RUN: FLATPAK_USER_DIR=%q flatpak %q --user' "$ATM_SECRETS_FLATPAK_DIR" "$1"
+    fi
+    shift
+    printf ' %q' "$@"; printf '\n'
 }
 
 atm_secrets_version() {
-    [[ -d "$ATM_SECRETS_FLATPAK_DIR" ]] || return 1
+    if [[ "${ATM_SECRETS_MODE:-atm}" == atm && ! -d "$ATM_SECRETS_FLATPAK_DIR" ]]; then return 1; fi
     local rows="" app="" branch="" version=""
     rows="$(atm_secrets_flatpak list --app --columns=application,branch,version)" || return 2
     while IFS=$'\t' read -r app branch version; do
@@ -25,14 +68,18 @@ atm_secrets_status() {
     elif ! command -v flatpak >/dev/null 2>&1; then
         atm_t ATM_PLUGIN_SECRETS_DEPENDENCY
     else
-        local version=""
-        if version="$(atm_secrets_version 2>/dev/null)"; then
-            printf 'Secrets %s (ATM)\n' "$version"
-        elif [[ "$?" == 1 ]]; then
-            atm_t ATM_PLUGIN_SECRETS_NOT_INSTALLED
-        else
-            atm_t ATM_PLUGIN_SECRETS_QUERY_FAILED
-        fi
+        local version="" ATM_SECRETS_MODE=atm label=""
+        for ATM_SECRETS_MODE in atm default; do
+            label=ATM
+            [[ "$ATM_SECRETS_MODE" != default ]] || label="$(atm_t ATM_PLUGIN_SECRETS_MODE_DEFAULT)"
+            if version="$(atm_secrets_version 2>/dev/null)"; then
+                printf 'Secrets %s (%s)\n' "$version" "$label"
+            elif [[ "$?" == 1 ]]; then
+                atm_secrets_not_installed; printf '\n'
+            else
+                printf '%s: %s\n' "$label" "$(atm_t ATM_PLUGIN_SECRETS_QUERY_FAILED)"
+            fi
+        done
     fi
 }
 
@@ -61,13 +108,17 @@ atm_secrets_paths() {
 atm_secrets_require() {
     [[ "$(uname -s)" == Linux ]] || { atm_warn "$(atm_t ATM_PLUGIN_SECRETS_LINUX_ONLY)"; return 1; }
     command -v flatpak >/dev/null 2>&1 || { atm_warn "$(atm_t ATM_PLUGIN_SECRETS_DEPENDENCY)"; return 1; }
-    atm_secrets_paths
+    if [[ "${ATM_SECRETS_MODE:-atm}" == atm ]]; then atm_secrets_paths; fi
 }
 
 atm_secrets_confirm() {
     local answer=""
-    printf '%s\n%s: %s\n%s: %s\n%s ' "$(atm_t ATM_PLUGIN_SECRETS_NOTICE)" \
-        "$(atm_t ATM_PLUGIN_SECRETS_LOCATION)" "$ATM_SECRETS_ROOT" \
+    if [[ "${ATM_SECRETS_MODE:-atm}" == default ]]; then
+        printf '%s\n%s\n' "$(atm_t ATM_PLUGIN_SECRETS_MODE_DEFAULT)" "$(atm_t ATM_PLUGIN_SECRETS_DEFAULT_NOTICE)"
+    else
+        printf '%s\n%s: %s\n' "$(atm_t ATM_PLUGIN_SECRETS_NOTICE)" "$(atm_t ATM_PLUGIN_SECRETS_LOCATION)" "$ATM_SECRETS_ROOT"
+    fi
+    printf '%s: %s\n%s ' \
         "$(atm_t ATM_PLUGIN_SECRETS_DATA)" "$HOME/.var/app/$ATM_SECRETS_APP_ID" \
         "$(atm_t ATM_PLUGIN_SECRETS_CONFIRM)"
     read -r answer || return 1
@@ -96,18 +147,22 @@ atm_secrets_origin() {
 }
 
 atm_secrets_record() {
-    local installed="$1" version="${2:-}"
-    atm_manifest_write secrets "ATM_PLUGIN_VERSION=0.0.1" "ATM_INSTALLED=$installed" \
+    local installed="$1" version="${2:-}" manifest=secrets location="$ATM_SECRETS_FLATPAK_DIR"
+    if [[ "${ATM_SECRETS_MODE:-atm}" == default ]]; then manifest=secrets-default; location=system; fi
+    atm_manifest_write "$manifest" "ATM_PLUGIN_VERSION=0.0.1" "ATM_INSTALLED=$installed" \
+        "ATM_SECRETS_MODE=${ATM_SECRETS_MODE:-atm}" \
         "ATM_SECRETS_VERSION=$(printf '%q' "$version")" \
-        "ATM_SECRETS_FLATPAK_DIR=$(printf '%q' "$ATM_SECRETS_FLATPAK_DIR")"
+        "ATM_SECRETS_FLATPAK_DIR=$(printf '%q' "$location")"
 }
 
 atm_secrets_install() {
     local action=install version="" temporary="" status=0
-    case "$#:${1:-}" in 0:) ;; 1:--update) action=update ;; *) atm_warn "$(atm_t ATM_PLUGIN_SECRETS_ARGS)"; return 1 ;; esac
+    local ATM_SECRETS_MODE=atm ATM_SECRETS_UPDATE=0 ATM_SECRETS_REMOTE="$ATM_SECRETS_REMOTE"
+    atm_secrets_options install "$@" || return 1
+    [[ "$ATM_SECRETS_UPDATE" == 0 ]] || action=update
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: FLATPAK_USER_DIR=%q flatpak %s --user %s %s\n' "$ATM_SECRETS_FLATPAK_DIR" "$action" \
-            "$([[ "$action" == install ]] && printf '%s' "$ATM_SECRETS_REMOTE")" "$ATM_SECRETS_APP_ID//stable"
+        if [[ "$action" == install ]]; then atm_secrets_dry_run install "$ATM_SECRETS_REMOTE" "$ATM_SECRETS_APP_ID//stable"
+        else atm_secrets_dry_run update "$ATM_SECRETS_APP_ID//stable"; fi
         return 0
     fi
     atm_secrets_require || return 1
@@ -116,7 +171,7 @@ atm_secrets_install() {
     else
         status=$?
         if ((status != 1)); then atm_warn "$(atm_t ATM_PLUGIN_SECRETS_QUERY_FAILED)"; return 1; fi
-        if [[ "$action" == update ]]; then atm_warn "$(atm_t ATM_PLUGIN_SECRETS_NOT_INSTALLED)"; return 1; fi
+        if [[ "$action" == update ]]; then atm_warn "$(atm_secrets_not_installed)"; return 1; fi
     fi
     atm_secrets_confirm || return 0
     atm_secrets_remote || return 1
@@ -127,6 +182,11 @@ atm_secrets_install() {
     fi
     version="$(atm_secrets_version)" || return 1
     atm_secrets_origin || return 1
+    if [[ "$ATM_SECRETS_MODE" == default ]]; then
+        atm_secrets_record 1 "$version" || return 1
+        atm_success "$(atm_t ATM_PLUGIN_SECRETS_DONE): $version"
+        return 0
+    fi
     atm_secrets_paths || return 1
     mkdir -p "$ATM_SECRETS_ROOT/bin" || return 1
     temporary="$(mktemp "$ATM_SECRETS_ROOT/bin/.secrets.XXXXXX")" || return 1
@@ -140,16 +200,17 @@ atm_secrets_install() {
 
 atm_secrets_remove() {
     local status=0
-    case "$#:${1:-}" in 0:|1:stable) ;; *) atm_warn "$(atm_t ATM_PLUGIN_SECRETS_ARGS)"; return 1 ;; esac
+    local ATM_SECRETS_MODE=atm ATM_SECRETS_REMOTE="$ATM_SECRETS_REMOTE"
+    atm_secrets_options remove "$@" || return 1
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: FLATPAK_USER_DIR=%q flatpak uninstall --user %s\n' "$ATM_SECRETS_FLATPAK_DIR" "$ATM_SECRETS_APP_ID//stable"
+        atm_secrets_dry_run uninstall "$ATM_SECRETS_APP_ID//stable"
         return 0
     fi
     atm_secrets_require || return 1
     if atm_secrets_version >/dev/null 2>&1; then :; else
         status=$?
         if ((status != 1)); then atm_warn "$(atm_t ATM_PLUGIN_SECRETS_QUERY_FAILED)"; return 1; fi
-        atm_info "$(atm_t ATM_PLUGIN_SECRETS_NOT_INSTALLED)"; return 0
+        atm_info "$(atm_secrets_not_installed)"; return 0
     fi
     atm_secrets_confirm || return 0
     atm_secrets_flatpak uninstall "$ATM_SECRETS_APP_ID//stable" || return 1
@@ -157,7 +218,7 @@ atm_secrets_remove() {
         status=$?
         if ((status != 1)); then atm_warn "$(atm_t ATM_PLUGIN_SECRETS_QUERY_FAILED)"; return 1; fi
     fi
-    if [[ -f "$ATM_SECRETS_ROOT/bin/secrets" ]] && cmp -s "$ATM_SECRETS_ROOT/bin/secrets" <(atm_secrets_launcher_text); then
+    if [[ "$ATM_SECRETS_MODE" == atm && -f "$ATM_SECRETS_ROOT/bin/secrets" ]] && cmp -s "$ATM_SECRETS_ROOT/bin/secrets" <(atm_secrets_launcher_text); then
         rm -f -- "$ATM_SECRETS_ROOT/bin/secrets" || return 1
     fi
     atm_secrets_record 0 || return 1
@@ -165,13 +226,14 @@ atm_secrets_remove() {
 }
 
 atm_secrets_open() {
-    (($# == 0)) || return 1
+    local ATM_SECRETS_MODE=atm ATM_SECRETS_REMOTE="$ATM_SECRETS_REMOTE"
+    atm_secrets_options open "$@" || return 1
     if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then
-        printf 'DRY-RUN: FLATPAK_USER_DIR=%q flatpak run --user --branch=stable %s\n' "$ATM_SECRETS_FLATPAK_DIR" "$ATM_SECRETS_APP_ID"
+        atm_secrets_dry_run run --branch=stable "$ATM_SECRETS_APP_ID"
         return 0
     fi
     atm_secrets_require || return 1
-    atm_secrets_version >/dev/null 2>&1 || { atm_warn "$(atm_t ATM_PLUGIN_SECRETS_NOT_INSTALLED)"; return 1; }
+    atm_secrets_version >/dev/null 2>&1 || { atm_warn "$(atm_secrets_not_installed)"; return 1; }
     atm_secrets_flatpak run --branch=stable "$ATM_SECRETS_APP_ID"
 }
 
@@ -179,19 +241,36 @@ atm_secrets_path_entries() {
     if [[ -x "$ATM_SECRETS_ROOT/bin/secrets" ]]; then printf '%s\n' "$ATM_SECRETS_ROOT/bin"; fi
 }
 
+atm_secrets_choose_mode() {
+    local choice=""
+    printf '1) %s\n2) %s\nb) %s\n%s ' "$(atm_t ATM_PLUGIN_SECRETS_MODE_ATM)" \
+        "$(atm_t ATM_PLUGIN_SECRETS_MODE_DEFAULT)" "$(atm_t ATM_MENU_BACK)" "$(atm_t ATM_PLUGIN_SECRETS_SELECT_MODE)" >&2
+    read -r choice || return 1
+    case "$choice" in ''|1) printf 'atm\n' ;; 2) printf 'default\n' ;; b|B|q|Q) return 1 ;;
+        *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)"; return 1 ;; esac
+}
+
 atm_secrets_menu() {
-    local option=""
+    local option="" mode=""
     while true; do
         printf '\n%s\nhttps://apps.gnome.org/Secrets/\n' "$(atm_t ATM_PLUGIN_SECRETS_MENU_TITLE)"
         atm_secrets_status; printf '\n'
-        printf '1) %s\n2) %s\n3) %s\n4) %s\nb) %s\nq) %s\n%s ' \
-            "$(atm_t ATM_PLUGIN_SECRETS_INSTALL)" "$(atm_t ATM_PLUGIN_SECRETS_UPDATE)" \
+        printf '1) %s: %s\n2) %s: %s\n3) %s\n4) %s\n5) %s\nb) %s\nq) %s\n%s ' \
+            "$(atm_t ATM_PLUGIN_SECRETS_INSTALL)" "$(atm_t ATM_PLUGIN_SECRETS_MODE_ATM)" \
+            "$(atm_t ATM_PLUGIN_SECRETS_INSTALL)" "$(atm_t ATM_PLUGIN_SECRETS_MODE_DEFAULT)" "$(atm_t ATM_PLUGIN_SECRETS_UPDATE)" \
             "$(atm_t ATM_PLUGIN_SECRETS_OPEN)" "$(atm_t ATM_PLUGIN_SECRETS_REMOVE)" \
             "$(atm_t ATM_MENU_BACK)" "$(atm_t ATM_MENU_EXIT)" "$(atm_t ATM_MENU_SELECT_OPTION)"
         read -r option || return 0
         case "$option" in
-            1) atm_secrets_install || true ;; 2) atm_secrets_install --update || true ;;
-            3) atm_secrets_open || true ;; 4) atm_secrets_remove || true ;;
+            1) atm_secrets_install --mode atm || true ;; 2) atm_secrets_install --mode default || true ;;
+            3|4|5)
+                if mode="$(atm_secrets_choose_mode)"; then
+                    case "$option" in
+                        3) atm_secrets_install --mode "$mode" --update || true ;;
+                        4) atm_secrets_open --mode "$mode" || true ;;
+                        5) atm_secrets_remove --mode "$mode" || true ;;
+                    esac
+                fi ;;
             b|B|q|Q|0) return 0 ;; *) atm_warn "$(atm_t ATM_ERR_INVALID_OPTION)" ;;
         esac
         atm_prompt_continue
