@@ -28,3 +28,6 @@ ATM_MSG_SETUP_PORTABLE_DONE="Mode portable configure"
 ATM_MSG_SETUP_SYSTEM_DONE="Commande systeme installee"
 
 ATM_ERR_INVALID_OPTION="Option invalide."
+ATM_UPDATES_PYTHON_MISSING="Python 3 est nécessaire pour vérifier les mises à jour des plugins et du CORE."
+ATM_UPDATES_CHECK_FAILED="La recherche de mises à jour a échoué ; aucune mise à jour ne sera appliquée."
+ATM_UPDATES_TIMEOUT="Le délai de vérification a expiré ; réessayez avec une valeur ATM_UPDATES_CHECK_TIMEOUT plus élevée"

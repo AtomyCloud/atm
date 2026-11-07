@@ -28,3 +28,6 @@ ATM_MSG_SETUP_PORTABLE_DONE="Портативный режим настроен"
 ATM_MSG_SETUP_SYSTEM_DONE="Системная команда установлена"
 
 ATM_ERR_INVALID_OPTION="Недопустимая опция."
+ATM_UPDATES_PYTHON_MISSING="Для проверки обновлений плагинов и CORE требуется Python 3."
+ATM_UPDATES_CHECK_FAILED="Не удалось проверить обновления; обновления не будут применены."
+ATM_UPDATES_TIMEOUT="Превышено время проверки; повторите с большим значением ATM_UPDATES_CHECK_TIMEOUT"

@@ -28,3 +28,6 @@ ATM_MSG_SETUP_PORTABLE_DONE="ポータブルモードを設定しました"
 ATM_MSG_SETUP_SYSTEM_DONE="システムコマンドをインストールしました"
 
 ATM_ERR_INVALID_OPTION="無効なオプションです。"
+ATM_UPDATES_PYTHON_MISSING="プラグインとCOREの更新確認にはPython 3が必要です。"
+ATM_UPDATES_CHECK_FAILED="更新確認に失敗しました。更新は適用されません。"
+ATM_UPDATES_TIMEOUT="更新確認がタイムアウトしました。ATM_UPDATES_CHECK_TIMEOUTを増やして再試行してください"

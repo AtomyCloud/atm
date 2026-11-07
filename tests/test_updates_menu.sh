@@ -25,6 +25,75 @@ ATM_UPDATES_ROWS=$'core\tcurrent\tbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\tCore
 [[ "$(NO_COLOR=1 atm_updates_menu_label)" == 'Updates Update [CORE: 0; Plugins: 2]' ]]
 printf 'PASS independent plugin badges, CORE counter and NO_COLOR output\n'
 
+(
+    atm_updates_engine() {
+        printf 'partial invalid output\n'
+        printf 'ATM updates: fixture permission denied\n' >&2
+        return 1
+    }
+    TMPDIR="$temp" atm_updates_refresh --force
+    [[ -z "$ATM_UPDATES_ROWS" && "$ATM_UPDATES_ERROR" == *'fixture permission denied'* ]]
+    [[ "$ATM_UPDATES_ERROR" == *'exit=1'* ]]
+    atm_updates_show > "$temp/check-error"
+    grep -q 'fixture permission denied' "$temp/check-error"
+    [[ -z "$(find "$temp" -name 'atm-updates-error.*' -print)" ]]
+    atm_updates_engine() { [[ "$ATM_UPDATES_CHECK_TIMEOUT" == 123 ]]; return 124; }
+    ATM_UPDATES_CHECK_TIMEOUT=123 atm_updates_refresh --force
+    [[ "$ATM_UPDATES_ERROR" == *'timed out'*'123s'* && -z "$ATM_UPDATES_ROWS" ]]
+    atm_updates_engine() { printf 'plugin:secrets\tavailable\t%s\tChanged\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb; }
+    atm_updates_refresh --force
+    [[ -z "$ATM_UPDATES_ERROR" && "$(atm_updates_state plugin:secrets)" == available ]]
+    atm_updates_engine() { [[ "$1" == cached ]]; }
+    ATM_UPDATES_KEY=''
+    ATM_UPDATES_AUTO_CHECK=0 atm_updates_refresh
+    [[ -z "$ATM_UPDATES_ROWS" && -z "$ATM_UPDATES_ERROR" ]]
+    atm_updates_show > "$temp/no-cache"
+    grep -q 'No current-version claim' "$temp/no-cache"
+    command() { if [[ "$*" == '-v python3' ]]; then return 1; else builtin command "$@"; fi; }
+    atm_updates_refresh --force
+    [[ "$ATM_UPDATES_ERROR" == *'Python 3 is required'* && -z "$ATM_UPDATES_ROWS" ]]
+)
+printf 'PASS refresh diagnostics, timeout override, cleanup, recovery, empty cache and missing Python\n'
+
+(
+    atm_updates_engine() {
+        case "$1" in
+            check) printf 'plugin:secrets\tunknown\t\tGitHub rate limit fixture\n' ;;
+            apply) printf 'must not apply\n' >> "$temp/unsafe-apply"; return 1 ;;
+        esac
+    }
+    if atm_updates_apply plugin:secrets <<< y > "$temp/unknown" 2>&1; then exit 1; fi
+    grep -q 'GitHub rate limit fixture' "$temp/unknown"
+    [[ ! -e "$temp/unsafe-apply" ]]
+)
+printf 'PASS empty revision preserves diagnostic detail and blocks apply\n'
+
+(
+    atm_updates_engine() {
+        case "$1" in
+            check)
+                printf '%s\n' "$*" >> "$temp/secrets-checks"
+                printf 'core\tcurrent\t%s\tCurrent\nplugin:secrets\tavailable\t%s\tChanged\n' \
+                    bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ;;
+            apply)
+                [[ "$2" == plugin:secrets && "$4" == bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb ]]
+                printf '%s\n' "$*" > "$temp/secrets-apply"
+                printf 'plugin:secrets\tupdated\tfixture-backup\n' ;;
+        esac
+    }
+    atm_updates_refresh --force
+    atm_updates_pick_plugin <<< $'1\ny' > "$temp/secrets-menu" 2>&1
+    [[ -e "$temp/secrets-apply" && "$ATM_UPDATES_RESTART_REQUIRED" == 1 ]]
+    [[ "$(wc -l < "$temp/secrets-checks")" == 1 ]]
+    ATM_UPDATES_AT=$((SECONDS - 61))
+    atm_updates_refresh --apply
+    [[ "$(wc -l < "$temp/secrets-checks")" == 2 ]]
+    [[ "$(tail -n 1 "$temp/secrets-checks")" == check ]]
+    atm_updates_refresh --force
+    [[ "$(wc -l < "$temp/secrets-checks")" == 3 ]]
+)
+printf 'PASS Secrets selection reuses fresh snapshot; expired/forced checks bypass cache\n'
+
 atm_updates_refresh() { :; }
 atm_updates_engine() {
     printf '%s\n' "$*" >> "$temp/actions"

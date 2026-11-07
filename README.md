@@ -298,6 +298,14 @@ the report lists affected files. See the update guide for recovery and diagnosti
 Offline or
 unverified installations are reported explicitly, not assumed current.
 
+Selecting an update reuses the menu's checked snapshot for up to 60 seconds;
+the apply engine still revalidates the pinned revision and local files. Explicit
+checks bypass this cache. Failed checks retain their diagnostics, including
+missing Python and timeouts, instead of hiding the cause behind an unknown status.
+On slow connections, `ATM_UPDATES_CHECK_TIMEOUT=180 atm updates check` increases
+the explicit check timeout from its default of 90 seconds. This affects checking,
+not download/apply operations, and does not bypass verification or authorization.
+
 ```bash
 atm updates check
 atm updates core

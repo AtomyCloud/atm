@@ -28,3 +28,6 @@ ATM_MSG_SETUP_PORTABLE_DONE="포터블 모드가 설정되었습니다"
 ATM_MSG_SETUP_SYSTEM_DONE="시스템 명령이 설치되었습니다"
 
 ATM_ERR_INVALID_OPTION="잘못된 옵션입니다."
+ATM_UPDATES_PYTHON_MISSING="플러그인 및 CORE 업데이트를 확인하려면 Python 3가 필요합니다."
+ATM_UPDATES_CHECK_FAILED="업데이트 확인에 실패했습니다. 업데이트는 적용되지 않습니다."
+ATM_UPDATES_TIMEOUT="업데이트 확인 시간이 초과되었습니다. ATM_UPDATES_CHECK_TIMEOUT 값을 늘려 다시 시도하세요"

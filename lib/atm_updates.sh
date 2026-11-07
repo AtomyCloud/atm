@@ -9,7 +9,7 @@ atm_updates_engine() {
         printf 'DRY-RUN: component updates'; printf ' %q' "$@"; printf '; no network, probes or writes\n'
         return 0
     fi
-    command -v python3 >/dev/null 2>&1 || { atm_warn "$(atm_updates_t ATM_UPDATES_UNKNOWN)"; return 1; }
+    command -v python3 >/dev/null 2>&1 || { atm_warn "$(atm_updates_t ATM_UPDATES_PYTHON_MISSING)"; return 1; }
     local run=()
     if [[ "${1:-}" == check ]] && command -v timeout >/dev/null 2>&1; then
         run=(timeout --kill-after=1 "${ATM_UPDATES_CHECK_TIMEOUT:-90}")
@@ -19,28 +19,46 @@ atm_updates_engine() {
 }
 
 atm_updates_refresh() {
-    local output="" key="$ATM_HOME|$ATM_PLUGIN_DIR" args=(check --ttl 300)
-    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then ATM_UPDATES_ROWS=""; return 0; fi
+    local output="" error_file="" result=0 key="$ATM_HOME|$ATM_PLUGIN_DIR" args=(check --ttl 300)
+    if [[ "${ATM_DRY_RUN:-0}" == 1 ]]; then ATM_UPDATES_ROWS="" ATM_UPDATES_ERROR=""; return 0; fi
     if [[ "${1:-}" != --force && "${ATM_UPDATES_KEY:-}" == "$key" && "${ATM_UPDATES_AT:-}" =~ ^[0-9]+$ ]] \
+        && [[ "${1:-}" != --apply || ( -n "${ATM_UPDATES_ROWS:-}" && -z "${ATM_UPDATES_ERROR:-}" ) ]] \
         && ((SECONDS >= ATM_UPDATES_AT && SECONDS - ATM_UPDATES_AT < 60)); then return 0; fi
-    ATM_UPDATES_KEY="$key" ATM_UPDATES_AT="$SECONDS" ATM_UPDATES_ROWS=""
-    command -v python3 >/dev/null 2>&1 || return 0
-    if [[ "${1:-}" == --force ]]; then
+    ATM_UPDATES_KEY="$key" ATM_UPDATES_AT="$SECONDS" ATM_UPDATES_ROWS="" ATM_UPDATES_ERROR=""
+    if ! command -v python3 >/dev/null 2>&1; then
+        ATM_UPDATES_ERROR="$(atm_updates_t ATM_UPDATES_PYTHON_MISSING)"; return 0
+    fi
+    if [[ "${1:-}" == --force || "${1:-}" == --apply ]]; then
         args=(check)
     elif [[ "${ATM_UPDATES_AUTO_CHECK:-1}" != 1 ]] || ! command -v timeout >/dev/null 2>&1; then
         args=(cached)
     fi
-    local ATM_UPDATES_CHECK_TIMEOUT="${ATM_UPDATES_CHECK_TIMEOUT:-8}"
-    [[ "${1:-}" != --force ]] || ATM_UPDATES_CHECK_TIMEOUT=90
-    if output="$(atm_updates_engine "${args[@]}" 2>/dev/null)"; then ATM_UPDATES_ROWS="$output"; fi
+    local default_timeout=8
+    [[ "${1:-}" != --force && "${1:-}" != --apply ]] || default_timeout=90
+    local ATM_UPDATES_CHECK_TIMEOUT="${ATM_UPDATES_CHECK_TIMEOUT:-$default_timeout}"
+    error_file="$(mktemp "${TMPDIR:-/tmp}/atm-updates-error.XXXXXX")" || {
+        ATM_UPDATES_ERROR="$(atm_updates_t ATM_UPDATES_CHECK_FAILED)"; return 0;
+    }
+    if output="$(atm_updates_engine "${args[@]}" 2>"$error_file")"; then
+        ATM_UPDATES_ROWS="$output"
+    else
+        result=$?
+        ATM_UPDATES_ERROR="$(atm_updates_t ATM_UPDATES_CHECK_FAILED) (exit=$result)"
+        if [[ "$result" == 124 ]]; then
+            ATM_UPDATES_ERROR="$(atm_updates_t ATM_UPDATES_TIMEOUT): ${ATM_UPDATES_CHECK_TIMEOUT}s"
+        fi
+        if [[ -s "$error_file" ]]; then ATM_UPDATES_ERROR+=$'\n'"$(<"$error_file")"; fi
+    fi
+    rm -f -- "$error_file"
     return 0
 }
 
 atm_updates_state() {
     local component="" status="" revision="" detail=""
-    while IFS=$'\t' read -r component status revision detail; do
+    local rows="${ATM_UPDATES_ROWS:-}"
+    while IFS=$'\x1f' read -r component status revision detail; do
         if [[ "$component" == "$1" ]]; then printf '%s\n' "$status"; return 0; fi
-    done <<< "${ATM_UPDATES_ROWS:-}"
+    done <<< "${rows//$'\t'/$'\x1f'}"
     printf 'unknown\n'
 }
 
@@ -56,12 +74,13 @@ atm_updates_badge() {
 
 atm_updates_menu_label() {
     local component="" status="" revision="" detail="" count=0 core=0
+    local rows="${ATM_UPDATES_ROWS:-}"
     printf '%s' "$(atm_updates_t ATM_UPDATES_TITLE)"
-    while IFS=$'\t' read -r component status revision detail; do
+    while IFS=$'\x1f' read -r component status revision detail; do
         case "$status" in available|blocked)
             if [[ "$component" == core ]]; then core=1; else count=$((count + 1)); fi ;;
         esac
-    done <<< "${ATM_UPDATES_ROWS:-}"
+    done <<< "${rows//$'\t'/$'\x1f'}"
     if ((core || count)); then
         printf ' '
         atm_updates_blue "$(atm_updates_t ATM_UPDATES_BADGE)"
@@ -72,13 +91,17 @@ atm_updates_menu_label() {
 
 atm_updates_show() {
     local component="" status="" revision="" detail=""
+    local rows="${ATM_UPDATES_ROWS:-}"
     printf '%s\nCORE: %s\nPlugins: %s\n' "$(atm_updates_t ATM_UPDATES_TITLE)" \
         'https://github.com/AtomyCloud/atm/tree/v0.0.1' 'https://github.com/AtomyCloud/atm/tree/v0.0.1/plugins'
-    if [[ -z "${ATM_UPDATES_ROWS:-}" ]]; then atm_info "$(atm_updates_t ATM_UPDATES_UNKNOWN)"; return 0; fi
-    while IFS=$'\t' read -r component status revision detail; do
+    if [[ -z "${ATM_UPDATES_ROWS:-}" ]]; then
+        atm_info "${ATM_UPDATES_ERROR:-$(atm_updates_t ATM_UPDATES_UNKNOWN)}"; return 0
+    fi
+    # Tabs are IFS whitespace: use a non-whitespace delimiter to retain empty revisions.
+    while IFS=$'\x1f' read -r component status revision detail; do
         [[ -n "$component" ]] || continue
         printf '%-24s %-22s %s\n' "$component" "$(atm_updates_t "ATM_UPDATES_STATE_${status^^}")" "$detail"
-    done <<< "$ATM_UPDATES_ROWS"
+    done <<< "${rows//$'\t'/$'\x1f'}"
 }
 
 atm_updates_apply() {
@@ -87,15 +110,16 @@ atm_updates_apply() {
         printf 'DRY-RUN: check/confirm/stage/validate/back up/update %s; preserve local edits and application data; no network or writes\n' "$target"
         return 0
     fi
-    atm_updates_refresh --force
+    # Reuse the menu's fresh snapshot; the apply engine revalidates its pinned revision.
+    atm_updates_refresh --apply
     atm_updates_show
-    local candidate=""
-    while IFS=$'\t' read -r component status candidate detail; do
+    local candidate="" rows="${ATM_UPDATES_ROWS:-}"
+    while IFS=$'\x1f' read -r component status candidate detail; do
         if [[ "$component" == "$target" || ( "$target" == all-plugins && "$component" == plugin:* ) ]]; then
             revision="$candidate"
             break
         fi
-    done <<< "${ATM_UPDATES_ROWS:-}"
+    done <<< "${rows//$'\t'/$'\x1f'}"
     [[ "$revision" =~ ^[a-f0-9]{40}$ ]] || { atm_warn "$(atm_updates_t ATM_UPDATES_UNKNOWN)"; return 1; }
     printf '%s\n%s\n%s %s\n%s ' "$(atm_updates_t ATM_UPDATES_TRUST)" "$(atm_updates_t ATM_UPDATES_SCOPE)" \
         "$(atm_updates_t ATM_UPDATES_TARGET)" "$target@$revision" "$(atm_updates_t ATM_UPDATES_CONFIRM)"
@@ -117,12 +141,13 @@ atm_updates_apply() {
 
 atm_updates_pick_plugin() {
     local component="" status="" revision="" detail="" choice="" idx=1 ids=()
-    while IFS=$'\t' read -r component status revision detail; do
+    local rows="${ATM_UPDATES_ROWS:-}"
+    while IFS=$'\x1f' read -r component status revision detail; do
         [[ "$component" == plugin:* ]] || continue
         ids+=("$component")
         printf '%s) %s [%s]\n' "$idx" "${component#plugin:}" "$(atm_updates_t "ATM_UPDATES_STATE_${status^^}")" >&2
         idx=$((idx + 1))
-    done <<< "${ATM_UPDATES_ROWS:-}"
+    done <<< "${rows//$'\t'/$'\x1f'}"
     printf 'b) %s\n%s ' "$(atm_t ATM_MENU_BACK)" "$(atm_t ATM_MENU_SELECT_OPTION)" >&2
     read -r choice || return 0
     case "$choice" in ''|b|B) return 0 ;; esac
